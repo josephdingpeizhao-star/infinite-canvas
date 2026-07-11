@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> **fork 纪律（workflow-editor 分支）**：本仓库是低侵入 fork，改动前必读根目录 `FORK_NOTES.md`（锚点登记册）；工作流语义一律放主仓库 canvas-bridge，勿写进本仓库。
+
 本文档用于约束本项目中的 AI / 自动化开发行为。开发时优先遵循本文件，其次遵循用户当前消息。
 
 ## 基本原则
