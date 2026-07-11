@@ -359,6 +359,8 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
             return;
         }
         errorLoggedRef.current = false;
+        localStorage.setItem("canvas-agent-url", nextEndpoint);
+        localStorage.setItem("canvas-agent-token", nextToken);
         setAgentState({ url: nextEndpoint, token: nextToken, enabled: true, connected: false, activity: "连接中", connectError: "", activeTab: "setup" });
     };
 

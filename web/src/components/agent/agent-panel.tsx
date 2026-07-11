@@ -72,7 +72,7 @@ export function AgentPanel() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                         <label className="flex items-center gap-1.5 text-xs" style={{ color: theme.node.muted }}>
-                            <Switch size="small" checked={confirmTools} onChange={(confirmTools) => setAgentState({ confirmTools })} />
+                            <Switch size="small" checked={confirmTools} onChange={(confirmTools) => { localStorage.setItem("canvas-agent-confirm-tools", confirmTools ? "1" : "0"); setAgentState({ confirmTools }); }} />
                             工具确认
                         </label>
                         <Tooltip title="收起对话">

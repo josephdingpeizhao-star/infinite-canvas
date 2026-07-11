@@ -75,7 +75,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     workspacePath: "",
     loadingThreads: false,
     activeTab: "setup",
-    confirmTools: true,
+    confirmTools: typeof window === "undefined" ? true : localStorage.getItem("canvas-agent-confirm-tools") !== "0",
     activity: "就绪",
     connectError: "",
     pendingTool: null,
