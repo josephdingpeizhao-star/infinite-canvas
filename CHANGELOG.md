@@ -2,6 +2,7 @@
 
 ## Unreleased
 
++ [修复] Canvas Agent Codex 新线程支持可选兼容模型，并保留失败或中断的真实回合状态，避免显示为空成功回复。
 + [优化] 本地 Agent 连接说明明确区分插件 / 手动 MCP 才会增加 Codex token 消耗，直接运行 Agent 不受影响。
 + [优化] 优化本地 Agent 连接说明，区分 Codex 插件启动和直接运行 Agent 两种方式。
 + [新增] Agent 对话消息改用 streamdown 流式渲染，提升长回复与 Markdown 内容展示效果。

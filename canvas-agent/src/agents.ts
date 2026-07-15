@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 
 import { AGENT_PROMPT, VERSION } from "./config.js";
@@ -11,7 +12,7 @@ import type { AgentAttachment, AgentEmit } from "./types.js";
 type Json = Record<string, unknown>;
 type AgentEvent = Json & { type: string; usage?: unknown };
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-type CodexRunOptions = { threadId?: string; cwd?: string };
+type CodexRunOptions = { threadId?: string; cwd?: string; model?: string };
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
 
 let codexQueue: Promise<unknown> = Promise.resolve();
@@ -47,7 +48,7 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
             if (!isRecoverableThreadError(error)) throw error;
             emit("agent_log", { text: `Codex thread unavailable, starting a new thread: ${errorMessage(error)}` });
             codexThreadId = "";
-            threadId = await ensureCodexThread(codexApp, { cwd: options.cwd }, emit);
+            threadId = await ensureCodexThread(codexApp, { cwd: options.cwd, model: options.model }, emit);
             await codexApp.startTurn(threadId, prompt, files);
         }
     } catch (error) {
@@ -57,9 +58,9 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
     }
 }
 
-export async function startCodexThread(emit: AgentEmit, cwd?: string) {
+export async function startCodexThread(emit: AgentEmit, cwd?: string, model?: string) {
     codexApp ||= await CodexAppClient.start(emit);
-    const thread = await codexApp.startThread(cwd);
+    const thread = await codexApp.startThread(cwd, model);
     codexThreadId = String(field(thread, "id") || "");
     return thread;
 }
@@ -125,7 +126,7 @@ async function ensureCodexThread(app: CodexAppClient, options: CodexRunOptions, 
         }
     }
     if (!codexThreadId) {
-        const thread = await app.startThread(options.cwd);
+        const thread = await app.startThread(options.cwd, options.model);
         codexThreadId = String(field(thread, "id") || "");
     }
     return codexThreadId;
@@ -150,7 +151,9 @@ class CodexAppClient {
     static async start(emit: AgentEmit) {
         const child = spawn(process.execPath, [codexBin(), "app-server", "--stdio"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
         const client = new CodexAppClient(child, emit);
-        child.stdout?.on("data", (chunk) => client.read(chunk.toString()));
+        const stdoutDecoder = createUtf8StreamDecoder((text) => client.read(text));
+        child.stdout?.on("data", stdoutDecoder.write);
+        child.stdout?.on("end", stdoutDecoder.end);
         child.stderr?.on("data", (chunk) => emit("agent_log", { text: chunk.toString() }));
         child.on("error", (error) => emit("agent_error", { message: error.message }));
         child.on("exit", (code) => {
@@ -164,8 +167,8 @@ class CodexAppClient {
         return client;
     }
 
-    async startThread(cwd?: string) {
-        const result = await this.request("thread/start", { approvalPolicy: "never", sandbox: "workspace-write", config: codexConfig(), ...(cwd ? { cwd } : {}), threadSource: "user" });
+    async startThread(cwd?: string, model?: string) {
+        const result = await this.request("thread/start", codexThreadStartParams(cwd, model));
         const thread = field(result, "thread") as Json | undefined;
         const id = String(field(thread, "id") || "");
         if (!id) throw new Error("Codex app-server 没有返回 thread id");
@@ -260,16 +263,18 @@ class CodexAppClient {
         if (event.type === "turn.completed") {
             const turnId = String(field(params, "turnId") || field(field(params, "turn"), "id") || "");
             const pending = this.activeTurns.get(turnId);
-            const error = field(field(params, "turn"), "error");
+            const turn = field(params, "turn");
+            const status = String(field(turn, "status") || "");
+            const failure = codexTurnFailure(turn);
             if (pending) {
                 this.activeTurns.delete(turnId);
-                error ? pending.reject(new Error(String(field(error, "message") || "Codex turn failed"))) : pending.resolve(event);
+                failure ? pending.reject(failure) : pending.resolve(event);
             } else if (turnId) {
-                this.completedTurns.set(turnId, error ? new Error(String(field(error, "message") || "Codex turn failed")) : null);
+                this.completedTurns.set(turnId, failure);
             }
             this.emit("agent_event", { agent: "codex", type: "stream.summary", delta_count: this.deltaCount });
             this.deltaCount = 0;
-            this.emit("agent_done", { agent: "codex", usage: event.usage });
+            this.emit("agent_done", { agent: "codex", usage: event.usage, status });
         }
     }
 
@@ -305,6 +310,15 @@ class CodexAppClient {
     }
 }
 
+export function createUtf8StreamDecoder(consume: (text: string) => void) {
+    const decoder = new StringDecoder("utf8");
+    const forward = (text: string) => text && consume(text);
+    return {
+        write: (chunk: Buffer) => forward(decoder.write(chunk)),
+        end: () => forward(decoder.end()),
+    };
+}
+
 function canvasAgentMcpCommand() {
     const current = process.argv.find((arg) => /index\.(t|j)s$/.test(arg)) || "";
     const entry = path.resolve(current || fileURLToPath(new URL("./index.js", import.meta.url)));
@@ -314,6 +328,20 @@ function canvasAgentMcpCommand() {
 
 function codexConfig() {
     return { mcp_servers: { "infinite-canvas": { command: canvasAgentMcp.command, args: canvasAgentMcp.args, default_tools_approval_mode: "approve", startup_timeout_sec: 20, tool_timeout_sec: 90 } } };
+}
+
+export function codexThreadStartParams(cwd?: string, model?: string) {
+    return { approvalPolicy: "never", sandbox: "workspace-write", config: codexConfig(), ...(cwd ? { cwd } : {}), ...(model ? { model } : {}), threadSource: "user" };
+}
+
+export function codexTurnFailure(turn: unknown) {
+    const error = field(turn, "error");
+    const message = String(field(error, "message") || "");
+    if (message) return new Error(message);
+    const status = String(field(turn, "status") || "");
+    if (status === "failed") return new Error("Codex turn failed");
+    if (status === "interrupted") return new Error("Codex turn interrupted");
+    return null;
 }
 
 function codexInput(prompt: string, images: string[]) {

@@ -47,9 +47,10 @@ export function startHttpServer() {
         const result = await listCodexThreads(emit, { cwd: workspace.workspacePath, searchTerm: String(req.query.searchTerm || "") });
         res.json({ ok: true, workspace, ...result });
     }));
-    app.post("/agent/codex/threads/new", route(async (_req, res) => {
+    app.post("/agent/codex/threads/new", route(async (req, res) => {
         const workspace = ensureSiteWorkspace(config);
-        const thread = await startCodexThread(emit, workspace.workspacePath);
+        const requestedModel = typeof req.body?.model === "string" ? req.body.model.trim() : "";
+        const thread = await startCodexThread(emit, workspace.workspacePath, requestedModel || undefined);
         const activeThreadId = String((thread as Record<string, unknown>).id || "");
         updateSiteWorkspace(config, { activeThreadId });
         res.json({ ok: true, workspace: { ...workspace, activeThreadId }, thread: summarizeCodexThread(thread), messages: [] });
