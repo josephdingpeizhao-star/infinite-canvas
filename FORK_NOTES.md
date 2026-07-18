@@ -25,6 +25,13 @@
 | 17 | `docs/content/docs/progress/pending-test.mdx` | “待测试”清单 | 新增工作流演示人工验收项 | 按 fork 文档纪律记录尚待用户亲手确认的真实交互 | 2026-07-18 |
 | 18 | `web/src/types/canvas.ts` | `CanvasWorkflowDemoStatus` / `CanvasWorkflowDemoMetadata` | 新增后台排队状态及请求/进度时间戳 | M1-b 由桥接常驻服务接管后，前端只写命令并显示排队、进度与离线超时，不再把浏览器计时器当执行事实 | 2026-07-18 |
 | 19 | `CHANGELOG.md` | `Unreleased` | 新增 M1-b 后台接管的用户可感知记录 | 说明占位图已由本机 demo 服务真实落盘后流式上桌，仍为零模型/零费用 | 2026-07-18 |
+| 20 | `web/src/types/canvas.ts` | `CanvasNodeType.BatchInfo`、批次登记及 `sourceFile` 元数据 | 新增信息卡、七项事实、独立登记状态、回执和磁盘原图 SHA-256 凭证类型 | 让 M2-a 信息卡与无损原图通道有可持久化合同，同时不改变现有 manifest 字段 | 2026-07-18 |
+| 21 | `web/src/constant/canvas.ts` | `NODE_DEFAULT_SIZE` 与 `NODE_SPECS` | 登记信息卡默认尺寸、固定 6+8 / 手持 2+1 和初始开关 | 让工具栏按现有节点工厂创建一张完整但尚未登记的信息卡 | 2026-07-18 |
+| 22 | `web/src/components/canvas/canvas-node.tsx` | `NodeContent()` 与 `nodeContentRenderers` | 新信息卡类型走专用富内容渲染分支并保留兜底 | 不改变既有节点渲染和连接点，只为 M2-a 注入原生画布卡片 | 2026-07-18 |
+| 23 | `web/src/components/canvas/canvas-toolbar.tsx` | `CanvasToolbar` 参数、节点工具区与 `toolLabel()` | 新增“信息卡”创建按钮及提示 | 用户可从现有底部工具栏直接放置批次信息卡 | 2026-07-18 |
+| 24 | `web/src/pages/canvas/project.tsx` | 信息卡控制器接入、原始 File 凭证、节点渲染、工具栏创建、删除/清空和刷新恢复 | 磁盘图片首次入画保存原字节 SHA-256，派生图清除原图标记；信息卡只写 `build: batch` 并在本机服务接单后逐图无损上传 | 完成 M2-a 画布内登记闭环，不把 M1“开始”按钮变成真实生产 | 2026-07-18 |
+| 25 | `web/src/components/canvas/canvas-node-hover-toolbar.tsx` | `CanvasNodeInfoModal` 类型名称 | 新类型显示为“信息卡” | 避免节点信息把批次卡误标成生成配置 | 2026-07-18 |
+| 26 | `CHANGELOG.md` | `Unreleased` | 新增 M2-a 信息卡与无损登记的用户可感知记录 | 明确登记不生图、不收费，SHA-256 不一致时硬停止且不重试 | 2026-07-18 |
 
 ## 新增文件
 
@@ -34,6 +41,10 @@
 - `web/src/components/canvas/canvas-workflow-cost-card.tsx`：每次演示开始前不可跳过的 0 元费用确认卡。
 - `web/src/pages/canvas/use-canvas-workflow-demo.ts`：页面私有的 0 元确认门；确认后只把 `run/retry: renders` 命令写入画布状态，并负责未接单/进度停顿的人话降级，不再生成图片。
 - `web/tests/canvas-workflow-demo.test.ts`：保留原 7 项断言，并新增后台命令、重跑、未接单和中断状态合同。
+- `web/src/lib/canvas/canvas-batch-intake.ts`：M2-a 七项事实、连线门禁、中文路由、磁盘原图 SHA-256 证据和回环 raw POST 合同；任何哈希异常硬停止且不重试。
+- `web/src/components/canvas/canvas-batch-info-node.tsx`：画布原生信息卡，直接填写品类、高度和三个开关，并显示固定张数、人话状态及成功回执。
+- `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
+- `web/tests/canvas-batch-intake.test.ts`：覆盖七项事实、单卡单机原图连线、中文编码、首次 File 与浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
 
 ## 上游同步纪律
 

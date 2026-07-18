@@ -14,6 +14,7 @@ export enum CanvasNodeType {
     Text = "text",
     Config = "config",
     Workflow = "workflow",
+    BatchInfo = "batch-info",
     Video = "video",
     Audio = "audio",
     Group = "group",
@@ -34,6 +35,52 @@ export type CanvasWorkflowDemoOutputMetadata = {
     workflowNodeId: string;
     runId: string;
     index: number;
+};
+export type CanvasBatchIntakeStatus = "draft" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
+export type CanvasBatchSourceFile = {
+    name: string;
+    size: number;
+    type: string;
+    lastModified: number;
+    sha256: string;
+};
+export type CanvasBatchIntakeFacts = {
+    product_type: string;
+    height_cm: number;
+    handheld_main: 2;
+    handheld_detail: 1;
+    allow_clear_water: boolean;
+    forbid_pouring_and_heating: boolean;
+    missing_d_no_retake: boolean;
+};
+export type CanvasBatchIntakeReceipt = {
+    batchId: string;
+    imageCount: number;
+    facts: CanvasBatchIntakeFacts;
+};
+export type CanvasBatchIntakeMetadata = {
+    status: CanvasBatchIntakeStatus;
+    productType: string;
+    productHeightCm?: number;
+    allowClearWater: boolean;
+    prohibitPouringAndHeating: boolean;
+    skipMissingDAngle: boolean;
+    mainImageCount: 6;
+    detailImageCount: 8;
+    handheldMainCount: 2;
+    handheldDetailCount: 1;
+    facts?: CanvasBatchIntakeFacts;
+    requestId?: string;
+    requestedAt?: number;
+    updatedAt?: number;
+    workflowNodeId?: string;
+    sourceImageNodeIds?: string[];
+    batchId?: string;
+    uploadBaseUrl?: string;
+    expectedCount?: number;
+    receivedCount?: number;
+    errorMessage?: string;
+    receipt?: CanvasBatchIntakeReceipt;
 };
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
@@ -76,6 +123,8 @@ export type CanvasNodeMetadata = {
     groupId?: string;
     workflowDemo?: CanvasWorkflowDemoMetadata;
     workflowDemoOutput?: CanvasWorkflowDemoOutputMetadata;
+    batchIntake?: CanvasBatchIntakeMetadata;
+    sourceFile?: CanvasBatchSourceFile;
 };
 
 export type CanvasNodeData = {

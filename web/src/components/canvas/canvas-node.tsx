@@ -409,7 +409,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 });
 
 function NodeContent(props: NodeContentRendererProps) {
-    if (usesCustomNodeContent(props.node.type) && props.renderNodeContent) return props.renderNodeContent(props.node);
+    if ((usesCustomNodeContent(props.node.type) || props.node.type === CanvasNodeType.BatchInfo) && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent theme={props.theme} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />;
@@ -423,10 +423,19 @@ const nodeContentRenderers = {
     [CanvasNodeType.Image]: ImageNodeContent,
     [CanvasNodeType.Config]: EmptyImageContent,
     [CanvasNodeType.Workflow]: WorkflowFallbackContent,
+    [CanvasNodeType.BatchInfo]: BatchInfoFallbackContent,
     [CanvasNodeType.Video]: VideoNodeContent,
     [CanvasNodeType.Audio]: AudioNodeContent,
     [CanvasNodeType.Group]: GroupNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
+
+function BatchInfoFallbackContent({ theme }: NodeContentRendererProps) {
+    return (
+        <div className="grid h-full place-items-center p-4 text-center text-sm" style={{ color: theme.node.placeholder }}>
+            批次信息卡正在准备中
+        </div>
+    );
+}
 
 function WorkflowFallbackContent({ theme }: NodeContentRendererProps) {
     return (

@@ -32,6 +32,7 @@ import { CanvasNodeSplitDialog, type CanvasImageSplitParams } from "@/components
 import { CanvasNodeUpscaleDialog, type CanvasImageUpscaleParams } from "@/components/canvas/canvas-node-upscale-dialog";
 import { buildNodeGenerationContext, buildNodeGenerationInputs, buildNodeResponseMessages, hydrateNodeGenerationContext, type NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-hover-toolbar";
+import { CanvasBatchInfoNode } from "@/components/canvas/canvas-batch-info-node";
 import { CanvasWorkflowCostCard } from "@/components/canvas/canvas-workflow-cost-card";
 import { CanvasWorkflowNode, CanvasWorkflowNodePanel } from "@/components/canvas/canvas-workflow-node";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
@@ -46,11 +47,14 @@ import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
+import { batchSourceFilePatch, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
+import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
 import { useCanvasWorkflowDemo } from "./use-canvas-workflow-demo";
 import {
     CanvasNodeType,
     type CanvasAssistantImage,
     type CanvasAssistantSession,
+    type CanvasBatchSourceFile,
     type CanvasConnection,
     type CanvasImageGenerationType,
     type CanvasNodeData,
@@ -333,6 +337,13 @@ function InfiniteCanvasPage() {
         setConnections,
         warn: (text) => void message.warning(text),
     });
+    const batchIntake = useCanvasBatchIntake({
+        nodes,
+        nodesRef,
+        connectionsRef,
+        setNodes,
+        warn: (text) => void message.warning(text),
+    });
 
     const createHistoryEntry = useCallback(
         (): CanvasHistoryEntry => ({
@@ -409,7 +420,7 @@ function InfiniteCanvasPage() {
         }
 
         const restore = async () => {
-            const restoredNodes = await hydrateCanvasImages(resetInterruptedWorkflowDemos(resetInterruptedGeneration(project.nodes)));
+            const restoredNodes = await hydrateCanvasImages(resetInterruptedBatchIntakes(resetInterruptedWorkflowDemos(resetInterruptedGeneration(project.nodes))));
             const restoredSessions = await hydrateAssistantImages(project.chatSessions || []);
             setNodes(restoredNodes);
             setConnections(project.connections);
@@ -792,7 +803,7 @@ function InfiniteCanvasPage() {
             setNodes((prev) => [...prev, newNode]);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
-            if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Group) setDialogNodeId(newNode.id);
+            if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Group && type !== CanvasNodeType.BatchInfo) setDialogNodeId(newNode.id);
         },
         [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter],
     );
@@ -805,6 +816,7 @@ function InfiniteCanvasPage() {
                 if (ids.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => allIds.add(childId));
             });
             workflowDemo.cancelNodes(allIds);
+            batchIntake.cancelNodes(allIds);
             setNodes((prev) => {
                 const next = prev.filter((node) => !allIds.has(node.id));
                 return next.map((node) => {
@@ -843,7 +855,7 @@ function InfiniteCanvasPage() {
             setContextMenu((current) => (current?.type === "node" && allIds.has(current.nodeId) ? null : current));
             cleanupCanvasFiles({ projectId, nodes: nodesRef.current.filter((node) => !allIds.has(node.id)), chatSessions });
         },
-        [chatSessions, cleanupCanvasFiles, projectId, workflowDemo.cancelNodes],
+        [batchIntake.cancelNodes, chatSessions, cleanupCanvasFiles, projectId, workflowDemo.cancelNodes],
     );
 
     const deleteConnection = useCallback((connectionId: string) => {
@@ -866,6 +878,7 @@ function InfiniteCanvasPage() {
 
     const clearCanvas = useCallback(() => {
         workflowDemo.cancelAll();
+        batchIntake.cancelAll();
         setNodes([]);
         setConnections([]);
         setInfoNodeId(null);
@@ -877,7 +890,7 @@ function InfiniteCanvasPage() {
         deselectCanvas();
         setClearConfirmOpen(false);
         cleanupCanvasFiles({ projectId, nodes: [], chatSessions: [] });
-    }, [cleanupCanvasFiles, deselectCanvas, projectId, workflowDemo.cancelAll]);
+    }, [batchIntake.cancelAll, cleanupCanvasFiles, deselectCanvas, projectId, workflowDemo.cancelAll]);
 
     const duplicateNode = useCallback((nodeId: string) => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
@@ -894,7 +907,7 @@ function InfiniteCanvasPage() {
         setNodes((prev) => [...prev, next]);
         setSelectedNodeIds(new Set([id]));
         setSelectedConnectionId(null);
-        if (next.type !== CanvasNodeType.Group) setDialogNodeId(id);
+        if (next.type !== CanvasNodeType.Group && next.type !== CanvasNodeType.BatchInfo) setDialogNodeId(id);
     }, []);
 
     const copySelectedNodes = useCallback(() => {
@@ -1295,7 +1308,7 @@ function InfiniteCanvasPage() {
     }, [finishNodeDrag, handleGlobalMouseMove, handleGlobalMouseUp, handleGlobalPointerMove]);
 
     const createImageFileNode = useCallback(async (file: File, position: Position) => {
-        const image = await uploadImage(file);
+        const [image, sourceFile] = await Promise.all([uploadImage(file), createBatchSourceFile(file)]);
         const size = fitNodeSize(image.width, image.height);
         const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const newNode: CanvasNodeData = {
@@ -1305,7 +1318,7 @@ function InfiniteCanvasPage() {
             position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
             width: size.width,
             height: size.height,
-            metadata: imageMetadata(image),
+            metadata: imageMetadata(image, sourceFile),
         };
 
         setNodes((prev) => [...prev, newNode]);
@@ -1889,7 +1902,7 @@ function InfiniteCanvasPage() {
                     event.target.value = "";
                     return;
                 }
-                const image = await uploadImage(file);
+                const [image, sourceFile] = await Promise.all([uploadImage(file), createBatchSourceFile(file)]);
                 const size = fitNodeSize(image.width, image.height);
                 setNodes((prev) =>
                     prev.map((node) =>
@@ -1902,7 +1915,7 @@ function InfiniteCanvasPage() {
                                   height: size.height,
                                   metadata: {
                                       ...node.metadata,
-                                      ...imageMetadata(image),
+                                      ...imageMetadata(image, sourceFile),
                                       errorDetails: undefined,
                                       freeResize: false,
                                       isBatchRoot: undefined,
@@ -2582,7 +2595,7 @@ function InfiniteCanvasPage() {
                             resourceLabel={resourceReferenceByNodeId.get(node.id)}
                             mentionReferences={mentionReferencesByNodeId.get(node.id) || []}
                             renderPanel={(panelNode) =>
-                                panelNode.type === CanvasNodeType.Workflow ? (
+                                panelNode.type === CanvasNodeType.BatchInfo ? null : panelNode.type === CanvasNodeType.Workflow ? (
                                     <CanvasWorkflowNodePanel onClose={() => setDialogNodeId(null)} />
                                 ) : panelNode.type === CanvasNodeType.Config ? (
                                     <CanvasConfigComposer
@@ -2608,7 +2621,14 @@ function InfiniteCanvasPage() {
                                 )
                             }
                             renderNodeContent={(contentNode) =>
-                                contentNode.type === CanvasNodeType.Workflow ? (
+                                contentNode.type === CanvasNodeType.BatchInfo ? (
+                                    <CanvasBatchInfoNode
+                                        node={contentNode}
+                                        connectedOriginalCount={connectedBatchOriginalImageIds(contentNode.id, nodes, connections).length}
+                                        onChange={batchIntake.updateFacts}
+                                        onRegister={batchIntake.requestRegistration}
+                                    />
+                                ) : contentNode.type === CanvasNodeType.Workflow ? (
                                     <CanvasWorkflowNode
                                         node={contentNode}
                                         connectedImageCount={connectedWorkflowImageIds(contentNode.id, nodes, connections).length}
@@ -2710,6 +2730,7 @@ function InfiniteCanvasPage() {
                     onAddText={() => createNode(CanvasNodeType.Text)}
                     onAddConfig={() => createNode(CanvasNodeType.Config)}
                     onAddWorkflow={() => createNode(CanvasNodeType.Workflow)}
+                    onAddBatchInfo={() => createNode(CanvasNodeType.BatchInfo)}
                     onAddGroup={() => createNode(CanvasNodeType.Group)}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
@@ -3024,8 +3045,8 @@ function audioExtension(mimeType?: string) {
     return "mp3";
 }
 
-function imageMetadata(image: UploadedImage): CanvasNodeMetadata {
-    return { content: image.url, storageKey: image.storageKey, status: "success", naturalWidth: image.width, naturalHeight: image.height, bytes: image.bytes, mimeType: image.mimeType };
+function imageMetadata(image: UploadedImage, sourceFile?: CanvasBatchSourceFile): CanvasNodeMetadata {
+    return { content: image.url, storageKey: image.storageKey, status: "success", naturalWidth: image.width, naturalHeight: image.height, bytes: image.bytes, mimeType: image.mimeType, ...batchSourceFilePatch(sourceFile) };
 }
 
 function videoMetadata(video: UploadedFile): CanvasNodeMetadata {
