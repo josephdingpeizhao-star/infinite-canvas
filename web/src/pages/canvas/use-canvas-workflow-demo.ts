@@ -2,13 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { nanoid } from "nanoid";
 
 import {
+    buildWorkflowDemoCommand,
     connectedWorkflowImageIds,
-    createWorkflowDemoPlaceholder,
-    findWorkflowDemoOutputPosition,
+    expireWorkflowDemoState,
     readWorkflowDemoState,
-    startWorkflowDemoSequence,
-    WORKFLOW_DEMO_TOTAL,
-    type WorkflowDemoFrame,
 } from "@/lib/canvas/canvas-workflow-demo";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowDemoMetadata } from "@/types/canvas";
 
@@ -27,10 +24,9 @@ type PendingConfirmation = {
     previous: CanvasWorkflowDemoMetadata;
 };
 
-export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connectionsRef, setNodes, setConnections, warn }: WorkflowDemoControllerOptions) {
+export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connectionsRef, setNodes, warn }: WorkflowDemoControllerOptions) {
     const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
     const pendingConfirmationRef = useRef(pendingConfirmation);
-    const sequencesRef = useRef(new Map<string, { cancel: () => void }>());
 
     useEffect(() => {
         pendingConfirmationRef.current = pendingConfirmation;
@@ -52,7 +48,8 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
     const requestStart = useCallback(
         (nodeId: string) => {
             const workflow = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Workflow);
-            if (!workflow || readWorkflowDemoState(workflow.metadata).status === "running") return;
+            const workflowStatus = workflow ? readWorkflowDemoState(workflow.metadata).status : "idle";
+            if (!workflow || workflowStatus === "running" || workflowStatus === "queued" || workflowStatus === "awaiting_confirmation") return;
             const inputIds = connectedWorkflowImageIds(nodeId, nodesRef.current, connectionsRef.current);
             if (!inputIds.length) {
                 warn("请先把至少 1 张图片素材连到工作流左侧输入点。");
@@ -88,33 +85,19 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
             return;
         }
 
-        sequencesRef.current.get(workflow.id)?.cancel();
-        const runId = nanoid(10);
+        const requestId = nanoid(10);
         pendingConfirmationRef.current = null;
         setPendingConfirmation(null);
-        updateWorkflowState(workflow.id, (state) => ({ ...state, status: "running", producedCount: 0, runId, errorMessage: undefined }));
-
-        const sequence = startWorkflowDemoSequence({
-            runId,
-            onFrame: (frame) => insertFrame(workflow.id, frame, nodesRef, setNodes, setConnections),
-            onComplete: () => {
-                sequencesRef.current.delete(workflow.id);
-                updateWorkflowState(workflow.id, (state) => ({ ...state, status: "completed", producedCount: WORKFLOW_DEMO_TOTAL, completedRuns: state.completedRuns + 1, runId, errorMessage: undefined }));
-            },
-            onError: () => {
-                sequencesRef.current.delete(workflow.id);
-                updateWorkflowState(workflow.id, (state) => ({ ...state, status: "failed", errorMessage: "演示没有完成，已经上桌的图片仍然保留。可以重新开始。" }));
-                warn("演示没有完成，已经上桌的图片仍然保留。");
-            },
-        });
-        sequencesRef.current.set(workflow.id, sequence);
-    }, [connectionsRef, nodesRef, setConnections, setNodes, updateWorkflowState, warn]);
+        setNodes((current) =>
+            current.map((node) => {
+                if (node.id !== workflow.id || node.type !== CanvasNodeType.Workflow) return node;
+                const command = buildWorkflowDemoCommand(readWorkflowDemoState(node.metadata), requestId, Date.now());
+                return { ...node, metadata: { ...node.metadata, content: command.content, workflowDemo: command.state } };
+            }),
+        );
+    }, [connectionsRef, nodesRef, setNodes, updateWorkflowState, warn]);
 
     const cancelNodes = useCallback((nodeIds: Set<string>) => {
-        nodeIds.forEach((nodeId) => {
-            sequencesRef.current.get(nodeId)?.cancel();
-            sequencesRef.current.delete(nodeId);
-        });
         const pending = pendingConfirmationRef.current;
         if (pending && nodeIds.has(pending.nodeId)) {
             pendingConfirmationRef.current = null;
@@ -123,20 +106,12 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
     }, []);
 
     const cancelAll = useCallback(() => {
-        sequencesRef.current.forEach((sequence) => sequence.cancel());
-        sequencesRef.current.clear();
         pendingConfirmationRef.current = null;
         setPendingConfirmation(null);
     }, []);
 
     useEffect(() => {
         const liveWorkflowIds = new Set(nodes.filter((node) => node.type === CanvasNodeType.Workflow).map((node) => node.id));
-        sequencesRef.current.forEach((sequence, nodeId) => {
-            const node = nodes.find((candidate) => candidate.id === nodeId);
-            if (liveWorkflowIds.has(nodeId) && node && readWorkflowDemoState(node.metadata).status === "running") return;
-            sequence.cancel();
-            sequencesRef.current.delete(nodeId);
-        });
         const pending = pendingConfirmationRef.current;
         if (pending && !liveWorkflowIds.has(pending.nodeId)) {
             pendingConfirmationRef.current = null;
@@ -146,12 +121,33 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
 
     useEffect(
         () => () => {
-            sequencesRef.current.forEach((sequence) => sequence.cancel());
-            sequencesRef.current.clear();
             pendingConfirmationRef.current = null;
         },
         [],
     );
+
+    useEffect(() => {
+        const handle = globalThis.setInterval(() => {
+            const now = Date.now();
+            setNodes((current) =>
+                current.map((node) => {
+                    if (node.type !== CanvasNodeType.Workflow) return node;
+                    const state = readWorkflowDemoState(node.metadata);
+                    const expired = expireWorkflowDemoState(state, now);
+                    if (expired === state) return node;
+                    return {
+                        ...node,
+                        metadata: {
+                            ...node.metadata,
+                            content: `# request-id: ${expired.runId || "unknown"}\n# expired`,
+                            workflowDemo: expired,
+                        },
+                    };
+                }),
+            );
+        }, 1000);
+        return () => globalThis.clearInterval(handle);
+    }, [setNodes]);
 
     const pendingConnectedImageCount = useMemo(
         () => (pendingConfirmation ? connectedWorkflowImageIds(pendingConfirmation.nodeId, nodes, connections).length : 0),
@@ -167,47 +163,4 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
         cancelNodes,
         cancelAll,
     };
-}
-
-function insertFrame(
-    workflowNodeId: string,
-    frame: WorkflowDemoFrame,
-    nodesRef: MutableRefObject<CanvasNodeData[]>,
-    setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>,
-    setConnections: Dispatch<SetStateAction<CanvasConnection[]>>,
-) {
-    const workflow = nodesRef.current.find((node) => node.id === workflowNodeId && node.type === CanvasNodeType.Workflow);
-    if (!workflow) throw new Error("工作流节点已不存在");
-    const position = findWorkflowDemoOutputPosition(workflow, nodesRef.current, frame);
-    const content = createWorkflowDemoPlaceholder(frame);
-    const output: CanvasNodeData = {
-        id: frame.id,
-        type: CanvasNodeType.Image,
-        title: frame.label,
-        position,
-        width: frame.width,
-        height: frame.height,
-        metadata: {
-            content,
-            status: "success",
-            naturalWidth: frame.naturalWidth,
-            naturalHeight: frame.naturalHeight,
-            workflowDemoOutput: { workflowNodeId, runId: frame.runId, index: frame.index },
-        },
-    };
-    setNodes((current) => {
-        if (!current.some((node) => node.id === workflowNodeId) || current.some((node) => node.id === output.id)) return current;
-        return [
-            ...current.map((node) =>
-                node.id === workflowNodeId
-                    ? { ...node, metadata: { ...node.metadata, workflowDemo: { ...readWorkflowDemoState(node.metadata), status: "running" as const, producedCount: frame.index, runId: frame.runId, errorMessage: undefined } } }
-                    : node,
-            ),
-            output,
-        ];
-    });
-    setConnections((current) => {
-        if (current.some((connection) => connection.fromNodeId === workflowNodeId && connection.toNodeId === output.id)) return current;
-        return [...current, { id: `conn-${frame.id}`, fromNodeId: workflowNodeId, toNodeId: output.id }];
-    });
 }

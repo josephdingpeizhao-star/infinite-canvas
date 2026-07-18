@@ -10,7 +10,7 @@ export function CanvasWorkflowCostCard({ open, connectedImageCount, onConfirm, o
     const rows = [
         { icon: <Images className="size-4" />, label: "本次张数", value: `${WORKFLOW_DEMO_TOTAL} 张` },
         { icon: <Coins className="size-4" />, label: "演示费用", value: "0 元" },
-        { icon: <Clock3 className="size-4" />, label: "预计时长", value: "约 30 秒" },
+        { icon: <Clock3 className="size-4" />, label: "预计时长", value: "约 30–60 秒" },
     ];
     return (
         <Modal
@@ -45,7 +45,7 @@ export function CanvasWorkflowCostCard({ open, connectedImageCount, onConfirm, o
                 </div>
                 <div className="mt-3 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs leading-5" style={{ borderColor: theme.node.stroke, background: theme.toolbar.activeBg }}>
                     <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-                    <span>所有图片都由当前网页直接绘制，只用于演示，不会产生任何费用，也不会把素材发送到外部服务。</span>
+                    <span>本机演示服务会生成真实占位图片文件，只用于零成本演示，不会调用模型，也不会把素材发送到外部服务。</span>
                 </div>
                 <div className="mt-3 text-xs" style={{ color: theme.node.muted }}>
                     已连接 {connectedImageCount} 张图片素材。取消后不会生成任何内容。

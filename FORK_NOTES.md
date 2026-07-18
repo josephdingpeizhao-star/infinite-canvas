@@ -23,15 +23,17 @@
 | 15 | `web/src/components/canvas/canvas-node-hover-toolbar.tsx` | `CanvasNodeInfoModal` 类型名称 | 新类型显示为“工作流” | 避免节点信息把演示机器误标成“生成配置” | 2026-07-18 |
 | 16 | `CHANGELOG.md` | `Unreleased` | 新增一条 M1-a 版本级记录 | 让 fork 的用户可感知变化进入既有发布记录 | 2026-07-18 |
 | 17 | `docs/content/docs/progress/pending-test.mdx` | “待测试”清单 | 新增工作流演示人工验收项 | 按 fork 文档纪律记录尚待用户亲手确认的真实交互 | 2026-07-18 |
+| 18 | `web/src/types/canvas.ts` | `CanvasWorkflowDemoStatus` / `CanvasWorkflowDemoMetadata` | 新增后台排队状态及请求/进度时间戳 | M1-b 由桥接常驻服务接管后，前端只写命令并显示排队、进度与离线超时，不再把浏览器计时器当执行事实 | 2026-07-18 |
+| 19 | `CHANGELOG.md` | `Unreleased` | 新增 M1-b 后台接管的用户可感知记录 | 说明占位图已由本机 demo 服务真实落盘后流式上桌，仍为零模型/零费用 | 2026-07-18 |
 
 ## 新增文件
 
 - `canvas-agent/src/agents.test.ts`：覆盖可选模型 thread 参数及 completed / failed / interrupted 状态判定；只测试通用 canvas-agent 边界，不含工作流语义。
-- `web/src/lib/canvas/canvas-workflow-demo.ts`：M1-a 纯前端演示合同、14 张输出规划、避让布局、占位图绘制和可取消计时序列。
-- `web/src/components/canvas/canvas-workflow-node.tsx`：工作流机器卡、五种状态及只读演示信息面板。
+- `web/src/lib/canvas/canvas-workflow-demo.ts`：M1-a 演示合同与既有回归保留；M1-b 新增唯一命令、排队确认和后台停顿超时合同，浏览器本地绘图序列不再由页面控制器调用。
+- `web/src/components/canvas/canvas-workflow-node.tsx`：工作流机器卡、排队/制作/完成/失败等人话状态及只读演示信息面板。
 - `web/src/components/canvas/canvas-workflow-cost-card.tsx`：每次演示开始前不可跳过的 0 元费用确认卡。
-- `web/src/pages/canvas/use-canvas-workflow-demo.ts`：页面私有的确认门、流式插入和计时器生命周期控制器。
-- `web/tests/canvas-workflow-demo.test.ts`：覆盖工作流专用渲染分支、序列化容忍、输入计数、14 张边界、避让布局、计时器清理和刷新中断。
+- `web/src/pages/canvas/use-canvas-workflow-demo.ts`：页面私有的 0 元确认门；确认后只把 `run/retry: renders` 命令写入画布状态，并负责未接单/进度停顿的人话降级，不再生成图片。
+- `web/tests/canvas-workflow-demo.test.ts`：保留原 7 项断言，并新增后台命令、重跑、未接单和中断状态合同。
 
 ## 上游同步纪律
 

@@ -20,13 +20,15 @@ export enum CanvasNodeType {
 }
 
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
-export type CanvasWorkflowDemoStatus = "idle" | "awaiting_confirmation" | "running" | "completed" | "failed";
+export type CanvasWorkflowDemoStatus = "idle" | "awaiting_confirmation" | "queued" | "running" | "completed" | "failed";
 export type CanvasWorkflowDemoMetadata = {
     status: CanvasWorkflowDemoStatus;
     producedCount: number;
     completedRuns: number;
     runId?: string;
     errorMessage?: string;
+    requestedAt?: number;
+    updatedAt?: number;
 };
 export type CanvasWorkflowDemoOutputMetadata = {
     workflowNodeId: string;

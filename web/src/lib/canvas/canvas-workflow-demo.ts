@@ -5,7 +5,10 @@ export const WORKFLOW_DEMO_MAIN_COUNT = 6;
 export const WORKFLOW_DEMO_DETAIL_COUNT = 8;
 
 const WORKFLOW_DEMO_DELAYS = [1500, 1750, 2000, 2250, 2500] as const;
-const WORKFLOW_DEMO_STATUSES = new Set(["idle", "awaiting_confirmation", "running", "completed", "failed"]);
+const WORKFLOW_DEMO_STATUSES = new Set(["idle", "awaiting_confirmation", "queued", "running", "completed", "failed"]);
+
+export const WORKFLOW_DEMO_ACK_TIMEOUT_MS = 8000;
+export const WORKFLOW_DEMO_PROGRESS_TIMEOUT_MS = 12000;
 
 export type WorkflowDemoFrame = {
     id: string;
@@ -68,7 +71,45 @@ export function readWorkflowDemoState(metadata?: CanvasNodeMetadata): CanvasWork
         completedRuns: clampInteger(value?.completedRuns, 0, Number.MAX_SAFE_INTEGER),
         runId: typeof value?.runId === "string" && value.runId ? value.runId : undefined,
         errorMessage: typeof value?.errorMessage === "string" && value.errorMessage ? value.errorMessage : undefined,
+        requestedAt: finiteTimestamp(value?.requestedAt),
+        updatedAt: finiteTimestamp(value?.updatedAt),
     };
+}
+
+export function buildWorkflowDemoCommand(state: CanvasWorkflowDemoMetadata, requestId: string, now: number) {
+    const retry = state.completedRuns > 0 || state.producedCount > 0;
+    return {
+        content: `# workflow-demo\n# request-id: ${requestId}\n# requested-at: ${now}\n${retry ? "retry" : "run"}: renders`,
+        state: {
+            ...state,
+            status: "queued" as const,
+            producedCount: 0,
+            runId: requestId,
+            errorMessage: undefined,
+            requestedAt: now,
+            updatedAt: now,
+        },
+    };
+}
+
+export function expireWorkflowDemoState(state: CanvasWorkflowDemoMetadata, now: number): CanvasWorkflowDemoMetadata {
+    if (state.status === "queued" && state.requestedAt !== undefined && now - state.requestedAt >= WORKFLOW_DEMO_ACK_TIMEOUT_MS) {
+        return {
+            ...state,
+            status: "failed",
+            updatedAt: now,
+            errorMessage: "本机演示服务没有响应，请重新启动画布服务后再试。",
+        };
+    }
+    if (state.status === "running" && state.updatedAt !== undefined && now - state.updatedAt >= WORKFLOW_DEMO_PROGRESS_TIMEOUT_MS) {
+        return {
+            ...state,
+            status: "failed",
+            updatedAt: now,
+            errorMessage: "本机演示服务已中断，已经完成的图片仍然保留。",
+        };
+    }
+    return state;
 }
 
 export function connectedWorkflowImageIds(workflowNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
@@ -250,4 +291,8 @@ export function resetInterruptedWorkflowDemos(nodes: CanvasNodeData[]) {
 function clampInteger(value: unknown, minimum: number, maximum: number) {
     const number = typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : minimum;
     return Math.min(maximum, Math.max(minimum, number));
+}
+
+function finiteTimestamp(value: unknown) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }

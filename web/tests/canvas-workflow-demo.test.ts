@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 import {
+    buildWorkflowDemoCommand,
     buildWorkflowDemoFrames,
     connectedWorkflowImageIds,
+    expireWorkflowDemoState,
     findWorkflowDemoOutputPosition,
     readWorkflowDemoState,
     rectanglesOverlap,
@@ -168,5 +170,38 @@ describe("workflow demo node", () => {
         expect(readWorkflowDemoState(restored[1].metadata)).toMatchObject({ status: "idle", producedCount: 0, errorMessage: undefined });
         expect(readWorkflowDemoState(restored[2].metadata)).toMatchObject({ status: "completed", producedCount: 14, errorMessage: undefined });
         expect(readWorkflowDemoState(restored[3].metadata)).toMatchObject({ status: "completed", producedCount: 14 });
+    });
+
+    test("writes one route-gated render command after confirmation", () => {
+        const first = buildWorkflowDemoCommand(readWorkflowDemoState(undefined), "request-001", 1_000);
+        expect(first.content).toContain("# request-id: request-001");
+        expect(first.content).toContain("run: renders");
+        expect(first.state).toMatchObject({ status: "queued", runId: "request-001", requestedAt: 1_000, updatedAt: 1_000 });
+    });
+
+    test("uses retry for reruns and partial failed runs without erasing old history", () => {
+        const completed = readWorkflowDemoState({ workflowDemo: { status: "completed", producedCount: 14, completedRuns: 1 } });
+        expect(buildWorkflowDemoCommand(completed, "request-002", 2_000).content).toContain("retry: renders");
+        const partial = readWorkflowDemoState({ workflowDemo: { status: "failed", producedCount: 3, completedRuns: 0 } });
+        expect(buildWorkflowDemoCommand(partial, "request-003", 3_000).content).toContain("retry: renders");
+    });
+
+    test("turns an unacknowledged queued command into a clear local service failure", () => {
+        const queued = buildWorkflowDemoCommand(readWorkflowDemoState(undefined), "request-004", 4_000).state;
+        expect(expireWorkflowDemoState(queued, 11_999)).toEqual(queued);
+        expect(expireWorkflowDemoState(queued, 12_000)).toMatchObject({
+            status: "failed",
+            errorMessage: "本机演示服务没有响应，请重新启动画布服务后再试。",
+        });
+    });
+
+    test("turns stalled backend progress into an interruption while preserving produced count", () => {
+        const running = readWorkflowDemoState({ workflowDemo: { status: "running", producedCount: 5, completedRuns: 0, runId: "request-005", updatedAt: 5_000 } });
+        expect(expireWorkflowDemoState(running, 16_999)).toEqual(running);
+        expect(expireWorkflowDemoState(running, 17_000)).toMatchObject({
+            status: "failed",
+            producedCount: 5,
+            errorMessage: "本机演示服务已中断，已经完成的图片仍然保留。",
+        });
     });
 });

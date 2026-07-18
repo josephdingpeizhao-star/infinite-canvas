@@ -9,6 +9,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, onStart, onToggl
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const state = readWorkflowDemoState(node.metadata);
     const running = state.status === "running";
+    const queued = state.status === "queued";
     const awaitingConfirmation = state.status === "awaiting_confirmation";
     const statusLabel = workflowStatusLabel(state.status);
     const statusText = workflowStatusText(state.status, state.producedCount, connectedImageCount, state.errorMessage);
@@ -51,7 +52,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, onStart, onToggl
                     type="button"
                     className="inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-55"
                     style={{ borderColor: theme.node.activeStroke, background: theme.node.activeStroke, color: theme.node.panel }}
-                    disabled={running || awaitingConfirmation}
+                    disabled={running || queued || awaitingConfirmation}
                     onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
@@ -59,7 +60,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, onStart, onToggl
                         onStart(node.id);
                     }}
                 >
-                    {running ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
+                    {running || queued ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
                     {workflowActionLabel(state.status)}
                 </button>
                 <button
@@ -131,6 +132,7 @@ function SummaryCell({ label, value }: { label: string; value: string }) {
 
 function workflowStatusLabel(status: CanvasWorkflowDemoStatus) {
     if (status === "awaiting_confirmation") return "待确认";
+    if (status === "queued") return "排队中";
     if (status === "running") return "制作中";
     if (status === "completed") return "完成";
     if (status === "failed") return "需处理";
@@ -139,6 +141,7 @@ function workflowStatusLabel(status: CanvasWorkflowDemoStatus) {
 
 function workflowStatusText(status: CanvasWorkflowDemoStatus, producedCount: number, connectedImageCount: number, errorMessage?: string) {
     if (status === "awaiting_confirmation") return "等待确认本次 0 元演示费用。";
+    if (status === "queued") return "已提交，等待本机演示服务接单。";
     if (status === "running") return `正在生成第 ${Math.min(producedCount + 1, WORKFLOW_DEMO_TOTAL)}/${WORKFLOW_DEMO_TOTAL} 张，已完成 ${producedCount} 张。`;
     if (status === "completed") return `${WORKFLOW_DEMO_TOTAL} 张演示图已上桌。再次开始会保留旧图。`;
     if (status === "failed") return errorMessage || "演示没有完成，已经上桌的图片仍然保留。";
@@ -147,6 +150,7 @@ function workflowStatusText(status: CanvasWorkflowDemoStatus, producedCount: num
 
 function workflowActionLabel(status: CanvasWorkflowDemoStatus) {
     if (status === "running") return "演示进行中";
+    if (status === "queued") return "等待接单";
     if (status === "awaiting_confirmation") return "等待确认";
     if (status === "completed") return "再次开始";
     if (status === "failed") return "重新开始";
@@ -154,7 +158,7 @@ function workflowActionLabel(status: CanvasWorkflowDemoStatus) {
 }
 
 function statusIcon(status: CanvasWorkflowDemoStatus) {
-    if (status === "running") return <LoaderCircle className="size-3 animate-spin" />;
+    if (status === "running" || status === "queued") return <LoaderCircle className="size-3 animate-spin" />;
     if (status === "completed") return <CheckCircle2 className="size-3" />;
     if (status === "failed") return <CircleAlert className="size-3" />;
     return null;
