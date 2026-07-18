@@ -12,6 +12,7 @@ export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Image]: { width: 340, height: 240, title: "图片" },
     [CanvasNodeType.Text]: { width: 340, height: 240, title: "文本" },
     [CanvasNodeType.Config]: { width: 340, height: 240, title: "生成配置" },
+    [CanvasNodeType.Workflow]: { width: 420, height: 300, title: "生图工作流 · 演示" },
     [CanvasNodeType.Video]: { width: 420, height: 236, title: "视频" },
     [CanvasNodeType.Audio]: { width: 340, height: 120, title: "音频" },
     [CanvasNodeType.Group]: { width: 760, height: 480, title: "组" },
@@ -29,6 +30,10 @@ export const NODE_SPECS = {
     [CanvasNodeType.Config]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Config],
         metadata: { content: "", status: "idle", generationMode: "image" },
+    },
+    [CanvasNodeType.Workflow]: {
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Workflow],
+        metadata: { workflowDemo: { status: "idle", producedCount: 0, completedRuns: 0 } },
     },
     [CanvasNodeType.Video]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Video],

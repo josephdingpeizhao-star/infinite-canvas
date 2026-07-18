@@ -13,12 +13,26 @@ export enum CanvasNodeType {
     Image = "image",
     Text = "text",
     Config = "config",
+    Workflow = "workflow",
     Video = "video",
     Audio = "audio",
     Group = "group",
 }
 
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
+export type CanvasWorkflowDemoStatus = "idle" | "awaiting_confirmation" | "running" | "completed" | "failed";
+export type CanvasWorkflowDemoMetadata = {
+    status: CanvasWorkflowDemoStatus;
+    producedCount: number;
+    completedRuns: number;
+    runId?: string;
+    errorMessage?: string;
+};
+export type CanvasWorkflowDemoOutputMetadata = {
+    workflowNodeId: string;
+    runId: string;
+    index: number;
+};
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
 
@@ -58,6 +72,8 @@ export type CanvasNodeMetadata = {
     bytes?: number;
     durationMs?: number;
     groupId?: string;
+    workflowDemo?: CanvasWorkflowDemoMetadata;
+    workflowDemoOutput?: CanvasWorkflowDemoOutputMetadata;
 };
 
 export type CanvasNodeData = {

@@ -5,6 +5,7 @@ description: 当前版本已实现但仍需人工验证的变更项
 
 # 待测试
 
+- 画布工作流演示：工具栏可放置“生图工作流 · 演示”机器；连接图片后点击开始必须先看到 0 元费用确认卡，确认后 6 张主图与 8 张详情图在本地逐张上桌并自动连线；需验证旧图保留、节点避让、刷新中断和删除清理符合预期。
 - Canvas Agent Codex 兼容：新线程接口支持可选模型，`turn.completed` 会保留 `completed` / `failed` / `interrupted` 状态；需验证显式选择兼容模型时正常返回，失败或中断时不再显示为空成功回复。
 - 本地 Agent 连接说明：新增提醒说明只有安装 Codex 插件或手动添加 MCP 后才会增加 Codex token 消耗，直接运行 `npx -y @basketikun/canvas-agent` 不会安装 MCP；需验证文案位置清晰。
 - 本地 Agent 连接说明：画布面板和配置页 Codex Tab 改为区分“Codex 插件启动画布”和“直接运行 Agent 后网页连接”两种方式，需验证文案和布局清晰。
