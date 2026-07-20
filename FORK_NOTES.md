@@ -38,6 +38,9 @@
 | 30 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 登记完成回执区域 | 增加风格参考直连数量、补登按钮、人话状态和独立回执摘要 | 落实用户选择的“画布补登 A”，旧建批字段和原图回执保持不变 | 2026-07-20 |
 | 31 | `CHANGELOG.md` | `Unreleased` | 新增一条 M2-b 真实费用、流式真图与风格补登的版本级记录 | 让用户可感知变化进入既有发布记录 | 2026-07-20 |
 | 32 | `docs/content/docs/progress/pending-test.mdx` | “待测试”清单 | 新增 M2-b 阶段 E 真实费用、逐张上桌、持久化、续跑与补登验收项 | 纯离线实现已完成，但真实调用仍须逐闸门批准并由用户验收 | 2026-07-20 |
+| 33 | `web/src/lib/canvas/canvas-style-reference-intake.ts` + `web/src/pages/canvas/use-canvas-style-reference-intake.ts` | 风格补登命令前健康预检与四级人话降级 | 先读取 17373 工作台健康状态；服务未开、工人已停或画布重连时不生成请求编号、不启动 8 秒计时，恢复后仍须用户重新点击 | 修复僵尸工作台让画布误以为已发单的问题，不自动重试、不改变补登字节通道 | 2026-07-20 |
+| 34 | `CHANGELOG.md` | `Unreleased` | 新增一条风格补登健康预检的用户可感知修复记录 | 让服务、工人、重连与未确认的分级提示进入既有发布记录 | 2026-07-20 |
+| 35 | `docs/content/docs/progress/pending-test.mdx` | M2-b 待验收项 | 补记四级提示、发号前阻断和恢复后手动重试的现场验收点 | 自动测试通过后仍需用户在真实画布亲手验收 | 2026-07-20 |
 
 ## 新增文件
 

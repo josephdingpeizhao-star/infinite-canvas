@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { buildStyleReferenceCommand, expireStyleReferenceState, readStyleReferenceState, resolveStyleReferenceSelection, StyleReferenceIntegrityError, uploadStyleReferences } from "@/lib/canvas/canvas-style-reference-intake";
+import { expireStyleReferenceState, prepareStyleReferenceCommand, readStyleReferenceState, resolveStyleReferenceSelection, StyleReferenceIntegrityError, uploadStyleReferences } from "@/lib/canvas/canvas-style-reference-intake";
 import { getImageBlob } from "@/services/image-storage";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasStyleReferenceMetadata } from "@/types/canvas";
@@ -20,7 +20,7 @@ export function useCanvasStyleReferenceIntake({ nodes, nodesRef, connectionsRef,
     const controllers = useRef(new Map<string, AbortController>());
 
     const requestSupplement = useCallback(
-        (cardId: string) => {
+        async (cardId: string) => {
             const selection = resolveStyleReferenceSelection(cardId, nodesRef.current, connectionsRef.current);
             if (!selection.ok) {
                 warn(selection.message);
@@ -34,10 +34,21 @@ export function useCanvasStyleReferenceIntake({ nodes, nodesRef, connectionsRef,
                 return;
             }
             const sources = selection.sourceNodeIds.map((id) => nodesRef.current.find((node) => node.id === id)!).filter(Boolean);
-            const command = buildStyleReferenceCommand(card, sources, nanoid(10), Date.now());
+            const prepared = await prepareStyleReferenceCommand({
+                card,
+                sources,
+                token,
+                requestIdFactory: () => nanoid(10),
+                clock: Date.now,
+            });
+            if (!prepared.ok) {
+                warn(prepared.message);
+                return;
+            }
+            const command = prepared.command;
             setNodes((items) => items.map((node) => (node.id === cardId ? { ...node, metadata: { ...node.metadata, content: command.content, styleReferenceIntake: command.state } } : node)));
         },
-        [connectionsRef, nodesRef, setNodes, warn],
+        [connectionsRef, nodesRef, setNodes, token, warn],
     );
 
     const updateRequest = useCallback(

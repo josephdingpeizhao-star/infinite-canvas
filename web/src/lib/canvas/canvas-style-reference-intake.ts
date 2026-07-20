@@ -2,7 +2,14 @@ import { sha256Blob } from "@/lib/canvas/canvas-batch-intake";
 import { CanvasNodeType, type CanvasBatchSourceFile, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasStyleReferenceMetadata } from "@/types/canvas";
 
 export const STYLE_REFERENCE_ORIGIN = "http://127.0.0.1:17373";
+export const STYLE_REFERENCE_HEALTH_URL = `${STYLE_REFERENCE_ORIGIN}/workbench-health`;
 export const STYLE_REFERENCE_ACK_TIMEOUT_MS = 8_000;
+export const STYLE_REFERENCE_HEALTH_MESSAGES = {
+    serviceNotRunning: "本机画布工作台没有启动，本次尚未发出。",
+    workerStopped: "本机风格接单工人已停止，需要重新启动画布服务后再试。",
+    reconnecting: "画布正在重新连接，本次尚未发出；连接稳定后请重新点击。",
+    acknowledgementTimeout: "工作台在线，但本次请求在 8 秒内没有获得确认，已停止。",
+} as const;
 const STATUSES = new Set(["idle", "queued", "upload_ready", "uploading", "completed", "failed", "integrity_blocked"]);
 
 export class StyleReferenceIntegrityError extends Error {
@@ -71,6 +78,36 @@ export function buildStyleReferenceCommand(card: CanvasNodeData, sources: Canvas
     };
 }
 
+export async function preflightStyleReferenceWorker({ token, fetcher = globalThis.fetch }: { token: string; fetcher?: typeof fetch }): Promise<{ ok: true } | { ok: false; message: string }> {
+    let response: Response;
+    try {
+        response = await fetcher(STYLE_REFERENCE_HEALTH_URL, {
+            method: "GET",
+            headers: token.trim() ? { "X-Canvas-Agent-Token": token.trim() } : undefined,
+        });
+    } catch {
+        return { ok: false, message: STYLE_REFERENCE_HEALTH_MESSAGES.serviceNotRunning };
+    }
+    let payload: unknown;
+    try {
+        payload = await response.json();
+    } catch {
+        return { ok: false, message: STYLE_REFERENCE_HEALTH_MESSAGES.serviceNotRunning };
+    }
+    const worker = workerHealth(payload, "style_reference_intake");
+    if (!worker) return { ok: false, message: STYLE_REFERENCE_HEALTH_MESSAGES.serviceNotRunning };
+    if (worker.status === "waiting_canvas") return { ok: false, message: STYLE_REFERENCE_HEALTH_MESSAGES.reconnecting };
+    if (!response.ok || worker.status !== "running") return { ok: false, message: STYLE_REFERENCE_HEALTH_MESSAGES.workerStopped };
+    return { ok: true };
+}
+
+export async function prepareStyleReferenceCommand({ card, sources, token, requestIdFactory, clock, fetcher = globalThis.fetch }: { card: CanvasNodeData; sources: CanvasNodeData[]; token: string; requestIdFactory: () => string; clock: () => number; fetcher?: typeof fetch }) {
+    const health = await preflightStyleReferenceWorker({ token, fetcher });
+    if (!health.ok) return health;
+    const command = buildStyleReferenceCommand(card, sources, requestIdFactory(), clock());
+    return { ok: true as const, command };
+}
+
 export async function uploadStyleReferences({ uploadBaseUrl, batchId, requestId, token, sources, fetcher = globalThis.fetch, signal }: { uploadBaseUrl: string; batchId: string; requestId: string; token: string; sources: Array<{ nodeId: string; sourceFile: CanvasBatchSourceFile; blob: Blob }>; fetcher?: typeof fetch; signal?: AbortSignal }) {
     if (!token.trim() || uploadBaseUrl !== STYLE_REFERENCE_ORIGIN) throw new Error("本机风格补登服务尚未就绪，本次已停止。");
     const verified: Array<{ nodeId: string; sourceFile: CanvasBatchSourceFile; blob: Blob; sha256: string }> = [];
@@ -98,7 +135,7 @@ export async function uploadStyleReferences({ uploadBaseUrl, batchId, requestId,
 
 export function expireStyleReferenceState(state: CanvasStyleReferenceMetadata, now: number): CanvasStyleReferenceMetadata {
     if (state.status !== "queued" || state.requestedAt === undefined || now - state.requestedAt < STYLE_REFERENCE_ACK_TIMEOUT_MS) return state;
-    return { ...state, status: "failed", updatedAt: now, errorMessage: "本机风格补登服务没有及时接单，本次没有开始。" };
+    return { ...state, status: "failed", updatedAt: now, errorMessage: STYLE_REFERENCE_HEALTH_MESSAGES.acknowledgementTimeout };
 }
 
 export function resetInterruptedStyleReferenceIntakes(nodes: CanvasNodeData[]) {
@@ -112,6 +149,19 @@ export function resetInterruptedStyleReferenceIntakes(nodes: CanvasNodeData[]) {
 
 function validSourceFile(value?: CanvasBatchSourceFile) {
     return Boolean(value?.name && Number.isInteger(value.size) && value.size > 0 && value.type.startsWith("image/") && /^[0-9a-f]{64}$/i.test(value.sha256));
+}
+
+function workerHealth(payload: unknown, name: string): { status: string; lastStatusAt: number } | undefined {
+    if (!payload || typeof payload !== "object") return undefined;
+    const workers = (payload as { workers?: unknown }).workers;
+    if (!workers || typeof workers !== "object") return undefined;
+    const worker = (workers as Record<string, unknown>)[name];
+    if (!worker || typeof worker !== "object") return undefined;
+    const status = (worker as { status?: unknown }).status;
+    const lastStatusAt = (worker as { lastStatusAt?: unknown }).lastStatusAt;
+    return typeof status === "string" && typeof lastStatusAt === "number" && Number.isFinite(lastStatusAt)
+        ? { status, lastStatusAt }
+        : undefined;
 }
 
 function stringValue(value: unknown) {

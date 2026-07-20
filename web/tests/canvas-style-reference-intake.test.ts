@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
     StyleReferenceIntegrityError,
     buildStyleReferenceCommand,
+    expireStyleReferenceState,
+    prepareStyleReferenceCommand,
     readStyleReferenceState,
     resetInterruptedStyleReferenceIntakes,
     resolveStyleReferenceSelection,
@@ -44,6 +46,83 @@ describe("style reference supplement", () => {
         expect(command.content).toContain("supplement: style-references");
         expect(command.state).toMatchObject({ status: "queued", requestId: "style-request-001", batchId: "cup" });
         expect(command.state.sources).toEqual([{ nodeId: "style", name: "风格.jpg", mimeType: "image/jpeg", size: 3, sha256: SHA }]);
+    });
+
+    test("service not running is reported before a request id or timer is created", async () => {
+        let ids = 0;
+        let clocks = 0;
+        let healthCalls = 0;
+        const result = await prepareStyleReferenceCommand({
+            card: card(),
+            sources: [image()],
+            token: "canvas-token",
+            requestIdFactory: () => `${++ids}`,
+            clock: () => ++clocks,
+            fetcher: async () => { healthCalls += 1; throw new Error("offline"); },
+        });
+        expect(result).toEqual({ ok: false, message: "本机画布工作台没有启动，本次尚未发出。" });
+        expect(ids).toBe(0);
+        expect(clocks).toBe(0);
+        expect(healthCalls).toBe(1);
+    });
+
+    test("dead style worker is reported before a request id or timer is created", async () => {
+        let ids = 0;
+        let clocks = 0;
+        let healthCalls = 0;
+        const result = await prepareStyleReferenceCommand({
+            card: card(),
+            sources: [image()],
+            token: "canvas-token",
+            requestIdFactory: () => `${++ids}`,
+            clock: () => ++clocks,
+            fetcher: async () => { healthCalls += 1; return new Response(JSON.stringify({ workers: { style_reference_intake: { status: "stopped", lastStatusAt: 1_000 } } }), { status: 503 }); },
+        });
+        expect(result).toEqual({ ok: false, message: "本机风格接单工人已停止，需要重新启动画布服务后再试。" });
+        expect(ids).toBe(0);
+        expect(clocks).toBe(0);
+        expect(healthCalls).toBe(1);
+    });
+
+    test("canvas reconnecting is reported before a request id or timer is created", async () => {
+        let ids = 0;
+        let clocks = 0;
+        let healthCalls = 0;
+        const result = await prepareStyleReferenceCommand({
+            card: card(),
+            sources: [image()],
+            token: "canvas-token",
+            requestIdFactory: () => `${++ids}`,
+            clock: () => ++clocks,
+            fetcher: async () => { healthCalls += 1; return new Response(JSON.stringify({ workers: { style_reference_intake: { status: "waiting_canvas", lastStatusAt: 1_000 } } }), { status: 503 }); },
+        });
+        expect(result).toEqual({ ok: false, message: "画布正在重新连接，本次尚未发出；连接稳定后请重新点击。" });
+        expect(ids).toBe(0);
+        expect(clocks).toBe(0);
+        expect(healthCalls).toBe(1);
+    });
+
+    test("healthy worker starts one timer and reports a distinct eight-second acknowledgement timeout", async () => {
+        let ids = 0;
+        let clocks = 0;
+        let healthCalls = 0;
+        const result = await prepareStyleReferenceCommand({
+            card: card(),
+            sources: [image()],
+            token: "canvas-token",
+            requestIdFactory: () => `style-request-00${++ids}`,
+            clock: () => 1_000 + clocks++,
+            fetcher: async () => { healthCalls += 1; return new Response(JSON.stringify({ workers: { style_reference_intake: { status: "running", lastStatusAt: 1_000 } } }), { status: 200 }); },
+        });
+        expect(result.ok).toBe(true);
+        expect(ids).toBe(1);
+        expect(clocks).toBe(1);
+        expect(healthCalls).toBe(1);
+        if (!result.ok) throw new Error(result.message);
+        expect(expireStyleReferenceState(result.command.state, 9_000)).toMatchObject({
+            status: "failed",
+            errorMessage: "工作台在线，但本次请求在 8 秒内没有获得确认，已停止。",
+        });
     });
 
     test("preflights all browser blobs, uploads exact bytes once, and verifies server SHA", async () => {
