@@ -36,6 +36,29 @@ export type CanvasWorkflowDemoOutputMetadata = {
     runId: string;
     index: number;
 };
+export type CanvasWorkflowProductionStatus = "idle" | "queued" | "running" | "paused" | "completed" | "failed";
+export type CanvasWorkflowProductionMetadata = {
+    status: CanvasWorkflowProductionStatus;
+    producedCount: number;
+    totalCount: 14;
+    requestId?: string;
+    batchId?: string;
+    requestedAt?: number;
+    updatedAt?: number;
+    step?: string;
+    message?: string;
+    errorMessage?: string;
+};
+export type CanvasWorkflowProductionOutputMetadata = {
+    workflowNodeId: string;
+    batchId: string;
+    configId: string;
+    index: number;
+    sha256: string;
+    downloadUrl: string;
+    byteCount: number;
+    persistedAt?: number;
+};
 export type CanvasBatchIntakeStatus = "draft" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
 export type CanvasBatchSourceFile = {
     name: string;
@@ -82,6 +105,25 @@ export type CanvasBatchIntakeMetadata = {
     errorMessage?: string;
     receipt?: CanvasBatchIntakeReceipt;
 };
+export type CanvasStyleReferenceStatus = "idle" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
+export type CanvasStyleReferenceSource = {
+    nodeId: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    sha256: string;
+};
+export type CanvasStyleReferenceMetadata = {
+    status: CanvasStyleReferenceStatus;
+    requestId?: string;
+    requestedAt?: number;
+    updatedAt?: number;
+    batchId?: string;
+    sources: CanvasStyleReferenceSource[];
+    uploadBaseUrl?: string;
+    errorMessage?: string;
+    receipt?: { batchId: string; fileCount: number; files: string[] };
+};
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
 
@@ -123,7 +165,10 @@ export type CanvasNodeMetadata = {
     groupId?: string;
     workflowDemo?: CanvasWorkflowDemoMetadata;
     workflowDemoOutput?: CanvasWorkflowDemoOutputMetadata;
+    workflowProduction?: CanvasWorkflowProductionMetadata;
+    workflowProductionOutput?: CanvasWorkflowProductionOutputMetadata;
     batchIntake?: CanvasBatchIntakeMetadata;
+    styleReferenceIntake?: CanvasStyleReferenceMetadata;
     sourceFile?: CanvasBatchSourceFile;
 };
 

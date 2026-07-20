@@ -3,6 +3,7 @@ import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck } f
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { BATCH_INTAKE_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_MAIN_COUNT, BATCH_INTAKE_MAIN_COUNT, BATCH_INTAKE_TOTAL, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
+import { readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasBatchIntakeMetadata, CanvasNodeData } from "@/types/canvas";
 
@@ -11,13 +12,17 @@ type EditableFacts = Pick<CanvasBatchIntakeMetadata, "productType" | "productHei
 export function CanvasBatchInfoNode({
     node,
     connectedOriginalCount,
+    connectedStyleReferenceCount,
     onChange,
     onRegister,
+    onSupplementStyle,
 }: {
     node: CanvasNodeData;
     connectedOriginalCount: number;
+    connectedStyleReferenceCount: number;
     onChange: (nodeId: string, patch: Partial<EditableFacts>) => void;
     onRegister: (nodeId: string) => void;
+    onSupplementStyle: (nodeId: string) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const state = readBatchIntakeState(node.metadata);
@@ -27,6 +32,9 @@ export function CanvasBatchInfoNode({
     const integrityBlocked = state.status === "integrity_blocked";
     const batchId = state.receipt?.batchId || state.batchId;
     const imageCount = state.receipt?.imageCount ?? state.receivedCount ?? state.expectedCount ?? connectedOriginalCount;
+    const styleState = readStyleReferenceState(node.metadata);
+    const styleBusy = styleState.status === "queued" || styleState.status === "upload_ready" || styleState.status === "uploading";
+    const styleBlocked = styleState.status === "integrity_blocked";
 
     return (
         <div className="flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto p-4" style={{ color: theme.node.text }}>
@@ -57,6 +65,22 @@ export function CanvasBatchInfoNode({
                     <ReceiptRow label="缺少 D 角度" value={state.skipMissingDAngle ? "不补拍" : "需要补拍"} />
                     <ReceiptRow label="固定张数" value="主图 6 + 详情 8" />
                     <ReceiptRow label="固定手持" value="主图 2 + 详情 1" />
+                    <div className="mt-1 border-t pt-2" style={{ borderColor: theme.node.stroke }}>
+                        <div className="flex items-center justify-between gap-3"><span style={{ color: theme.node.muted }}>风格参考</span><span className="font-medium">已连 {connectedStyleReferenceCount} 张</span></div>
+                        <div className="mt-1 text-[11px] leading-5" style={{ color: styleState.status === "failed" || styleBlocked ? "#f87171" : theme.node.muted }}>{styleReferenceText(styleState.status, styleState.receipt?.fileCount, styleState.errorMessage)}</div>
+                        <button
+                            type="button"
+                            className="mt-2 inline-flex min-h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-55"
+                            style={{ borderColor: styleBlocked ? "#ef4444" : theme.node.activeStroke, background: styleBlocked ? "transparent" : theme.node.activeStroke, color: styleBlocked ? "#f87171" : theme.node.panel }}
+                            disabled={styleBusy || styleBlocked}
+                            onMouseDown={stopEvent}
+                            onPointerDown={stopEvent}
+                            onClick={(event) => { event.stopPropagation(); onSupplementStyle(node.id); }}
+                        >
+                            {styleBusy ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+                            {styleBlocked ? "补登已硬停止" : styleBusy ? "正在补登风格参考" : styleState.status === "completed" ? "继续补登风格参考" : "补登风格参考"}
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <>
@@ -180,10 +204,19 @@ function statusText(state: CanvasBatchIntakeMetadata, connectedOriginalCount: nu
     if (state.status === "queued") return "登记命令已提交，等待本机画布工作台服务接单。";
     if (state.status === "upload_ready") return "本机服务已接单，正在核对浏览器存储与磁盘原图。";
     if (state.status === "uploading") return `正在无损接收原图，已确认 ${state.receivedCount || 0}/${state.expectedCount || connectedOriginalCount} 张。`;
-    if (state.status === "completed") return "批次已登记；真实图片制作将在下一里程碑开放。当前工作流“开始”仍是 0 元演示。";
+    if (state.status === "completed") return "批次已登记。可先补登风格参考，再从已连接的工作流机器开始真实制作。";
     if (state.status === "integrity_blocked") return state.errorMessage || "原图 SHA-256 不一致，已立即硬停止。不会重试，也不会降低无损标准。";
     if (state.status === "failed") return state.errorMessage || "本次没有登记成功，未自动重试。请处理提示后重新登记。";
     return connectedOriginalCount ? `已连接 ${connectedOriginalCount} 张磁盘原图；填写完成后可登记。` : "请把信息卡和至少 1 张磁盘原图连接到同一台工作流机器。";
+}
+
+function styleReferenceText(status: ReturnType<typeof readStyleReferenceState>["status"], fileCount?: number, errorMessage?: string) {
+    if (status === "queued") return "补登命令已提交，等待本机服务接单。";
+    if (status === "upload_ready" || status === "uploading") return "正在逐字节核对并补登，不会重写原图和旧凭证。";
+    if (status === "completed") return `已补登 ${fileCount || 0} 张，并生成独立回执。`;
+    if (status === "integrity_blocked") return errorMessage || "文件不一致，已硬停止且不会自动重试。";
+    if (status === "failed") return errorMessage || "本次补登已停止，不会自动重试。";
+    return "把磁盘风格图直接连到信息卡后再点补登。";
 }
 
 function statusIcon(status: CanvasBatchIntakeMetadata["status"]) {

@@ -34,6 +34,7 @@ import { buildNodeGenerationContext, buildNodeGenerationInputs, buildNodeRespons
 import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-hover-toolbar";
 import { CanvasBatchInfoNode } from "@/components/canvas/canvas-batch-info-node";
 import { CanvasWorkflowCostCard } from "@/components/canvas/canvas-workflow-cost-card";
+import { CanvasWorkflowProductionCostCard } from "@/components/canvas/canvas-workflow-production-cost-card";
 import { CanvasWorkflowNode, CanvasWorkflowNodePanel } from "@/components/canvas/canvas-workflow-node";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { Minimap } from "@/components/canvas/canvas-mini-map";
@@ -48,8 +49,13 @@ import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } fro
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
 import { batchSourceFilePatch, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
+import { connectedProductionSummary, resetInterruptedProductions } from "@/lib/canvas/canvas-workflow-production";
+import { connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
+import { useCanvasStyleReferenceIntake } from "./use-canvas-style-reference-intake";
 import { useCanvasWorkflowDemo } from "./use-canvas-workflow-demo";
+import { useCanvasWorkflowOutputImport } from "./use-canvas-workflow-output-import";
+import { useCanvasWorkflowProduction } from "./use-canvas-workflow-production";
 import {
     CanvasNodeType,
     type CanvasAssistantImage,
@@ -344,6 +350,30 @@ function InfiniteCanvasPage() {
         setNodes,
         warn: (text) => void message.warning(text),
     });
+    const workflowProduction = useCanvasWorkflowProduction({
+        nodes,
+        connections,
+        nodesRef,
+        connectionsRef,
+        setNodes,
+        warn: (text) => void message.warning(text),
+    });
+    const workflowOutputImport = useCanvasWorkflowOutputImport({ nodes, setNodes });
+    const styleReferenceIntake = useCanvasStyleReferenceIntake({
+        nodes,
+        nodesRef,
+        connectionsRef,
+        setNodes,
+        warn: (text) => void message.warning(text),
+    });
+    const requestWorkflowStart = useCallback(
+        (nodeId: string) => {
+            void workflowProduction.requestStart(nodeId).then((handled) => {
+                if (!handled) workflowDemo.requestStart(nodeId);
+            });
+        },
+        [workflowDemo.requestStart, workflowProduction.requestStart],
+    );
 
     const createHistoryEntry = useCallback(
         (): CanvasHistoryEntry => ({
@@ -420,7 +450,13 @@ function InfiniteCanvasPage() {
         }
 
         const restore = async () => {
-            const restoredNodes = await hydrateCanvasImages(resetInterruptedBatchIntakes(resetInterruptedWorkflowDemos(resetInterruptedGeneration(project.nodes))));
+            const restoredNodes = await hydrateCanvasImages(
+                resetInterruptedStyleReferenceIntakes(
+                    resetInterruptedBatchIntakes(
+                        resetInterruptedProductions(resetInterruptedWorkflowDemos(resetInterruptedGeneration(project.nodes))),
+                    ),
+                ),
+            );
             const restoredSessions = await hydrateAssistantImages(project.chatSessions || []);
             setNodes(restoredNodes);
             setConnections(project.connections);
@@ -817,6 +853,9 @@ function InfiniteCanvasPage() {
             });
             workflowDemo.cancelNodes(allIds);
             batchIntake.cancelNodes(allIds);
+            workflowProduction.cancelNodes(allIds);
+            workflowOutputImport.cancelNodes(allIds);
+            styleReferenceIntake.cancelNodes(allIds);
             setNodes((prev) => {
                 const next = prev.filter((node) => !allIds.has(node.id));
                 return next.map((node) => {
@@ -855,7 +894,7 @@ function InfiniteCanvasPage() {
             setContextMenu((current) => (current?.type === "node" && allIds.has(current.nodeId) ? null : current));
             cleanupCanvasFiles({ projectId, nodes: nodesRef.current.filter((node) => !allIds.has(node.id)), chatSessions });
         },
-        [batchIntake.cancelNodes, chatSessions, cleanupCanvasFiles, projectId, workflowDemo.cancelNodes],
+        [batchIntake.cancelNodes, chatSessions, cleanupCanvasFiles, projectId, styleReferenceIntake.cancelNodes, workflowDemo.cancelNodes, workflowOutputImport.cancelNodes, workflowProduction.cancelNodes],
     );
 
     const deleteConnection = useCallback((connectionId: string) => {
@@ -879,6 +918,9 @@ function InfiniteCanvasPage() {
     const clearCanvas = useCallback(() => {
         workflowDemo.cancelAll();
         batchIntake.cancelAll();
+        workflowProduction.cancelAll();
+        workflowOutputImport.cancelAll();
+        styleReferenceIntake.cancelAll();
         setNodes([]);
         setConnections([]);
         setInfoNodeId(null);
@@ -890,7 +932,7 @@ function InfiniteCanvasPage() {
         deselectCanvas();
         setClearConfirmOpen(false);
         cleanupCanvasFiles({ projectId, nodes: [], chatSessions: [] });
-    }, [batchIntake.cancelAll, cleanupCanvasFiles, deselectCanvas, projectId, workflowDemo.cancelAll]);
+    }, [batchIntake.cancelAll, cleanupCanvasFiles, deselectCanvas, projectId, styleReferenceIntake.cancelAll, workflowDemo.cancelAll, workflowOutputImport.cancelAll, workflowProduction.cancelAll]);
 
     const duplicateNode = useCallback((nodeId: string) => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
@@ -2596,7 +2638,7 @@ function InfiniteCanvasPage() {
                             mentionReferences={mentionReferencesByNodeId.get(node.id) || []}
                             renderPanel={(panelNode) =>
                                 panelNode.type === CanvasNodeType.BatchInfo ? null : panelNode.type === CanvasNodeType.Workflow ? (
-                                    <CanvasWorkflowNodePanel onClose={() => setDialogNodeId(null)} />
+                                    <CanvasWorkflowNodePanel productionBatchId={connectedProductionSummary(panelNode.id, nodes, connections)?.batchId} onClose={() => setDialogNodeId(null)} />
                                 ) : panelNode.type === CanvasNodeType.Config ? (
                                     <CanvasConfigComposer
                                         value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}
@@ -2625,14 +2667,17 @@ function InfiniteCanvasPage() {
                                     <CanvasBatchInfoNode
                                         node={contentNode}
                                         connectedOriginalCount={connectedBatchOriginalImageIds(contentNode.id, nodes, connections).length}
+                                        connectedStyleReferenceCount={connectedStyleReferenceImageIds(contentNode.id, nodes, connections).length}
                                         onChange={batchIntake.updateFacts}
                                         onRegister={batchIntake.requestRegistration}
+                                        onSupplementStyle={styleReferenceIntake.requestSupplement}
                                     />
                                 ) : contentNode.type === CanvasNodeType.Workflow ? (
                                     <CanvasWorkflowNode
                                         node={contentNode}
                                         connectedImageCount={connectedWorkflowImageIds(contentNode.id, nodes, connections).length}
-                                        onStart={workflowDemo.requestStart}
+                                        production={connectedProductionSummary(contentNode.id, nodes, connections)}
+                                        onStart={requestWorkflowStart}
                                         onToggleDetails={(nodeId) => setDialogNodeId((current) => (current === nodeId ? null : nodeId))}
                                     />
                                 ) : (
@@ -2750,6 +2795,15 @@ function InfiniteCanvasPage() {
                     connectedImageCount={workflowDemo.pendingConnectedImageCount}
                     onConfirm={workflowDemo.confirmStart}
                     onCancel={workflowDemo.cancelConfirmation}
+                />
+
+                <CanvasWorkflowProductionCostCard
+                    open={Boolean(workflowProduction.pending)}
+                    batchId={workflowProduction.pending?.batchId}
+                    materialCount={workflowProduction.pending?.materialCount || 0}
+                    quote={workflowProduction.pending?.quote}
+                    onConfirm={workflowProduction.confirmStart}
+                    onCancel={workflowProduction.cancelConfirmation}
                 />
 
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}
@@ -3219,6 +3273,7 @@ function normalizeConnection(firstNodeId: string, secondNodeId: string, nodes: C
     if (!first || !second || first.id === second.id) return null;
     if (first.type === CanvasNodeType.Group || second.type === CanvasNodeType.Group) return null;
     if (first.type === CanvasNodeType.Workflow && firstHandleType === "target") return { fromNodeId: second.id, toNodeId: first.id };
+    if (first.type === CanvasNodeType.BatchInfo && firstHandleType === "target") return { fromNodeId: second.id, toNodeId: first.id };
     if (first.type === CanvasNodeType.Config && second.type === CanvasNodeType.Config) return null;
     if (second.type === CanvasNodeType.Config) return { fromNodeId: first.id, toNodeId: second.id };
     if (first.type === CanvasNodeType.Config && firstHandleType === "target") return { fromNodeId: second.id, toNodeId: first.id };

@@ -32,6 +32,12 @@
 | 24 | `web/src/pages/canvas/project.tsx` | 信息卡控制器接入、原始 File 凭证、节点渲染、工具栏创建、删除/清空和刷新恢复 | 磁盘图片首次入画保存原字节 SHA-256，派生图清除原图标记；信息卡只写 `build: batch` 并在本机服务接单后逐图无损上传 | 完成 M2-a 画布内登记闭环，不把 M1“开始”按钮变成真实生产 | 2026-07-18 |
 | 25 | `web/src/components/canvas/canvas-node-hover-toolbar.tsx` | `CanvasNodeInfoModal` 类型名称 | 新类型显示为“信息卡” | 避免节点信息把批次卡误标成生成配置 | 2026-07-18 |
 | 26 | `CHANGELOG.md` | `Unreleased` | 新增 M2-a 信息卡与无损登记的用户可感知记录 | 明确登记不生图、不收费，SHA-256 不一致时硬停止且不重试 | 2026-07-18 |
+| 27 | `web/src/types/canvas.ts` | `CanvasNodeMetadata` 与 M2-b 类型合同 | 新增真实制作、正式图片、风格补登状态与回执字段 | 让费用确认后的生产状态、浏览器持久化证明和信息卡补登可随画布保存，不复用 M1 演示状态 | 2026-07-20 |
+| 28 | `web/src/pages/canvas/project.tsx` | M2-b 控制器接入、刷新恢复、删除/清空取消、节点/费用卡渲染与信息卡目标连线方向 | 连接已登记信息卡时进入真实费用门和后台命令；正式图片转存 localforage，风格图可直接连入信息卡；无信息卡仍走 M1 演示 | 保持画布原生产品面，不加入九工序或前端业务路由 | 2026-07-20 |
+| 29 | `web/src/components/canvas/canvas-workflow-node.tsx` | 机器卡状态与详情面板 | 按信息卡连线显示“真实”批次、人话进度、暂停续跑和 QC 前完成状态 | 用户只看到机器行为与结果，不看到后台工序或日志 | 2026-07-20 |
+| 30 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 登记完成回执区域 | 增加风格参考直连数量、补登按钮、人话状态和独立回执摘要 | 落实用户选择的“画布补登 A”，旧建批字段和原图回执保持不变 | 2026-07-20 |
+| 31 | `CHANGELOG.md` | `Unreleased` | 新增一条 M2-b 真实费用、流式真图与风格补登的版本级记录 | 让用户可感知变化进入既有发布记录 | 2026-07-20 |
+| 32 | `docs/content/docs/progress/pending-test.mdx` | “待测试”清单 | 新增 M2-b 阶段 E 真实费用、逐张上桌、持久化、续跑与补登验收项 | 纯离线实现已完成，但真实调用仍须逐闸门批准并由用户验收 | 2026-07-20 |
 
 ## 新增文件
 
@@ -45,6 +51,16 @@
 - `web/src/components/canvas/canvas-batch-info-node.tsx`：画布原生信息卡，直接填写品类、高度和三个开关，并显示固定张数、人话状态及成功回执。
 - `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
 - `web/tests/canvas-batch-intake.test.ts`：覆盖七项事实、单卡单机原图连线、中文编码、首次 File 与浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
+- `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令和中断状态合同；不实现后台工序路由。
+- `web/src/components/canvas/canvas-workflow-production-cost-card.tsx`：真实费用唯一确认卡，显示剩余张数、约计美元金额和约计时长；取消不写画布状态。
+- `web/src/pages/canvas/use-canvas-workflow-production.ts`：页面私有真实费用控制器；只在确认后写生产命令，无信息卡时明确把开始动作交还 M1 演示。
+- `web/src/lib/canvas/canvas-workflow-output-import.ts`：正式 PNG 的 17373 地址、服务端 SHA、浏览器 Blob SHA 与字节数合同；通过后转存现有 localforage 图片库，拒绝 data URI。
+- `web/src/pages/canvas/use-canvas-workflow-output-import.ts`：页面私有正式图片接收器；每张只尝试一次，失败停机，不自动重试。
+- `web/src/lib/canvas/canvas-style-reference-intake.ts`：信息卡直连风格图的磁盘凭证、整批浏览器预检、17373 原字节上传和硬停止合同。
+- `web/src/pages/canvas/use-canvas-style-reference-intake.ts`：页面私有风格补登控制器；服务接单后从 localforage 取原 Blob，刷新中断不自动恢复。
+- `web/tests/canvas-workflow-production.test.ts`：覆盖演示/真实模式隔离、单卡单机素材门、费用估算鉴权、确认命令和续跑/超时。
+- `web/tests/canvas-workflow-output-import.test.ts`：覆盖正式图片原字节转存、无 data URI、地址/哈希/字节拒绝与防重复导入。
+- `web/tests/canvas-style-reference-intake.test.ts`：覆盖信息卡直连、精确凭证、整批预检、单次上传、硬停止和刷新不续传。
 
 ## 上游同步纪律
 
