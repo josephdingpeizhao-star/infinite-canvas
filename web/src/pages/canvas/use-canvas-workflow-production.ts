@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { buildProductionCommand, expireProductionState, fetchProductionQuote, readProductionState, resolveProductionSelection, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
+import { buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, readProductionState, reserveProductionSubmission, resolveProductionSelection, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
 
@@ -27,6 +27,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
     const token = useAgentStore((state) => state.token);
     const [pending, setPending] = useState<Pending | null>(null);
     const pendingRef = useRef(pending);
+    const submittedRef = useRef(new Set<string>());
 
     useEffect(() => {
         pendingRef.current = pending;
@@ -42,6 +43,10 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
             }
             const workflow = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Workflow);
             if (!workflow) return true;
+            if (hasProductionSubmission(submittedRef.current, nodeId, selection.batchId)) {
+                warn("这次真实制作已经提交过一次。若已获得新的执行批准，请重新打开画布后再点“开始”。");
+                return true;
+            }
             const state = readProductionState(workflow.metadata);
             if (state.status === "queued" || state.status === "running") return true;
             if (state.status === "completed") {
@@ -79,6 +84,10 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
         setPending(null);
         if (selection.mode !== "production" || selection.cardId !== current.cardId || selection.batchId !== current.batchId) {
             warn("信息卡或素材连线已经变化，本次没有开始。");
+            return;
+        }
+        if (!reserveProductionSubmission(submittedRef.current, current.nodeId, selection.batchId)) {
+            warn("这次真实制作已经提交过一次。若已获得新的执行批准，请重新打开画布后再点“开始”。");
             return;
         }
         const requestId = nanoid(10);

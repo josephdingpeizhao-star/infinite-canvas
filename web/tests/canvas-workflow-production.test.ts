@@ -6,6 +6,7 @@ import {
     expireProductionState,
     fetchProductionQuote,
     readProductionState,
+    reserveProductionSubmission,
     resolveProductionSelection,
 } from "../src/lib/canvas/canvas-workflow-production";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
@@ -119,6 +120,16 @@ describe("canvas workflow production", () => {
         expect(first.state).toMatchObject({ status: "queued", batchId: "cup", requestId: "request-001", producedCount: 0 });
         const partial = readProductionState({ workflowProduction: { status: "paused", producedCount: 1, batchId: "cup" } });
         expect(buildProductionCommand(partial, "cup", "request-002", 2_000).content).toContain("retry: renders");
+    });
+
+    test("allows exactly one submission per machine and batch until the page is reopened", () => {
+        const submissions = new Set<string>();
+        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(true);
+        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(false);
+        expect(submissions.size).toBe(1);
+
+        const reopenedPage = new Set<string>();
+        expect(reserveProductionSubmission(reopenedPage, "machine", "cup")).toBe(true);
     });
 
     test("expires only an unacknowledged command and preserves finished images", () => {

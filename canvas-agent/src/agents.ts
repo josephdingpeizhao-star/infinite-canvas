@@ -14,6 +14,7 @@ type AgentEvent = Json & { type: string; usage?: unknown };
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
 type CodexRunOptions = { threadId?: string; cwd?: string; model?: string };
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
+type CodexTurnError = Error & { code: string };
 
 let codexQueue: Promise<unknown> = Promise.resolve();
 let codexApp: CodexAppClient | null = null;
@@ -145,6 +146,9 @@ class CodexAppClient {
     private pending = new Map<number, PendingRequest>();
     private activeTurns = new Map<string, PendingRequest>();
     private completedTurns = new Map<string, Error | null>();
+    private assistantOutputTurns = new Set<string>();
+    private errorNotificationTurns = new Set<string>();
+    private currentTurnId = "";
 
     private constructor(private child: ChildProcess, private emit: AgentEmit) {}
 
@@ -199,13 +203,18 @@ class CodexAppClient {
         const result = await this.request("turn/start", { threadId, input: codexInput(prompt, images), approvalPolicy: "never" });
         const turnId = String(field(field(result, "turn"), "id") || "");
         if (!turnId) throw new Error("Codex app-server 没有返回 turn id");
-        const completed = this.completedTurns.get(turnId);
-        if (this.completedTurns.has(turnId)) {
-            this.completedTurns.delete(turnId);
-            if (completed) throw completed;
-            return;
+        this.currentTurnId = turnId;
+        try {
+            const completed = this.completedTurns.get(turnId);
+            if (this.completedTurns.has(turnId)) {
+                this.completedTurns.delete(turnId);
+                if (completed) throw completed;
+                return;
+            }
+            await new Promise((resolve, reject) => this.activeTurns.set(turnId, { resolve, reject }));
+        } finally {
+            if (this.currentTurnId === turnId) this.currentTurnId = "";
         }
-        await new Promise((resolve, reject) => this.activeTurns.set(turnId, { resolve, reject }));
     }
 
     interruptCurrentTurn() {
@@ -254,7 +263,13 @@ class CodexAppClient {
     }
 
     private handleNotification(method: string, params: Json) {
-        if (method === "item/agentMessage/delta") return this.emitDelta(params);
+        const notificationTurnId = String(field(params, "turnId") || field(field(params, "turn"), "id") || this.currentTurnId);
+        if (method === "item/agentMessage/delta") {
+            if (notificationTurnId && String(field(params, "delta") || "").trim()) this.assistantOutputTurns.add(notificationTurnId);
+            return this.emitDelta(params);
+        }
+        if (method === "item/completed" && notificationTurnId && completedAssistantText(params)) this.assistantOutputTurns.add(notificationTurnId);
+        if (method === "error" && notificationTurnId) this.errorNotificationTurns.add(notificationTurnId);
         if (method === "thread/tokenUsage/updated") this.lastUsage = normalizeUsage(params);
         const event = normalizeCodexNotification(method, params);
         if (!event) return;
@@ -265,7 +280,11 @@ class CodexAppClient {
             const pending = this.activeTurns.get(turnId);
             const turn = field(params, "turn");
             const status = String(field(turn, "status") || "");
-            const failure = codexTurnFailure(turn);
+            const failure = codexTurnFailure(
+                turn,
+                this.assistantOutputTurns.delete(turnId),
+                this.errorNotificationTurns.delete(turnId),
+            );
             if (pending) {
                 this.activeTurns.delete(turnId);
                 failure ? pending.reject(failure) : pending.resolve(event);
@@ -274,7 +293,12 @@ class CodexAppClient {
             }
             this.emit("agent_event", { agent: "codex", type: "stream.summary", delta_count: this.deltaCount });
             this.deltaCount = 0;
-            this.emit("agent_done", { agent: "codex", usage: event.usage, status });
+            this.emit("agent_done", {
+                agent: "codex",
+                usage: event.usage,
+                status: failure ? "failed" : status,
+                ...(failure ? { failureCode: failure.code } : {}),
+            });
         }
     }
 
@@ -307,6 +331,9 @@ class CodexAppClient {
         [...this.pending.values(), ...this.activeTurns.values()].forEach((item) => item.reject(new Error(message)));
         this.pending.clear();
         this.activeTurns.clear();
+        this.assistantOutputTurns.clear();
+        this.errorNotificationTurns.clear();
+        this.currentTurnId = "";
     }
 }
 
@@ -334,14 +361,22 @@ export function codexThreadStartParams(cwd?: string, model?: string) {
     return { approvalPolicy: "never", sandbox: "workspace-write", config: codexConfig(), ...(cwd ? { cwd } : {}), ...(model ? { model } : {}), threadSource: "user" };
 }
 
-export function codexTurnFailure(turn: unknown) {
-    const error = field(turn, "error");
-    const message = String(field(error, "message") || "");
-    if (message) return new Error(message);
+function codexTurnError(code: string, message: string): CodexTurnError {
+    return Object.assign(new Error(message), { code });
+}
+
+export function codexTurnFailure(turn: unknown, hasAssistantOutput: boolean, hasErrorNotification = false): CodexTurnError | null {
+    if (hasErrorNotification || field(turn, "error")) return codexTurnError("codex_turn_failed", "Codex turn failed");
     const status = String(field(turn, "status") || "");
-    if (status === "failed") return new Error("Codex turn failed");
-    if (status === "interrupted") return new Error("Codex turn interrupted");
+    if (status === "failed") return codexTurnError("codex_turn_failed", "Codex turn failed");
+    if (status === "interrupted") return codexTurnError("codex_turn_interrupted", "Codex turn interrupted");
+    if (!hasAssistantOutput) return codexTurnError("empty_assistant_response", "Codex turn completed without assistant output");
     return null;
+}
+
+function completedAssistantText(params: Json) {
+    const item = field(params, "item");
+    return String(field(item, "type") || "") === "agentMessage" && Boolean(String(field(item, "text") || "").trim());
 }
 
 function codexInput(prompt: string, images: string[]) {
@@ -354,7 +389,7 @@ function normalizeCodexNotification(method: string, params: Json): AgentEvent | 
     if (method === "turn/completed") return { type: "turn.completed", usage: null };
     if (method === "item/started") return { type: "item.started", item: normalizeItem(field(params, "item")) };
     if (method === "item/completed") return { type: "item.completed", item: normalizeItem(field(params, "item")) };
-    if (method === "error") return { type: "error", message: field(params, "message") };
+    if (method === "error") return { type: "error", message: "Codex turn failed" };
     return null;
 }
 

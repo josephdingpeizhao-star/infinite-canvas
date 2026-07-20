@@ -148,6 +148,17 @@ export function buildProductionCommand(state: CanvasWorkflowProductionMetadata, 
     };
 }
 
+export function hasProductionSubmission(submissions: ReadonlySet<string>, machineId: string, batchId: string) {
+    return submissions.has(`${machineId}\u0000${batchId}`);
+}
+
+export function reserveProductionSubmission(submissions: Set<string>, machineId: string, batchId: string) {
+    const key = `${machineId}\u0000${batchId}`;
+    if (submissions.has(key)) return false;
+    submissions.add(key);
+    return true;
+}
+
 export function expireProductionState(state: CanvasWorkflowProductionMetadata, now: number): CanvasWorkflowProductionMetadata {
     const ackExpired = state.status === "queued" && state.requestedAt !== undefined && now - state.requestedAt >= WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS;
     const progressExpired = state.status === "running" && state.updatedAt !== undefined && now - state.updatedAt >= WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS;
