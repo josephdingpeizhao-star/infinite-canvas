@@ -43,6 +43,7 @@
 | 35 | `docs/content/docs/progress/pending-test.mdx` | M2-b 待验收项 | 补记四级提示、发号前阻断和恢复后手动重试的现场验收点 | 自动测试通过后仍需用户在真实画布亲手验收 | 2026-07-20 |
 | 36 | `canvas-agent/src/agents.ts` + `canvas-agent/src/agents.test.ts` | Codex 回合完成判定与脱敏失败码 | `turn.completed` 只有在本轮出现非空助手答复时才成功；空答复或错误通知返回固定安全码，原始异常不进入完成事件 | 防止本地 Codex 静默完成却被 Canvas Agent 宣布成功 | 2026-07-21 |
 | 37 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` | 真实费用确认后的单页闸门锁 | 同一页面内同一机器/批次只允许一次费用确认提交；再次执行须另获批准并重新打开画布后由用户亲手开始 | 防止一次阶段 E 闸门在首次失败后收到第二条制作命令，不引入自动重试 | 2026-07-21 |
+| 38 | `canvas-agent/src/agents.ts` + `canvas-agent/src/agents.test.ts` | Codex 备用失败事件、附件协议与线程状态摘要 | 回合异常回收时只发送白名单失败码；0/1/2 张本地图片继续使用既有 `localImage` 输入；对象状态显示稳定状态名 | 防止主仓只收到备用 `agent_error` 时丢失 `empty_assistant_response`，同时消除 `[object Object]`，不改变模型或附件协议 | 2026-07-21 |
 
 ## 新增文件
 

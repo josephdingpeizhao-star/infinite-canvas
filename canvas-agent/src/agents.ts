@@ -16,6 +16,8 @@ type CodexRunOptions = { threadId?: string; cwd?: string; model?: string };
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
 type CodexTurnError = Error & { code: string };
 
+const CODEX_FAILURE_CODES = new Set(["empty_assistant_response", "codex_turn_failed", "codex_turn_interrupted"]);
+
 let codexQueue: Promise<unknown> = Promise.resolve();
 let codexApp: CodexAppClient | null = null;
 let codexThreadId = "";
@@ -53,7 +55,7 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
             await codexApp.startTurn(threadId, prompt, files);
         }
     } catch (error) {
-        emit("agent_error", { message: errorMessage(error) });
+        emit("agent_error", codexFailureEvent(error));
     } finally {
         await Promise.all(files.map((file) => fs.unlink(file).catch(() => undefined)));
     }
@@ -374,12 +376,21 @@ export function codexTurnFailure(turn: unknown, hasAssistantOutput: boolean, has
     return null;
 }
 
+export function codexFailureEvent(error: unknown) {
+    const candidate = String(field(error, "code") || "");
+    return {
+        agent: "codex",
+        message: "Codex turn failed",
+        failureCode: CODEX_FAILURE_CODES.has(candidate) ? candidate : "codex_turn_failed",
+    };
+}
+
 function completedAssistantText(params: Json) {
     const item = field(params, "item");
     return String(field(item, "type") || "") === "agentMessage" && Boolean(String(field(item, "text") || "").trim());
 }
 
-function codexInput(prompt: string, images: string[]) {
+export function codexInput(prompt: string, images: string[]) {
     return [{ type: "text", text: prompt, text_elements: [] }, ...images.map((file) => ({ type: "localImage", path: file }))];
 }
 
@@ -450,12 +461,17 @@ export function summarizeCodexThread(thread: unknown) {
         preview: displayUserText(String(field(thread, "preview") || "")),
         name: stringOrNull(field(thread, "name")),
         cwd: String(field(thread, "cwd") || ""),
-        status: String(field(thread, "status") || ""),
+        status: codexStatusLabel(field(thread, "status")),
         source: field(thread, "source"),
         threadSource: field(thread, "threadSource"),
         createdAt: Number(field(thread, "createdAt") || 0),
         updatedAt: Number(field(thread, "updatedAt") || 0),
     };
+}
+
+function codexStatusLabel(status: unknown) {
+    if (typeof status === "string") return status;
+    return String(field(status, "type") || "");
 }
 
 function threadMessages(thread: unknown): AgentHistoryMessage[] {
