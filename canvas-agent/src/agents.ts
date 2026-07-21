@@ -12,11 +12,13 @@ import type { AgentAttachment, AgentEmit } from "./types.js";
 type Json = Record<string, unknown>;
 type AgentEvent = Json & { type: string; usage?: unknown };
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-type CodexRunOptions = { threadId?: string; cwd?: string; model?: string };
+type CodexReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+type CodexRunOptions = { threadId?: string; cwd?: string; model?: string; effort?: CodexReasoningEffort };
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
 type CodexTurnError = Error & { code: string };
 
 const CODEX_FAILURE_CODES = new Set(["empty_assistant_response", "codex_turn_failed", "codex_turn_interrupted"]);
+const CODEX_REASONING_EFFORTS = new Set<CodexReasoningEffort>(["none", "minimal", "low", "medium", "high", "xhigh"]);
 
 let codexQueue: Promise<unknown> = Promise.resolve();
 let codexApp: CodexAppClient | null = null;
@@ -51,7 +53,7 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
             if (!isRecoverableThreadError(error)) throw error;
             emit("agent_log", { text: `Codex thread unavailable, starting a new thread: ${errorMessage(error)}` });
             codexThreadId = "";
-            threadId = await ensureCodexThread(codexApp, { cwd: options.cwd, model: options.model }, emit);
+            threadId = await ensureCodexThread(codexApp, codexRecoveryThreadOptions(options), emit);
             await codexApp.startTurn(threadId, prompt, files);
         }
     } catch (error) {
@@ -61,9 +63,9 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
     }
 }
 
-export async function startCodexThread(emit: AgentEmit, cwd?: string, model?: string) {
+export async function startCodexThread(emit: AgentEmit, cwd?: string, model?: string, effort?: CodexReasoningEffort) {
     codexApp ||= await CodexAppClient.start(emit);
-    const thread = await codexApp.startThread(cwd, model);
+    const thread = await codexApp.startThread(cwd, model, effort);
     codexThreadId = String(field(thread, "id") || "");
     return thread;
 }
@@ -129,7 +131,7 @@ async function ensureCodexThread(app: CodexAppClient, options: CodexRunOptions, 
         }
     }
     if (!codexThreadId) {
-        const thread = await app.startThread(options.cwd, options.model);
+        const thread = await app.startThread(options.cwd, options.model, options.effort);
         codexThreadId = String(field(thread, "id") || "");
     }
     return codexThreadId;
@@ -173,8 +175,8 @@ class CodexAppClient {
         return client;
     }
 
-    async startThread(cwd?: string, model?: string) {
-        const result = await this.request("thread/start", codexThreadStartParams(cwd, model));
+    async startThread(cwd?: string, model?: string, effort?: CodexReasoningEffort) {
+        const result = await this.request("thread/start", codexThreadStartParams(cwd, model, effort));
         const thread = field(result, "thread") as Json | undefined;
         const id = String(field(thread, "id") || "");
         if (!id) throw new Error("Codex app-server 没有返回 thread id");
@@ -359,8 +361,24 @@ function codexConfig() {
     return { mcp_servers: { "infinite-canvas": { command: canvasAgentMcp.command, args: canvasAgentMcp.args, default_tools_approval_mode: "approve", startup_timeout_sec: 20, tool_timeout_sec: 90 } } };
 }
 
-export function codexThreadStartParams(cwd?: string, model?: string) {
-    return { approvalPolicy: "never", sandbox: "workspace-write", config: codexConfig(), ...(cwd ? { cwd } : {}), ...(model ? { model } : {}), threadSource: "user" };
+export function codexReasoningEffort(value: unknown): CodexReasoningEffort | undefined {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value !== "string" || !CODEX_REASONING_EFFORTS.has(value as CodexReasoningEffort)) {
+        throw new Error("Invalid Codex reasoning effort");
+    }
+    return value as CodexReasoningEffort;
+}
+
+export function codexRecoveryThreadOptions(options: CodexRunOptions): CodexRunOptions {
+    return {
+        ...(options.cwd ? { cwd: options.cwd } : {}),
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort ? { effort: options.effort } : {}),
+    };
+}
+
+export function codexThreadStartParams(cwd?: string, model?: string, effort?: CodexReasoningEffort) {
+    return { approvalPolicy: "never", sandbox: "workspace-write", config: codexConfig(), ...(cwd ? { cwd } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), threadSource: "user" };
 }
 
 function codexTurnError(code: string, message: string): CodexTurnError {

@@ -6,7 +6,9 @@ import * as agents from "./agents.js";
 type AgentTestSurface = {
     codexFailureEvent?: (error: unknown) => Record<string, unknown>;
     codexInput?: (prompt: string, images: string[]) => unknown[];
-    codexThreadStartParams?: (cwd?: string, model?: string) => Record<string, unknown>;
+    codexReasoningEffort?: (value: unknown) => string | undefined;
+    codexRecoveryThreadOptions?: (options: { threadId?: string; cwd?: string; model?: string; effort?: string }) => Record<string, unknown>;
+    codexThreadStartParams?: (cwd?: string, model?: string, effort?: string) => Record<string, unknown>;
     codexTurnFailure?: (turn: unknown, hasAssistantOutput: boolean, hasErrorNotification?: boolean) => (Error & { code?: string }) | null;
     createUtf8StreamDecoder?: (consume: (text: string) => void) => {
         write: (chunk: Buffer) => void;
@@ -26,6 +28,55 @@ test("thread start parameters include only an explicitly selected model", () => 
     assert.equal(selected?.model, "gpt-5.5");
     assert.equal(selected?.cwd, "C:/workspace");
     assert.equal(Object.hasOwn(inherited || {}, "model"), false);
+});
+
+test("production thread start parameters explicitly select gpt-5.5 with xhigh effort", () => {
+    assert.equal(typeof subject.codexThreadStartParams, "function");
+
+    const production = subject.codexThreadStartParams?.("C:/workspace", "gpt-5.5", "xhigh");
+
+    assert.equal(production?.model, "gpt-5.5");
+    assert.equal(production?.effort, "xhigh");
+});
+
+test("reasoning effort accepts only the Codex protocol allowlist without leaking rejected input", () => {
+    assert.equal(typeof subject.codexReasoningEffort, "function");
+    assert.equal(subject.codexReasoningEffort?.(undefined), undefined);
+    for (const effort of ["none", "minimal", "low", "medium", "high", "xhigh"]) {
+        assert.equal(subject.codexReasoningEffort?.(effort), effort);
+    }
+    for (const effort of ["", " xhigh", "xhigh ", "XHIGH", "max", 42, true, {}]) {
+        assert.throws(() => subject.codexReasoningEffort?.(effort), /invalid Codex reasoning effort/i);
+    }
+    const privateValue = "PRIVATE_REASONING_TOKEN";
+    assert.throws(
+        () => subject.codexReasoningEffort?.(privateValue),
+        (error: unknown) => !String((error as Error)?.message || error).includes(privateValue),
+    );
+});
+
+test("recoverable thread replacement keeps the selected model and effort", () => {
+    assert.equal(typeof subject.codexRecoveryThreadOptions, "function");
+
+    const recovered = subject.codexRecoveryThreadOptions?.({
+        threadId: "stale-thread",
+        cwd: "C:/workspace",
+        model: "gpt-5.5",
+        effort: "xhigh",
+    });
+
+    assert.deepEqual(recovered, { cwd: "C:/workspace", model: "gpt-5.5", effort: "xhigh" });
+});
+
+test("ordinary canvas threads still omit effort unless it is explicitly selected", () => {
+    assert.equal(typeof subject.codexThreadStartParams, "function");
+
+    const inherited = subject.codexThreadStartParams?.("C:/workspace");
+    const modelOnly = subject.codexThreadStartParams?.("C:/workspace", "gpt-5.5");
+
+    assert.equal(Object.hasOwn(inherited || {}, "effort"), false);
+    assert.equal(modelOnly?.model, "gpt-5.5");
+    assert.equal(Object.hasOwn(modelOnly || {}, "effort"), false);
 });
 
 test("completed turns require assistant output and reject error notifications without exposing raw detail", () => {

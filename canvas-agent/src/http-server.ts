@@ -2,7 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 
 import { DEFAULT_PORT, ensureSiteWorkspace, loadConfig, saveConfig, updateSiteWorkspace, type CanvasAgentConfig } from "./config.js";
 import { CanvasSession } from "./canvas-session.js";
-import { archiveCodexThread, interruptCodexTurn, listCodexThreads, readCodexThread, resumeCodexThread, runClaudeTurn, runCodexTurn, startCodexThread, summarizeCodexThread, verifyCodexThreadWorkspace, withAgentPrompt } from "./agents.js";
+import { archiveCodexThread, codexReasoningEffort, interruptCodexTurn, listCodexThreads, readCodexThread, resumeCodexThread, runClaudeTurn, runCodexTurn, startCodexThread, summarizeCodexThread, verifyCodexThreadWorkspace, withAgentPrompt } from "./agents.js";
 import type { AgentAttachment } from "./types.js";
 
 export function startHttpServer() {
@@ -48,9 +48,16 @@ export function startHttpServer() {
         res.json({ ok: true, workspace, ...result });
     }));
     app.post("/agent/codex/threads/new", route(async (req, res) => {
-        const workspace = ensureSiteWorkspace(config);
         const requestedModel = typeof req.body?.model === "string" ? req.body.model.trim() : "";
-        const thread = await startCodexThread(emit, workspace.workspacePath, requestedModel || undefined);
+        let requestedEffort;
+        try {
+            requestedEffort = codexReasoningEffort(req.body?.effort);
+        } catch {
+            res.status(400).json({ ok: false, error: "invalid Codex reasoning effort" });
+            return;
+        }
+        const workspace = ensureSiteWorkspace(config);
+        const thread = await startCodexThread(emit, workspace.workspacePath, requestedModel || undefined, requestedEffort);
         const activeThreadId = String((thread as Record<string, unknown>).id || "");
         updateSiteWorkspace(config, { activeThreadId });
         res.json({ ok: true, workspace: { ...workspace, activeThreadId }, thread: summarizeCodexThread(thread), messages: [] });
@@ -76,17 +83,25 @@ export function startHttpServer() {
     }));
     app.post("/agent/codex/turn", route(async (req, res) => {
         const attachments = Array.isArray(req.body?.attachments) ? (req.body.attachments as AgentAttachment[]) : [];
+        const requestedModel = typeof req.body?.model === "string" ? req.body.model.trim() : "";
+        let requestedEffort;
+        try {
+            requestedEffort = codexReasoningEffort(req.body?.effort);
+        } catch {
+            res.status(400).json({ ok: false, error: "invalid Codex reasoning effort" });
+            return;
+        }
         const workspace = ensureSiteWorkspace(config);
         let threadId = String(req.body?.threadId || workspace.activeThreadId || "");
         if (!threadId) {
-            const thread = await startCodexThread(emit, workspace.workspacePath);
+            const thread = await startCodexThread(emit, workspace.workspacePath, requestedModel || undefined, requestedEffort);
             threadId = String((thread as Record<string, unknown>).id || "");
             updateSiteWorkspace(config, { activeThreadId: threadId });
         } else if (threadId !== workspace.activeThreadId) {
             await verifyCodexThreadWorkspace(emit, threadId, workspace.workspacePath);
             updateSiteWorkspace(config, { activeThreadId: threadId });
         }
-        void runCodexTurn(withAgentPrompt(String(req.body?.prompt || "")), emit, attachments, { threadId, cwd: workspace.workspacePath });
+        void runCodexTurn(withAgentPrompt(String(req.body?.prompt || "")), emit, attachments, { threadId, cwd: workspace.workspacePath, model: requestedModel || undefined, effort: requestedEffort });
         res.json({ ok: true, threadId });
     }));
     app.post("/agent/codex/interrupt", (_req, res) => {
