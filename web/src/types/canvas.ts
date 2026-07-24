@@ -76,6 +76,14 @@ export type CanvasWorkflowRepairedProjectionMetadata = {
     projectedCount?: number;
     message?: string;
 };
+export type CanvasWorkflowReceivingBoxMetadata = {
+    status: "open" | "submitting" | "closed" | "failed";
+    batchId: string;
+    workflowNodeId: string;
+    selectionCount: number;
+    message?: string;
+    closedAt?: string;
+};
 export type CanvasBatchIntakeStatus = "draft" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
 export type CanvasBatchSourceFile = {
     name: string;
@@ -186,6 +194,7 @@ export type CanvasNodeMetadata = {
     workflowProductionOutput?: CanvasWorkflowProductionOutputMetadata;
     workflowProductionQc?: CanvasWorkflowQcBadgeMetadata;
     workflowRepairedProjection?: CanvasWorkflowRepairedProjectionMetadata;
+    workflowReceivingBox?: CanvasWorkflowReceivingBoxMetadata;
     batchIntake?: CanvasBatchIntakeMetadata;
     styleReferenceIntake?: CanvasStyleReferenceMetadata;
     sourceFile?: CanvasBatchSourceFile;

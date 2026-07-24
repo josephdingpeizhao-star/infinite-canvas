@@ -6,7 +6,7 @@ import { COMPLETED_PRODUCTION_ACTION_LABEL, completedProductionStatusText, readP
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionStatus } from "@/types/canvas";
 
-export function CanvasWorkflowNode({ node, connectedImageCount, production, onStart, onProjectRepaired, onToggleDetails }: { node: CanvasNodeData; connectedImageCount: number; production?: { batchId: string; materialCount: number }; onStart: (nodeId: string) => void; onProjectRepaired: (nodeId: string) => void; onToggleDetails: (nodeId: string) => void }) {
+export function CanvasWorkflowNode({ node, connectedImageCount, production, onStart, onProjectRepaired, onEnsureReceiving, onToggleDetails }: { node: CanvasNodeData; connectedImageCount: number; production?: { batchId: string; materialCount: number }; onStart: (nodeId: string) => void; onProjectRepaired: (nodeId: string) => void; onEnsureReceiving: (nodeId: string) => void; onToggleDetails: (nodeId: string) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const demoState = readWorkflowDemoState(node.metadata);
     const productionState = readProductionState(node.metadata);
@@ -51,19 +51,34 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
             </div>
 
             {production && productionState.status === "completed" ? (
-                <button
-                    type="button"
-                    className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
-                    style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        onProjectRepaired(node.id);
-                    }}
-                >
-                    上桌返修图
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                        type="button"
+                        className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
+                        style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onProjectRepaired(node.id);
+                        }}
+                    >
+                        上桌返修图
+                    </button>
+                    <button
+                        type="button"
+                        className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
+                        style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onEnsureReceiving(node.id);
+                        }}
+                    >
+                        已收货框
+                    </button>
+                </div>
             ) : null}
 
             <div className="mt-auto flex items-center gap-2">

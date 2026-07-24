@@ -57,6 +57,8 @@ import { useCanvasWorkflowDemo } from "./use-canvas-workflow-demo";
 import { useCanvasWorkflowOutputImport } from "./use-canvas-workflow-output-import";
 import { useCanvasWorkflowQcBadges } from "./use-canvas-workflow-qc-badges";
 import { useCanvasWorkflowRepairedProjection } from "./use-canvas-workflow-repaired-projection";
+import { useCanvasWorkflowReceiving } from "./use-canvas-workflow-receiving";
+import { receivingSelections, snapNodesIntoReceivingBox } from "@/lib/canvas/canvas-workflow-receiving";
 import { useCanvasWorkflowProduction } from "./use-canvas-workflow-production";
 import {
     CanvasNodeType,
@@ -363,6 +365,13 @@ function InfiniteCanvasPage() {
     const workflowOutputImport = useCanvasWorkflowOutputImport({ nodes, setNodes });
     useCanvasWorkflowQcBadges({ nodes, setNodes });
     const workflowRepairedProjection = useCanvasWorkflowRepairedProjection({
+        nodesRef,
+        connectionsRef,
+        setNodes,
+        warn: (text) => void message.warning(text),
+    });
+    const workflowReceiving = useCanvasWorkflowReceiving({
+        nodes,
         nodesRef,
         connectionsRef,
         setNodes,
@@ -2635,7 +2644,7 @@ function InfiniteCanvasPage() {
                             editRequestNonce={editingNodeId === node.id ? editRequestNonce : 0}
                             showPanel={dialogNodeId === node.id && !selectionBox}
                             batchCount={batchChildCountById.get(node.id) || 0}
-                            groupChildCount={groupChildCountById.get(node.id) || 0}
+                            groupChildCount={node.metadata?.workflowReceivingBox ? receivingSelections(node, nodes).length : groupChildCountById.get(node.id) || 0}
                             isGroupDropTarget={dropTargetGroupId === node.id}
                             batchExpanded={Boolean(node.metadata?.imageBatchExpanded)}
                             batchClosing={Boolean(node.metadata?.batchRootId && collapsingBatchIds.has(node.metadata.batchRootId))}
@@ -2688,6 +2697,7 @@ function InfiniteCanvasPage() {
                                         production={connectedProductionSummary(contentNode.id, nodes, connections)}
                                         onStart={requestWorkflowStart}
                                         onProjectRepaired={workflowRepairedProjection.requestProjection}
+                                        onEnsureReceiving={workflowReceiving.ensureBox}
                                         onToggleDetails={(nodeId) => setDialogNodeId((current) => (current === nodeId ? null : nodeId))}
                                     />
                                 ) : (
@@ -2722,6 +2732,7 @@ function InfiniteCanvasPage() {
                             onRetry={(node) => void handleRetryNode(node)}
                             onGenerateImage={generateImageFromTextNode}
                             onViewImage={(node) => setPreviewNodeId(node.id)}
+                            onConfirmReceiving={workflowReceiving.confirmCloseout}
                             onContextMenu={(event, id) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -3232,6 +3243,7 @@ function findGroupDropTarget(movedIds: Set<string>, nodes: CanvasNodeData[]) {
 }
 
 function snapNodesIntoGroup(movedIds: Set<string>, nodes: CanvasNodeData[], group: CanvasNodeData) {
+    if (group.metadata?.workflowReceivingBox) return snapNodesIntoReceivingBox(movedIds, nodes, group);
     const movingNodes = nodes.filter((node) => movedIds.has(node.id) && node.type !== CanvasNodeType.Group);
     if (!movingNodes.length) return nodes;
     const pad = 24;

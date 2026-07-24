@@ -49,6 +49,7 @@ type CanvasNodeProps = {
     onRetry?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onViewImage?: (node: CanvasNodeData) => void;
+    onConfirmReceiving?: (nodeId: string) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
 };
 
@@ -71,6 +72,7 @@ type NodeContentRendererProps = {
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
     groupChildCount: number;
+    onConfirmReceiving?: (nodeId: string) => void;
 };
 
 export const CanvasNode = React.memo(function CanvasNode({
@@ -108,6 +110,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onRetry,
     onGenerateImage,
     onViewImage,
+    onConfirmReceiving,
     onContextMenu,
 }: CanvasNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -388,6 +391,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         onSetBatchPrimary={() => onSetBatchPrimary?.(data)}
                         groupChildCount={groupChildCount}
+                        onConfirmReceiving={onConfirmReceiving}
                     />
                 </div>
 
@@ -458,19 +462,43 @@ function WorkflowFallbackContent({ theme }: NodeContentRendererProps) {
     );
 }
 
-function GroupNodeContent({ node, theme, groupChildCount }: NodeContentRendererProps) {
+function GroupNodeContent({ node, theme, groupChildCount, onConfirmReceiving }: NodeContentRendererProps) {
+    const receiving = node.metadata?.workflowReceivingBox;
     return (
         <div className="pointer-events-none flex h-full w-full flex-col p-4">
             <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: theme.node.text }}>
                 <span className="grid size-8 place-items-center rounded-xl" style={{ background: theme.toolbar.activeBg, color: theme.node.muted }}>
                     <Group className="size-4" />
                 </span>
-                <span>组</span>
+                <span>{receiving ? "已收货" : "组"}</span>
                 <span className="ml-auto rounded-full px-2 py-1 text-[11px] font-medium" style={{ background: theme.node.fill, color: theme.node.muted }}>
-                    {groupChildCount} 个节点
+                    {receiving ? `已收 ${groupChildCount}/14` : `${groupChildCount} 个节点`}
                 </span>
             </div>
             <div className="mt-3 flex-1 rounded-2xl border border-dashed" style={{ borderColor: theme.node.stroke, background: `${theme.node.fill}55` }} />
+            {receiving ? (
+                <div className="mt-3 flex items-center gap-3">
+                    <span className="text-xs" style={{ color: theme.node.muted }}>
+                        {receiving.status === "closed" ? "已关账" : receiving.message || "把满意图片拖进框内。"}
+                    </span>
+                    {groupChildCount === 14 && receiving.status !== "closed" ? (
+                        <button
+                            type="button"
+                            className="pointer-events-auto ml-auto h-9 rounded-lg px-4 text-xs font-semibold disabled:opacity-50"
+                            style={{ background: theme.node.activeStroke, color: theme.node.panel }}
+                            disabled={receiving.status === "submitting"}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onConfirmReceiving?.(node.id);
+                            }}
+                        >
+                            {receiving.status === "submitting" ? "正在核对…" : "确认关账"}
+                        </button>
+                    ) : null}
+                </div>
+            ) : null}
         </div>
     );
 }
