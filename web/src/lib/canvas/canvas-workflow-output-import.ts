@@ -27,7 +27,7 @@ export async function importProductionOutput(
 ): Promise<CanvasNodeMetadata> {
     const proof = node.metadata?.workflowProductionOutput;
     if (node.type !== CanvasNodeType.Image || !proof || !token.trim()) throw new Error("正式图片接收信息不完整，已停止。");
-    if (!validDownloadUrl(proof.downloadUrl, proof.batchId, proof.configId)) throw new Error("正式图片接收地址无效，已停止。");
+    if (!validDownloadUrl(proof.downloadUrl, proof.batchId, proof.configId, proof.source)) throw new Error("正式图片接收地址无效，已停止。");
     if (!SHA256_PATTERN.test(proof.sha256) || !Number.isInteger(proof.byteCount) || proof.byteCount <= 0) throw new ProductionOutputIntegrityError();
     const response = await fetcher(proof.downloadUrl, { method: "GET", headers: { "X-Canvas-Agent-Token": token.trim() }, signal });
     if (!response.ok) throw new Error("本机正式图片服务拒绝了接收，本次已停止且不会自动重试。");
@@ -50,10 +50,11 @@ export async function importProductionOutput(
     };
 }
 
-function validDownloadUrl(value: string, batchId: string, configId: string) {
+function validDownloadUrl(value: string, batchId: string, configId: string, source?: "renders" | "repaired") {
     try {
         const parsed = new URL(value);
-        return parsed.origin === PRODUCTION_ORIGIN && parsed.pathname === `/workflow-production/${encodeURIComponent(batchId)}/outputs/${encodeURIComponent(configId)}` && !parsed.search && !parsed.hash;
+        const sourcePath = source === "renders" || source === "repaired" ? `/${source}` : "";
+        return parsed.origin === PRODUCTION_ORIGIN && parsed.pathname === `/workflow-production/${encodeURIComponent(batchId)}/outputs${sourcePath}/${encodeURIComponent(configId)}` && !parsed.search && !parsed.hash;
     } catch {
         return false;
     }

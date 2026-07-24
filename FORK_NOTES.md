@@ -50,6 +50,14 @@
 | 42 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` | completed 机器继续入口、生产命令与完成态文案 | completed 不再在费用确认前被拦截，确认后固定发送 `run: next`；paused/部分失败仍用 `retry: renders`；状态行优先显示后端 message，无 message 时使用路由中性文案，按钮改为“继续/质检” | 已出齐 14 张的机器可由后端按现场路由进入 QC 或幂等完成，不会误发重渲染命令，也不再显示“停在质检前/制作完成”误导表述 | 2026-07-24 |
 | 43 | `web/tests/canvas-workflow-production.test.ts` | completed 继续、文案与单页提交锁回归 | 新增 3 项测试，覆盖 completed 可发起且恰为 `run: next`、paused/失败续跑不变、后端 message 优先与中性兜底，以及同机器/批次单页一次提交 | 防止后续改动重新拦截 completed、误发 `retry: renders` 或绕过既有费用闸门锁 | 2026-07-24 |
 | 44 | `web/dist/` | 最新生产构建运行副本 | 提交前按本次源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器继续加载陈旧前端，确保 completed 放行与新文案在下次画布启动时生效 | 2026-07-24 |
+| 45 | `web/src/types/canvas.ts` | 正式图片来源、QC 角标与返修投影状态 | 增加显式 renders/repaired 来源、三态角标和纯投影请求类型；旧节点来源保持可选以便安全补证 | 图位身份不再依赖文件名，补证失败节点可保持无角标且不进入后续收货 | 2026-07-24 |
+| 46 | `web/src/lib/canvas/canvas-workflow-output-import.ts` | `validDownloadUrl()` | 在保留旧 renders 地址的同时接受显式 renders/repaired 白名单地址，原 SHA/Blob/字节数合同不变 | 8 张返修图复用现有 localforage 接收器，不另建低安全通道 | 2026-07-24 |
+| 47 | `web/src/lib/canvas/canvas-workflow-delivery.ts` | QC 摘要、三态角标与返修纯投影合同 | 新增回环摘要读取、严格 14 图位校验、只给已持久化 renders 节点挂角标及不含命令的返修请求 | 前后端统一执行 issues 优先、needs_review 次之、通过兜底的固定规则 | 2026-07-24 |
+| 48 | `web/src/pages/canvas/use-canvas-workflow-qc-badges.ts` | 单页批次缓存 | 每批每页只请求一次 QC 摘要，缓存后给后续出现的正式节点补角标；404 和不可用静默 | 避免轮询与每帧请求，报告缺失不打扰用户 | 2026-07-24 |
+| 49 | `web/src/pages/canvas/use-canvas-workflow-repaired-projection.ts` | `requestProjection()` | completed 真实机器可提交一次独立返修投影状态，不经过费用卡、不写 content 或工作流命令 | 上桌既有磁盘成品是零费用纯投影，不能触发执行器或重做 | 2026-07-24 |
+| 50 | `web/src/components/canvas/canvas-node.tsx` | 图片节点 QC 角标 | 图片右上角显示通过、问题数或待核对三态小标，保持原图片点击、拖拽和缩放行为 | 让 QC 结论成为图片节点视觉附属而非新节点或遮挡层 | 2026-07-24 |
+| 51 | `web/src/components/canvas/canvas-workflow-node.tsx` + `web/src/pages/canvas/project.tsx` | “上桌返修图”入口与控制器接入 | completed 真实机器显示独立按钮并接入纯投影、QC 缓存控制器 | 用户无需手写命令，且入口与收费制作按钮明确分离 | 2026-07-24 |
+| 52 | `web/tests/canvas-workflow-delivery.test.ts` | QC 与返修投影回归 | 新增 8 项覆盖安全端点、404 静默、三态、来源隔离、无命令投影和 repaired SHA 接收 | 锁定角标不落到 repaired/补证失败节点及纯投影边界 | 2026-07-24 |
 
 ## 新增文件
 

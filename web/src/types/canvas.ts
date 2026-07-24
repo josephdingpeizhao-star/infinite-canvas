@@ -57,7 +57,24 @@ export type CanvasWorkflowProductionOutputMetadata = {
     sha256: string;
     downloadUrl: string;
     byteCount: number;
+    source?: "renders" | "repaired";
     persistedAt?: number;
+    sourceBackfillStatus?: "rejected";
+    sourceBackfillCode?: "source_proof_mismatch";
+};
+export type CanvasWorkflowQcBadgeMetadata = {
+    status: "pass" | "fail" | "needs_review";
+    issueCount: number;
+    topCategories: string[];
+};
+export type CanvasWorkflowRepairedProjectionMetadata = {
+    status: "idle" | "queued" | "running" | "completed" | "failed";
+    batchId?: string;
+    requestId?: string;
+    requestedAt?: number;
+    updatedAt?: number;
+    projectedCount?: number;
+    message?: string;
 };
 export type CanvasBatchIntakeStatus = "draft" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
 export type CanvasBatchSourceFile = {
@@ -167,6 +184,8 @@ export type CanvasNodeMetadata = {
     workflowDemoOutput?: CanvasWorkflowDemoOutputMetadata;
     workflowProduction?: CanvasWorkflowProductionMetadata;
     workflowProductionOutput?: CanvasWorkflowProductionOutputMetadata;
+    workflowProductionQc?: CanvasWorkflowQcBadgeMetadata;
+    workflowRepairedProjection?: CanvasWorkflowRepairedProjectionMetadata;
     batchIntake?: CanvasBatchIntakeMetadata;
     styleReferenceIntake?: CanvasStyleReferenceMetadata;
     sourceFile?: CanvasBatchSourceFile;

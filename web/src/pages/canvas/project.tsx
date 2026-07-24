@@ -55,6 +55,8 @@ import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
 import { useCanvasStyleReferenceIntake } from "./use-canvas-style-reference-intake";
 import { useCanvasWorkflowDemo } from "./use-canvas-workflow-demo";
 import { useCanvasWorkflowOutputImport } from "./use-canvas-workflow-output-import";
+import { useCanvasWorkflowQcBadges } from "./use-canvas-workflow-qc-badges";
+import { useCanvasWorkflowRepairedProjection } from "./use-canvas-workflow-repaired-projection";
 import { useCanvasWorkflowProduction } from "./use-canvas-workflow-production";
 import {
     CanvasNodeType,
@@ -359,6 +361,13 @@ function InfiniteCanvasPage() {
         warn: (text) => void message.warning(text),
     });
     const workflowOutputImport = useCanvasWorkflowOutputImport({ nodes, setNodes });
+    useCanvasWorkflowQcBadges({ nodes, setNodes });
+    const workflowRepairedProjection = useCanvasWorkflowRepairedProjection({
+        nodesRef,
+        connectionsRef,
+        setNodes,
+        warn: (text) => void message.warning(text),
+    });
     const styleReferenceIntake = useCanvasStyleReferenceIntake({
         nodes,
         nodesRef,
@@ -2678,6 +2687,7 @@ function InfiniteCanvasPage() {
                                         connectedImageCount={connectedWorkflowImageIds(contentNode.id, nodes, connections).length}
                                         production={connectedProductionSummary(contentNode.id, nodes, connections)}
                                         onStart={requestWorkflowStart}
+                                        onProjectRepaired={workflowRepairedProjection.requestProjection}
                                         onToggleDetails={(nodeId) => setDialogNodeId((current) => (current === nodeId ? null : nodeId))}
                                     />
                                 ) : (

@@ -9,6 +9,7 @@ import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textare
 import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { usesCustomNodeContent } from "@/lib/canvas/canvas-workflow-demo";
+import { qcBadgeView } from "@/lib/canvas/canvas-workflow-delivery";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const selectionBlue = "#2f80ff";
@@ -122,6 +123,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const imageBorderColor = isActive ? selectionBlue : isRelated && !isBatchChild ? theme.node.muted : "transparent";
+    const qcBadge = qcBadgeView(data.metadata?.workflowProductionQc);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const titleInputRef = useRef<HTMLInputElement>(null);
     const resizeRef = useRef({
@@ -391,6 +393,17 @@ export const CanvasNode = React.memo(function CanvasNode({
 
                 {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
                 {resourceLabel ? <ResourceLabelBadge reference={resourceLabel} /> : null}
+                {qcBadge ? (
+                    <span
+                        className="pointer-events-none absolute right-2 top-2 z-20 rounded-full px-2 py-1 text-[10px] font-semibold shadow"
+                        style={{
+                            background: qcBadge.tone === "pass" ? "#166534" : qcBadge.tone === "review" ? "#92400e" : "#991b1b",
+                            color: "#fff",
+                        }}
+                    >
+                        {qcBadge.text}
+                    </span>
+                ) : null}
 
                 {!isGroup && !hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
 
