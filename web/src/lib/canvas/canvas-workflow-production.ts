@@ -4,6 +4,8 @@ export const WORKFLOW_PRODUCTION_TOTAL = 14;
 export const WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS = 8_000;
 export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 12 * 60_000;
 export const WORKFLOW_PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
+export const COMPLETED_PRODUCTION_ACTION_LABEL = "继续/质检";
+export const COMPLETED_PRODUCTION_FALLBACK_MESSAGE = "14 张真实图片已上桌。点击继续后，机器会按当前批次状态处理下一步。";
 
 const PRODUCTION_STATUSES = new Set(["idle", "queued", "running", "paused", "completed", "failed"]);
 
@@ -131,9 +133,9 @@ export async function fetchProductionQuote(batchId: string, token: string, fetch
 }
 
 export function buildProductionCommand(state: CanvasWorkflowProductionMetadata, batchId: string, requestId: string, now: number) {
-    const retry = state.producedCount > 0 || state.status === "paused";
+    const action = state.status === "completed" ? "run: next" : state.producedCount > 0 || state.status === "paused" ? "retry: renders" : "run: next";
     return {
-        content: `# workflow-production\n# request-id: ${requestId}\n# requested-at: ${now}\n${retry ? "retry: renders" : "run: next"}`,
+        content: `# workflow-production\n# request-id: ${requestId}\n# requested-at: ${now}\n${action}`,
         state: {
             ...state,
             status: "queued" as const,
@@ -146,6 +148,14 @@ export function buildProductionCommand(state: CanvasWorkflowProductionMetadata, 
             step: undefined,
         },
     };
+}
+
+export function isProductionStartBlocked(state: CanvasWorkflowProductionMetadata) {
+    return state.status === "queued" || state.status === "running";
+}
+
+export function completedProductionStatusText(message?: string) {
+    return message || COMPLETED_PRODUCTION_FALLBACK_MESSAGE;
 }
 
 export function hasProductionSubmission(submissions: ReadonlySet<string>, machineId: string, batchId: string) {

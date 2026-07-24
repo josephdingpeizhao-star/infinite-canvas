@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+    COMPLETED_PRODUCTION_ACTION_LABEL,
     buildProductionCommand,
     buildProductionQuoteUrl,
+    completedProductionStatusText,
     expireProductionState,
     fetchProductionQuote,
+    isProductionStartBlocked,
     readProductionState,
     reserveProductionSubmission,
     resolveProductionSelection,
@@ -130,6 +133,35 @@ describe("canvas workflow production", () => {
 
         const reopenedPage = new Set<string>();
         expect(reserveProductionSubmission(reopenedPage, "machine", "cup")).toBe(true);
+    });
+
+    test("completed continuation is eligible and emits exactly run next while retries stay unchanged", () => {
+        const completed = readProductionState({ workflowProduction: { status: "completed", producedCount: 14, batchId: "cup" } });
+        expect(isProductionStartBlocked(completed)).toBe(false);
+        const completedCommand = buildProductionCommand(completed, "cup", "request-completed", 3_000);
+        expect(completedCommand.content.split("\n").at(-1)).toBe("run: next");
+        expect(completedCommand.content).not.toContain("retry: renders");
+
+        const paused = readProductionState({ workflowProduction: { status: "paused", producedCount: 14, batchId: "cup" } });
+        expect(buildProductionCommand(paused, "cup", "request-paused", 4_000).content.split("\n").at(-1)).toBe("retry: renders");
+        const failed = readProductionState({ workflowProduction: { status: "failed", producedCount: 5, batchId: "cup" } });
+        expect(buildProductionCommand(failed, "cup", "request-failed", 5_000).content.split("\n").at(-1)).toBe("retry: renders");
+    });
+
+    test("completed copy prefers the backend message and otherwise stays route neutral", () => {
+        expect(completedProductionStatusText("质检完成，QC 报告已生成。")).toBe("质检完成，QC 报告已生成。");
+        expect(completedProductionStatusText()).toBe("14 张真实图片已上桌。点击继续后，机器会按当前批次状态处理下一步。");
+        expect(completedProductionStatusText()).not.toContain("停在质检前");
+        expect(COMPLETED_PRODUCTION_ACTION_LABEL).toBe("继续/质检");
+    });
+
+    test("completed continuation keeps one submission per machine and batch", () => {
+        const completed = readProductionState({ workflowProduction: { status: "completed", producedCount: 14, batchId: "cup" } });
+        if (isProductionStartBlocked(completed)) throw new Error("completed must remain eligible for the guarded submission path");
+        const submissions = new Set<string>();
+        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(true);
+        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(false);
+        expect(submissions.size).toBe(1);
     });
 
     test("expires only an unacknowledged command and preserves finished images", () => {

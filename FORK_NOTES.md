@@ -47,6 +47,9 @@
 | 39 | `canvas-agent/src/http-server.ts` | Codex 新线程与回合入口的可选档位参数 | 接收 `effort` 后按内嵌 Codex 0.139.0 合法值校验并传给通用线程入口；非法值固定返回 400，且不回显原值 | 让主仓可显式固定生产档位，同时避免未知值进入 Codex 线程 | 2026-07-21 |
 | 40 | `canvas-agent/src/agents.ts` | Codex 模型与档位线程参数及异常重建 | `thread/start` 可选携带 `model + effort`；可恢复线程异常重建时两项设置继续保留，未提供档位的普通回合仍省略 | 消除生产图文回合对外部档位的被动继承，不改变普通画布会话 | 2026-07-21 |
 | 41 | `canvas-agent/src/agents.test.ts` | Codex 档位显式传递与隔离回归 | 覆盖 `gpt-5.5 + xhigh`、合法值白名单、非法值脱敏拒绝、异常重建保留和普通回合不受影响 | 锁定生产确定性，并保护既有 0/1/2 图和普通线程行为 | 2026-07-21 |
+| 42 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` | completed 机器继续入口、生产命令与完成态文案 | completed 不再在费用确认前被拦截，确认后固定发送 `run: next`；paused/部分失败仍用 `retry: renders`；状态行优先显示后端 message，无 message 时使用路由中性文案，按钮改为“继续/质检” | 已出齐 14 张的机器可由后端按现场路由进入 QC 或幂等完成，不会误发重渲染命令，也不再显示“停在质检前/制作完成”误导表述 | 2026-07-24 |
+| 43 | `web/tests/canvas-workflow-production.test.ts` | completed 继续、文案与单页提交锁回归 | 新增 3 项测试，覆盖 completed 可发起且恰为 `run: next`、paused/失败续跑不变、后端 message 优先与中性兜底，以及同机器/批次单页一次提交 | 防止后续改动重新拦截 completed、误发 `retry: renders` 或绕过既有费用闸门锁 | 2026-07-24 |
+| 44 | `web/dist/` | 最新生产构建运行副本 | 提交前按本次源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器继续加载陈旧前端，确保 completed 放行与新文案在下次画布启动时生效 | 2026-07-24 |
 
 ## 新增文件
 

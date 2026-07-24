@@ -2,7 +2,7 @@ import { CheckCircle2, CircleAlert, Info, LoaderCircle, Play, Workflow } from "l
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_COUNT, WORKFLOW_DEMO_TOTAL } from "@/lib/canvas/canvas-workflow-demo";
-import { readProductionState } from "@/lib/canvas/canvas-workflow-production";
+import { COMPLETED_PRODUCTION_ACTION_LABEL, completedProductionStatusText, readProductionState } from "@/lib/canvas/canvas-workflow-production";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionStatus } from "@/types/canvas";
 
@@ -180,7 +180,7 @@ function productionStatusText(status: CanvasWorkflowProductionStatus, producedCo
     if (status === "queued") return "费用已确认，等待本机工作台接单。";
     if (status === "running") return message || `正在制作，已完成 ${producedCount}/${WORKFLOW_DEMO_TOTAL} 张。`;
     if (status === "paused") return `已完成 ${producedCount}/${WORKFLOW_DEMO_TOTAL} 张。成果都已保留；再次开始会从既有路由续跑。`;
-    if (status === "completed") return "14 张真实图片已上桌。机器已停在质检前，不会越界执行。";
+    if (status === "completed") return completedProductionStatusText(message);
     if (status === "failed") return errorMessage || "这一步没做好，机器已停下。已经完成的成果都保留了。";
     return "已连接已登记批次。点击开始后先核对真实费用，确认前不会执行。";
 }
@@ -189,7 +189,7 @@ function productionActionLabel(status: CanvasWorkflowProductionStatus) {
     if (status === "queued") return "等待接单";
     if (status === "running") return "真实制作中";
     if (status === "paused") return "继续制作";
-    if (status === "completed") return "制作完成";
+    if (status === "completed") return COMPLETED_PRODUCTION_ACTION_LABEL;
     if (status === "failed") return "重新开始";
     return "开始真实制作";
 }

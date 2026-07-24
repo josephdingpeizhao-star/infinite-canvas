@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, readProductionState, reserveProductionSubmission, resolveProductionSelection, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
+import { buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, isProductionStartBlocked, readProductionState, reserveProductionSubmission, resolveProductionSelection, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
 
@@ -48,11 +48,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
                 return true;
             }
             const state = readProductionState(workflow.metadata);
-            if (state.status === "queued" || state.status === "running") return true;
-            if (state.status === "completed") {
-                warn("这个批次的 14 张图片已经全部上桌，下一步是质检，不会在这里重复制作。");
-                return true;
-            }
+            if (isProductionStartBlocked(state)) return true;
             try {
                 const quote = await fetchProductionQuote(selection.batchId, token);
                 const latest = resolveProductionSelection(nodeId, nodesRef.current, connectionsRef.current);
