@@ -61,6 +61,7 @@
 | 53 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-workflow-receiving.ts` + `web/src/pages/canvas/use-canvas-workflow-receiving.ts` | 已收货框状态、图位选择与关账通道 | 新增稳定组节点、显式元数据图位识别、14 项载荷、状态恢复和回环鉴权 POST；同图位后拖入者替换前者 | 不靠文件名猜测，收货过程可撤销，只有用户确认才进入不可逆关账 | 2026-07-24 |
 | 54 | `web/src/components/canvas/canvas-node.tsx` + `web/src/components/canvas/canvas-workflow-node.tsx` + `web/src/pages/canvas/project.tsx` | 收货框机器入口、拖入/替换/拖出与确认按钮 | completed 机器可创建唯一收货框；复用组拖拽并只接纳有来源和 SHA 的持久化图片，收满才显示确认 | 保持底层拖拽引擎不变，同时让错误补证节点无法计数 | 2026-07-24 |
 | 55 | `web/tests/canvas-workflow-receiving.test.ts` + `web/dist/` | 收货关账回归与最新运行副本 | 新增 8 项覆盖计数、替换、拖出、确认门、载荷、鉴权提交和关账恢复；提交前重建 dist | 锁定 NC-03 交互并避免启动器加载旧前端 | 2026-07-24 |
+| 56 | `web/src/lib/canvas/canvas-workflow-delivery.ts` + `web/src/pages/canvas/use-canvas-workflow-qc-badges.ts` + `web/tests/canvas-workflow-delivery.test.ts` | QC 角标引用稳定与缓存命中守卫 | 相同角标保留原节点和原数组引用；缓存仅在角标确有差异时写回节点，并补充连续应用、单节点引用和守卫回归 | 切断 `nodes` effect 的重复状态写回，避免打开画布触发 React 无限更新 | 2026-07-24 |
 
 ## 新增文件
 

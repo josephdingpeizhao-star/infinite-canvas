@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyQcSummaryToNodes, buildQcSummaryUrl, buildRepairedProjectionRequest, fetchWorkflowQcSummary, qcBadgeView, repairedProjectionCanStart, type WorkflowQcSummary } from "../src/lib/canvas/canvas-workflow-delivery";
+import { applyQcSummaryToNodes, buildQcSummaryUrl, buildRepairedProjectionRequest, fetchWorkflowQcSummary, qcBadgeView, qcSummaryNeedsApplication, repairedProjectionCanStart, type WorkflowQcSummary } from "../src/lib/canvas/canvas-workflow-delivery";
 import { importProductionOutput } from "../src/lib/canvas/canvas-workflow-output-import";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
@@ -56,6 +56,26 @@ describe("workflow delivery badges and repaired projection", () => {
         expect(result[1]?.metadata?.workflowProductionQc?.status).toBe("needs_review");
         expect(result[2]?.metadata?.workflowProductionQc).toBeUndefined();
         expect(result[3]?.metadata?.workflowProductionQc).toBeUndefined();
+    });
+
+    test("returns the original array when the same QC summary is applied twice", () => {
+        const first = applyQcSummaryToNodes([output("renders")], "cup", summary);
+        const second = applyQcSummaryToNodes(first, "cup", summary);
+        expect(second).toBe(first);
+    });
+
+    test("preserves an unchanged QC node while another node receives its badge", () => {
+        const unchanged = applyQcSummaryToNodes([output("renders")], "cup", summary)[0]!;
+        const nodes = [unchanged, output("renders", "detail_03")];
+        const result = applyQcSummaryToNodes(nodes, "cup", summary);
+        expect(result).not.toBe(nodes);
+        expect(result[0]).toBe(unchanged);
+    });
+
+    test("skips cached QC hook work until a render needs a badge", () => {
+        const applied = applyQcSummaryToNodes([output("renders")], "cup", summary);
+        expect(qcSummaryNeedsApplication(applied, "cup", summary)).toBe(false);
+        expect(qcSummaryNeedsApplication([...applied, output("renders", "main_02")], "cup", summary)).toBe(true);
     });
 
     test("renders fixed badge copy for pass, problems and review", () => {

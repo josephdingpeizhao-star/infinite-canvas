@@ -1,6 +1,6 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 
-import { applyQcSummaryToNodes, fetchWorkflowQcSummary, type WorkflowQcSummary } from "@/lib/canvas/canvas-workflow-delivery";
+import { applyQcSummaryToNodes, fetchWorkflowQcSummary, qcSummaryNeedsApplication, type WorkflowQcSummary } from "@/lib/canvas/canvas-workflow-delivery";
 import { useAgentStore } from "@/stores/use-agent-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
@@ -19,7 +19,7 @@ export function useCanvasWorkflowQcBadges({ nodes, setNodes }: { nodes: CanvasNo
         batches.forEach((batchId) => {
             const cached = cache.current.get(batchId);
             if (cached) {
-                setNodes((items) => applyQcSummaryToNodes(items, batchId, cached));
+                if (qcSummaryNeedsApplication(nodes, batchId, cached)) setNodes((items) => applyQcSummaryToNodes(items, batchId, cached));
                 return;
             }
             if (!token.trim() || started.current.has(batchId)) return;

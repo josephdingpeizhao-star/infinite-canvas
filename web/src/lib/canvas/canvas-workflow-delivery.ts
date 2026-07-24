@@ -37,17 +37,32 @@ export async function fetchWorkflowQcSummary(batchId: string, token: string, fet
 
 export function applyQcSummaryToNodes(nodes: CanvasNodeData[], batchId: string, summary: WorkflowQcSummary) {
     const byConfig = new Map(summary.images.map((item) => [item.configId, item] as const));
-    return nodes.map((node) => {
+    let changed = false;
+    const nextNodes = nodes.map((node) => {
         const proof = node.metadata?.workflowProductionOutput;
         if (node.type !== CanvasNodeType.Image || proof?.batchId !== batchId) return node;
         if (proof.source !== "renders" || !node.metadata?.storageKey || !SHA256_PATTERN.test(proof.sha256)) {
             if (!node.metadata?.workflowProductionQc) return node;
             const { workflowProductionQc: _removed, ...metadata } = node.metadata;
+            changed = true;
             return { ...node, metadata };
         }
         const badge = byConfig.get(proof.configId);
-        if (!badge) return node;
+        if (!badge || qcBadgeMatches(node.metadata?.workflowProductionQc, badge)) return node;
+        changed = true;
         return { ...node, metadata: { ...node.metadata, workflowProductionQc: { status: badge.status, issueCount: badge.issueCount, topCategories: [...badge.topCategories] } } };
+    });
+    return changed ? nextNodes : nodes;
+}
+
+export function qcSummaryNeedsApplication(nodes: CanvasNodeData[], batchId: string, summary: WorkflowQcSummary) {
+    const byConfig = new Map(summary.images.map((item) => [item.configId, item] as const));
+    return nodes.some((node) => {
+        const proof = node.metadata?.workflowProductionOutput;
+        if (node.type !== CanvasNodeType.Image || proof?.batchId !== batchId) return false;
+        if (proof.source !== "renders" || !node.metadata?.storageKey || !SHA256_PATTERN.test(proof.sha256)) return Boolean(node.metadata?.workflowProductionQc);
+        const badge = byConfig.get(proof.configId);
+        return Boolean(badge && !qcBadgeMatches(node.metadata?.workflowProductionQc, badge));
     });
 }
 
@@ -78,4 +93,8 @@ function validQcSummary(payload: unknown, batchId: string): payload is WorkflowQ
         seen.add(image.configId);
     }
     return seen.size === 14;
+}
+
+function qcBadgeMatches(current: CanvasWorkflowQcBadgeMetadata | undefined, next: WorkflowQcSummary["images"][number]) {
+    return current?.status === next.status && current.issueCount === next.issueCount && current.topCategories.length === next.topCategories.length && current.topCategories.every((item, index) => item === next.topCategories[index]);
 }
