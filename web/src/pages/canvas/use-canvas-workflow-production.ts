@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRe
 import { nanoid } from "nanoid";
 
 import { buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, isProductionStartBlocked, readProductionState, reserveProductionSubmission, resolveProductionSelection, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
+import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
 
@@ -21,6 +22,7 @@ type Pending = {
     materialCount: number;
     quote: WorkflowProductionQuote;
     previous: CanvasWorkflowProductionMetadata;
+    requestedCommand?: ClosedWorkflowCommand;
 };
 
 export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, connectionsRef, setNodes, warn }: Options) {
@@ -34,7 +36,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
     }, [pending]);
 
     const requestStart = useCallback(
-        async (nodeId: string) => {
+        async (nodeId: string, requestedCommand?: ClosedWorkflowCommand) => {
             const selection = resolveProductionSelection(nodeId, nodesRef.current, connectionsRef.current);
             if (selection.mode === "demo") return false;
             if (selection.mode === "error") {
@@ -56,7 +58,13 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
                     warn("信息卡或素材连线已经变化，请核对后重新开始。");
                     return true;
                 }
-                const next = { nodeId, ...latest, quote, previous: state };
+                const next = {
+                    nodeId,
+                    ...latest,
+                    quote,
+                    previous: state,
+                    requestedCommand,
+                };
                 pendingRef.current = next;
                 setPending(next);
             } catch (error) {
@@ -91,7 +99,13 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
         setNodes((items) =>
             items.map((node) => {
                 if (node.id !== current.nodeId || node.type !== CanvasNodeType.Workflow) return node;
-                const command = buildProductionCommand(readProductionState(node.metadata), selection.batchId, requestId, now);
+                const command = buildProductionCommand(
+                    readProductionState(node.metadata),
+                    selection.batchId,
+                    requestId,
+                    now,
+                    current.requestedCommand,
+                );
                 return { ...node, metadata: { ...node.metadata, content: command.content, workflowProduction: command.state } };
             }),
         );

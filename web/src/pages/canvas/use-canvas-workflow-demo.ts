@@ -7,6 +7,7 @@ import {
     expireWorkflowDemoState,
     readWorkflowDemoState,
 } from "@/lib/canvas/canvas-workflow-demo";
+import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowDemoMetadata } from "@/types/canvas";
 
 type WorkflowDemoControllerOptions = {
@@ -22,6 +23,7 @@ type WorkflowDemoControllerOptions = {
 type PendingConfirmation = {
     nodeId: string;
     previous: CanvasWorkflowDemoMetadata;
+    requestedCommand?: ClosedWorkflowCommand;
 };
 
 export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connectionsRef, setNodes, warn }: WorkflowDemoControllerOptions) {
@@ -46,7 +48,7 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
     );
 
     const requestStart = useCallback(
-        (nodeId: string) => {
+        (nodeId: string, requestedCommand?: ClosedWorkflowCommand) => {
             const workflow = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Workflow);
             const workflowStatus = workflow ? readWorkflowDemoState(workflow.metadata).status : "idle";
             if (!workflow || workflowStatus === "running" || workflowStatus === "queued" || workflowStatus === "awaiting_confirmation") return;
@@ -56,7 +58,7 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
                 return;
             }
             const previous = readWorkflowDemoState(workflow.metadata);
-            const pending = { nodeId, previous };
+            const pending = { nodeId, previous, requestedCommand };
             pendingConfirmationRef.current = pending;
             setPendingConfirmation(pending);
             updateWorkflowState(nodeId, (state) => ({ ...state, status: "awaiting_confirmation", errorMessage: undefined }));
@@ -91,7 +93,12 @@ export function useCanvasWorkflowDemo({ nodes, connections, nodesRef, connection
         setNodes((current) =>
             current.map((node) => {
                 if (node.id !== workflow.id || node.type !== CanvasNodeType.Workflow) return node;
-                const command = buildWorkflowDemoCommand(readWorkflowDemoState(node.metadata), requestId, Date.now());
+                const command = buildWorkflowDemoCommand(
+                    readWorkflowDemoState(node.metadata),
+                    requestId,
+                    Date.now(),
+                    pending.requestedCommand,
+                );
                 return { ...node, metadata: { ...node.metadata, content: command.content, workflowDemo: command.state } };
             }),
         );

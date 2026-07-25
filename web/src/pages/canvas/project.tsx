@@ -45,11 +45,17 @@ import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/a
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import {
+    clearWorkflowCommandBridge,
+    registerWorkflowCommandBridge,
+    type WorkflowCommandTarget,
+} from "@/stores/canvas/use-canvas-workflow-command-store";
 import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
+import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
 import { batchSourceFilePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
-import { connectedProductionSummary, resetInterruptedProductions } from "@/lib/canvas/canvas-workflow-production";
+import { connectedProductionSummary, resetInterruptedProductions, resolveProductionSelection } from "@/lib/canvas/canvas-workflow-production";
 import { connectedStyleReferenceFileNames, connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
 import { useCanvasStyleReferenceIntake } from "./use-canvas-style-reference-intake";
@@ -339,6 +345,7 @@ function InfiniteCanvasPage() {
     const selectionBoxRef = useRef(selectionBox);
     const pendingConnectionCreateRef = useRef(pendingConnectionCreate);
     const generationRequestsRef = useRef(new Map<string, CanvasGenerationRequest>());
+    const warnWorkflow = useCallback((text: string) => void message.warning(text), [message]);
     const workflowDemo = useCanvasWorkflowDemo({
         nodes,
         connections,
@@ -346,7 +353,7 @@ function InfiniteCanvasPage() {
         connectionsRef,
         setNodes,
         setConnections,
-        warn: (text) => void message.warning(text),
+        warn: warnWorkflow,
     });
     const batchIntake = useCanvasBatchIntake({
         nodes,
@@ -361,7 +368,7 @@ function InfiniteCanvasPage() {
         nodesRef,
         connectionsRef,
         setNodes,
-        warn: (text) => void message.warning(text),
+        warn: warnWorkflow,
     });
     const workflowOutputImport = useCanvasWorkflowOutputImport({ nodes, setNodes });
     useCanvasIntakeRoleVisibility({ nodes, connections, setNodes });
@@ -387,12 +394,60 @@ function InfiniteCanvasPage() {
         warn: (text) => void message.warning(text),
     });
     const requestWorkflowStart = useCallback(
-        (nodeId: string) => {
-            void workflowProduction.requestStart(nodeId).then((handled) => {
-                if (!handled) workflowDemo.requestStart(nodeId);
+        (nodeId: string, requestedCommand?: ClosedWorkflowCommand) => {
+            void workflowProduction.requestStart(nodeId, requestedCommand).then((handled) => {
+                if (!handled) workflowDemo.requestStart(nodeId, requestedCommand);
             });
         },
         [workflowDemo.requestStart, workflowProduction.requestStart],
+    );
+    const workflowCommandTargets = useMemo<WorkflowCommandTarget[]>(
+        () =>
+            projectLoaded
+                ? nodes
+                      .filter((node) => node.type === CanvasNodeType.Workflow)
+                      .map((node) => {
+                          const selection = resolveProductionSelection(node.id, nodes, connections);
+                          if (selection.mode === "production") {
+                              return {
+                                  nodeId: node.id,
+                                  title: node.title || "工作流机器",
+                                  mode: "production" as const,
+                                  batchId: selection.batchId,
+                              };
+                          }
+                          if (selection.mode === "error") {
+                              return {
+                                  nodeId: node.id,
+                                  title: node.title || "工作流机器",
+                                  mode: "error" as const,
+                                  message: selection.message,
+                              };
+                          }
+                          return {
+                              nodeId: node.id,
+                              title: node.title || "工作流机器",
+                              mode: "demo" as const,
+                          };
+                      })
+                : [],
+        [connections, nodes, projectLoaded],
+    );
+
+    useEffect(() => {
+        if (!projectLoaded) return;
+        registerWorkflowCommandBridge(
+            projectId,
+            workflowCommandTargets,
+            requestWorkflowStart,
+        );
+    }, [projectId, projectLoaded, requestWorkflowStart, workflowCommandTargets]);
+
+    useEffect(
+        () => () => {
+            clearWorkflowCommandBridge(projectId);
+        },
+        [projectId],
     );
 
     const createHistoryEntry = useCallback(

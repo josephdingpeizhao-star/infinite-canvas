@@ -1,4 +1,8 @@
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
+import {
+    requireClosedWorkflowCommand,
+    type ClosedWorkflowCommand,
+} from "@/lib/canvas/canvas-command-assistant";
 
 export const WORKFLOW_PRODUCTION_TOTAL = 14;
 export const WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS = 8_000;
@@ -132,8 +136,20 @@ export async function fetchProductionQuote(batchId: string, token: string, fetch
     };
 }
 
-export function buildProductionCommand(state: CanvasWorkflowProductionMetadata, batchId: string, requestId: string, now: number) {
-    const action = state.status === "completed" ? "run: next" : state.producedCount > 0 || state.status === "paused" ? "retry: renders" : "run: next";
+export function buildProductionCommand(
+    state: CanvasWorkflowProductionMetadata,
+    batchId: string,
+    requestId: string,
+    now: number,
+    requestedCommand?: ClosedWorkflowCommand,
+) {
+    const action = requestedCommand
+        ? requireClosedWorkflowCommand(requestedCommand)
+        : state.status === "completed"
+          ? "run: next"
+          : state.producedCount > 0 || state.status === "paused"
+            ? "retry: renders"
+            : "run: next";
     return {
         content: `# workflow-production\n# request-id: ${requestId}\n# requested-at: ${now}\n${action}`,
         state: {

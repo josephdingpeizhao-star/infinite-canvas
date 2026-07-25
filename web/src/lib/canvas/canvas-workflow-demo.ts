@@ -1,4 +1,8 @@
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkflowDemoMetadata, type Position } from "@/types/canvas";
+import {
+    requireClosedWorkflowCommand,
+    type ClosedWorkflowCommand,
+} from "@/lib/canvas/canvas-command-assistant";
 
 export const WORKFLOW_DEMO_TOTAL = 14;
 export const WORKFLOW_DEMO_MAIN_COUNT = 6;
@@ -76,10 +80,18 @@ export function readWorkflowDemoState(metadata?: CanvasNodeMetadata): CanvasWork
     };
 }
 
-export function buildWorkflowDemoCommand(state: CanvasWorkflowDemoMetadata, requestId: string, now: number) {
+export function buildWorkflowDemoCommand(
+    state: CanvasWorkflowDemoMetadata,
+    requestId: string,
+    now: number,
+    requestedCommand?: ClosedWorkflowCommand,
+) {
     const retry = state.completedRuns > 0 || state.producedCount > 0;
+    const action = requestedCommand
+        ? requireClosedWorkflowCommand(requestedCommand)
+        : `${retry ? "retry" : "run"}: renders`;
     return {
-        content: `# workflow-demo\n# request-id: ${requestId}\n# requested-at: ${now}\n${retry ? "retry" : "run"}: renders`,
+        content: `# workflow-demo\n# request-id: ${requestId}\n# requested-at: ${now}\n${action}`,
         state: {
             ...state,
             status: "queued" as const,

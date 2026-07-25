@@ -74,6 +74,13 @@
 | 66 | `CHANGELOG.md` | `Unreleased` | 新增一条 NC-01 用户可感知记录 | 让角色透明、同哈希拒绝和 fail-closed 行为进入版本记录 | 2026-07-25 |
 | 67 | `docs/content/docs/progress/pending-test.mdx` | “待测试/已完成”清单 | 标记 M3-a 真人验收完成，并新增 NC-01 三条人工验收项 | 区分已发生验收与仍需用户亲手检查的角标、拦截和正常链路 | 2026-07-25 |
 | 68 | `web/dist/` | 最新生产构建运行副本 | 提交前按 NC-01 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载旧前端，确保角色角标、文件清单与前置拒绝生效 | 2026-07-25 |
+| 69 | `web/src/components/canvas/canvas-readonly-assistant-panel.tsx` | M3-a 外壳中的批次助手页签与消息列表 | 页签改名“批次助手”，先辨认指令意图；问题仍交回原只读问答，命令显示新增草稿卡，原通用 Agent 持续挂载 | 在同一入口完成问答与起草，不把草稿当执行，也不改变原通用 Agent | 2026-07-25 |
+| 70 | `web/src/pages/canvas/project.tsx` | `requestWorkflowStart` 与当前工作流机器桥 | 原机器按钮回调增加可选封闭命令参数，并把同一回调和零/一/多机器摘要登记到临时 store；按钮调用仍不传参数 | 草稿卡调用的就是机器按钮同款函数，演示/真实分流和费用卡只有一套 | 2026-07-25 |
+| 71 | `web/src/lib/canvas/canvas-workflow-demo.ts` + `web/src/pages/canvas/use-canvas-workflow-demo.ts` | 0 元确认后的命令构造与待确认状态 | 待确认状态可携带已验证草稿；只有用户确认 0 元卡后才写该命令，请求编号、连图复核、默认 `run/retry: renders` 不变 | 让 `run: next` 等闭集命令复用 demo 原门禁，同时保护机器按钮原行为 | 2026-07-25 |
+| 72 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` | 真实费用确认后的命令构造与待确认状态 | 待确认状态可携带已验证草稿；只有用户确认原费用卡并通过单页提交锁后才写入，未传草稿时原续跑策略不变 | 不新增报价、收费、写入或放行通道，关账及其他业务状态继续交给后端门禁 | 2026-07-25 |
+| 73 | `CHANGELOG.md` | `Unreleased` | 新增 M3-b 用户可感知记录 | 说明说人话只生成草稿，仍经目标机器原费用卡和门禁 | 2026-07-25 |
+| 74 | `docs/content/docs/progress/pending-test.mdx` | “待测试/已完成”清单 | NC-01 三项按 2026-07-25 真人结果标记完成；新增 M3-b 草稿卡、0 元全链、关账拒绝和解析边界人工验收 | 区分已完成防呆验收与仍需顾问现场复核的蓝图收官交互 | 2026-07-25 |
+| 75 | `web/dist/` | 最新生产构建运行副本 | 提交前按 M3-b 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载旧面板，确保草稿卡和同一按钮接线在下次启动时生效 | 2026-07-25 |
 
 ## 新增文件
 
@@ -98,8 +105,12 @@
 - `web/tests/canvas-workflow-output-import.test.ts`：覆盖正式图片原字节转存、无 data URI、地址/哈希/字节拒绝与防重复导入。
 - `web/tests/canvas-style-reference-intake.test.ts`：覆盖信息卡直连、精确凭证、整批预检、单次上传、硬停止和刷新不续传。
 - `web/src/lib/canvas/canvas-readonly-assistant.ts`：M3-a 固定 17373 问答端点、现有令牌鉴权、8 条/8 KiB 历史、300 秒轮询终止与相同进度引用稳定合同。
-- `web/src/components/canvas/canvas-readonly-assistant-panel.tsx`：只读批次问答界面与原通用 Agent 切换外壳；不提供附件、工具或停止后重试入口，等待中显示固定人话进度。
+- `web/src/components/canvas/canvas-readonly-assistant-panel.tsx`：M3-a 只读批次问答界面与原通用 Agent 切换外壳；M3-b 在同一页签增加意图辨认和命令草稿卡渲染，问题仍调用原只读函数，原通用 Agent 不改。
 - `web/tests/canvas-readonly-assistant.test.ts`：覆盖固定回环端点、令牌、终态轮询、300 秒硬上限、引用稳定、历史容量和重复提交人话拒绝。
+- `web/src/lib/canvas/canvas-command-assistant.ts`：M3-b 固定 17373 草稿端点、19 条前端闭集复核、300 秒终止、引用稳定，以及命令/问题/越范围三路编排；问题路由明确复用 M3-a 原提交和轮询函数。
+- `web/src/components/canvas/canvas-command-draft-card.tsx`：显示命令原文、人话说明、费用与门禁提醒；一台机器默认、多台必选、零台提示，按钮只调用当前画布登记的机器回调。
+- `web/src/stores/canvas/use-canvas-workflow-command-store.ts`：页面存活期临时保存工作流机器摘要和机器按钮同款回调；按画布 owner 清理、不持久化，并对等价目标保持引用稳定。
+- `web/tests/canvas-command-assistant.test.ts`：独立覆盖 19 条闭集、固定端点、300 秒、问答零回归、草稿卡、零/一/多机器、同一按钮 mock、引用稳定、确认后命令与机器按钮默认行为。
 - `web/src/lib/canvas/canvas-intake-role-visibility.ts`：NC-01 角色推导、断线清理、引用稳定、角标文案栈和数量按钮文案的纯函数合同。
 - `web/src/pages/canvas/use-canvas-intake-role-visibility.ts`：页面私有角色同步 hook；仅在角色确有变化时写回节点，避免重复渲染。
 - `web/src/components/canvas/canvas-image-badge-stack.tsx`：复用图片右上角挂点同时渲染角色与既有 QC 角标，QC 文案和三色映射保持原样。
