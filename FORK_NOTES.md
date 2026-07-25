@@ -65,6 +65,15 @@
 | 57 | `web/src/components/agent/agent-panel.tsx` | 原面板内容入口 | 仅替换 1 个导入和 1 个渲染锚点，接入只读批次问答外壳 | 在同一右侧栏提供“批次问答（只读）/通用 Agent（原有）”切换；原通用 Agent 组件保持不变并持续挂载 | 2026-07-25 |
 | 58 | `CHANGELOG.md` | `Unreleased` | 新增一条 M3-a 只读批次问答的用户可感知记录 | 让只读范围、单问限制和超时行为进入既有发布记录 | 2026-07-25 |
 | 59 | `docs/content/docs/progress/pending-test.mdx` | “待测试”清单 | 新增只读问答切换、三问、重复拒绝和超时终止人工验收项 | 自动测试和真实问答后仍保留界面切换的用户亲手验收入口 | 2026-07-25 |
+| 60 | `web/src/types/canvas.ts` | `CanvasBatchIntakeRoleMetadata` 与 `CanvasNodeMetadata.batchIntakeRole` | 新增 1 个三态角色类型和 1 个可选元数据字段 | 让角标角色可随画布节点表达，既有 QC 元数据字段零改动 | 2026-07-25 |
+| 61 | `web/src/components/canvas/canvas-node.tsx` | 图片右上角既有 QC 角标挂点 | 新增 1 个组件导入，以 1 行角标栈组件替换原 QC 单角标块 | 复用原挂点让角色与 QC 共存；QC 文案、颜色和判定移入新增组件后保持不变 | 2026-07-25 |
+| 62 | `web/src/pages/canvas/project.tsx` | 角色 hook 接入与信息卡文件名参数 | 新增 1 个 hook 调用、2 个文件名参数及对应导入 | 连线变化即时刷新角标，并把现有选择器看到的文件名交给信息卡展示 | 2026-07-25 |
+| 63 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 建批与风格补登按钮区域 | 新增常驻文件名清单并把按钮文案改为“数量 + 角色” | 用户点击前即可看清本次登记对象，不增加确认弹窗 | 2026-07-25 |
+| 64 | `web/src/lib/canvas/canvas-batch-intake.ts` | 建批选择器与文件名投影 | 新增同哈希前置拒绝、共享全文文案和产品原图文件名读取 | 同一图片以不同节点重复连入时在发号前停止 | 2026-07-25 |
+| 65 | `web/src/lib/canvas/canvas-style-reference-intake.ts` | 风格补登选择器与文件名投影 | 新增已登记产品哈希交叉检查和风格文件名读取 | 接反时在发号前以与后端相同全文停止 | 2026-07-25 |
+| 66 | `CHANGELOG.md` | `Unreleased` | 新增一条 NC-01 用户可感知记录 | 让角色透明、同哈希拒绝和 fail-closed 行为进入版本记录 | 2026-07-25 |
+| 67 | `docs/content/docs/progress/pending-test.mdx` | “待测试/已完成”清单 | 标记 M3-a 真人验收完成，并新增 NC-01 三条人工验收项 | 区分已发生验收与仍需用户亲手检查的角标、拦截和正常链路 | 2026-07-25 |
+| 68 | `web/dist/` | 最新生产构建运行副本 | 提交前按 NC-01 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载旧前端，确保角色角标、文件清单与前置拒绝生效 | 2026-07-25 |
 
 ## 新增文件
 
@@ -91,6 +100,10 @@
 - `web/src/lib/canvas/canvas-readonly-assistant.ts`：M3-a 固定 17373 问答端点、现有令牌鉴权、8 条/8 KiB 历史、300 秒轮询终止与相同进度引用稳定合同。
 - `web/src/components/canvas/canvas-readonly-assistant-panel.tsx`：只读批次问答界面与原通用 Agent 切换外壳；不提供附件、工具或停止后重试入口，等待中显示固定人话进度。
 - `web/tests/canvas-readonly-assistant.test.ts`：覆盖固定回环端点、令牌、终态轮询、300 秒硬上限、引用稳定、历史容量和重复提交人话拒绝。
+- `web/src/lib/canvas/canvas-intake-role-visibility.ts`：NC-01 角色推导、断线清理、引用稳定、角标文案栈和数量按钮文案的纯函数合同。
+- `web/src/pages/canvas/use-canvas-intake-role-visibility.ts`：页面私有角色同步 hook；仅在角色确有变化时写回节点，避免重复渲染。
+- `web/src/components/canvas/canvas-image-badge-stack.tsx`：复用图片右上角挂点同时渲染角色与既有 QC 角标，QC 文案和三色映射保持原样。
+- `web/tests/canvas-intake-role-guardrails.test.ts`：覆盖前端全文文案、重复/跨角色哈希拒绝、角色序号与断线、引用稳定、文件清单及角色/QC 角标栈共存。
 
 ## 上游同步纪律
 

@@ -67,6 +67,11 @@ export type CanvasWorkflowQcBadgeMetadata = {
     issueCount: number;
     topCategories: string[];
 };
+export type CanvasBatchIntakeRoleMetadata = {
+    role: "product_original" | "style_reference" | "conflict";
+    index?: number;
+    count?: number;
+};
 export type CanvasWorkflowRepairedProjectionMetadata = {
     status: "idle" | "queued" | "running" | "completed" | "failed";
     batchId?: string;
@@ -193,6 +198,7 @@ export type CanvasNodeMetadata = {
     workflowProduction?: CanvasWorkflowProductionMetadata;
     workflowProductionOutput?: CanvasWorkflowProductionOutputMetadata;
     workflowProductionQc?: CanvasWorkflowQcBadgeMetadata;
+    batchIntakeRole?: CanvasBatchIntakeRoleMetadata;
     workflowRepairedProjection?: CanvasWorkflowRepairedProjectionMetadata;
     workflowReceivingBox?: CanvasWorkflowReceivingBoxMetadata;
     batchIntake?: CanvasBatchIntakeMetadata;

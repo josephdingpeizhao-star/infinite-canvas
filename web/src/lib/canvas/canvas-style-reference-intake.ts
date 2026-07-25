@@ -1,4 +1,4 @@
-import { sha256Blob } from "@/lib/canvas/canvas-batch-intake";
+import { CROSS_ROLE_IMAGE_MESSAGE, sha256Blob } from "@/lib/canvas/canvas-batch-intake";
 import { CanvasNodeType, type CanvasBatchSourceFile, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasStyleReferenceMetadata } from "@/types/canvas";
 
 export const STYLE_REFERENCE_ORIGIN = "http://127.0.0.1:17373";
@@ -46,12 +46,23 @@ export function resolveStyleReferenceSelection(cardId: string, nodes: CanvasNode
     for (const node of sourceNodes) {
         if (!node.metadata?.storageKey?.startsWith("image:") || !validSourceFile(node.metadata.sourceFile)) return { ok: false, message: `“${node.title || node.id}”缺少磁盘原文件凭证，请重新拖入。` };
     }
+    const productHashes = new Set(
+        (card.metadata?.batchIntake?.sourceImageNodeIds || [])
+            .map((id) => nodeById.get(id)?.metadata?.sourceFile?.sha256.toLowerCase())
+            .filter((sha256): sha256 is string => Boolean(sha256)),
+    );
+    if (sourceNodes.some((node) => productHashes.has(node.metadata!.sourceFile!.sha256.toLowerCase()))) return { ok: false, message: CROSS_ROLE_IMAGE_MESSAGE };
     return { ok: true, batchId, sourceNodeIds: sourceNodes.map((node) => node.id) };
 }
 
 export function connectedStyleReferenceImageIds(cardId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     return Array.from(new Set(connections.filter((item) => item.toNodeId === cardId).map((item) => nodeById.get(item.fromNodeId)).filter((node) => node?.type === CanvasNodeType.Image && node.metadata?.storageKey?.startsWith("image:") && node.metadata.sourceFile).map((node) => node!.id)));
+}
+
+export function connectedStyleReferenceFileNames(cardId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    return connectedStyleReferenceImageIds(cardId, nodes, connections).map((id) => nodeById.get(id)?.metadata?.sourceFile?.name || nodeById.get(id)?.title || id);
 }
 
 export function buildStyleReferenceCommand(card: CanvasNodeData, sources: CanvasNodeData[], requestId: string, now: number) {

@@ -7,6 +7,12 @@ export const BATCH_INTAKE_HANDHELD_MAIN_COUNT = 2;
 export const BATCH_INTAKE_HANDHELD_DETAIL_COUNT = 1;
 export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
+export const DUPLICATE_PRODUCT_IMAGE_MESSAGE =
+    "同一张图被重复加入本次产品原图登记，不能建批。" +
+    "请删除重复项，只保留一张；产品原图连工作流机器，风格参考图连信息卡。";
+export const CROSS_ROLE_IMAGE_MESSAGE =
+    "这张图已经是本批的产品原图，不能再登记为风格参考。" +
+    "若是接反了：产品原图连工作流机器，风格参考图连信息卡。";
 
 const BATCH_INTAKE_STATUSES = new Set<CanvasBatchIntakeStatus>(["draft", "queued", "upload_ready", "uploading", "completed", "failed", "integrity_blocked"]);
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
@@ -99,6 +105,8 @@ export function resolveBatchIntakeSelection(batchInfoNodeId: string, nodes: Canv
             return { ok: false, message: `“${image.title || image.id}”缺少完整的原图凭证，请从磁盘重新拖入。` };
         }
     }
+    const sourceHashes = sourceImages.map((image) => image.metadata!.sourceFile!.sha256.toLowerCase());
+    if (sourceHashes.length !== new Set(sourceHashes).size) return { ok: false, message: DUPLICATE_PRODUCT_IMAGE_MESSAGE };
 
     return { ok: true, workflowNodeId, sourceImageNodeIds: sourceImages.map((image) => image.id) };
 }
@@ -114,6 +122,11 @@ export function connectedBatchOriginalImageIds(batchInfoNodeId: string, nodes: C
             .filter((node): node is CanvasNodeData => Boolean(node && node.type === CanvasNodeType.Image && node.metadata?.sourceFile && node.metadata.storageKey?.startsWith("image:")))
             .map((node) => node.id),
     );
+}
+
+export function connectedBatchOriginalFileNames(batchInfoNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    return connectedBatchOriginalImageIds(batchInfoNodeId, nodes, connections).map((id) => nodesById.get(id)?.metadata?.sourceFile?.name || nodesById.get(id)?.title || id);
 }
 
 export function buildBatchIntakeCommand(state: CanvasBatchIntakeMetadata, selection: BatchIntakeSelection, requestId: string, now: number) {

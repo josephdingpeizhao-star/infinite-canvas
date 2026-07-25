@@ -48,14 +48,15 @@ import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
-import { batchSourceFilePatch, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
+import { batchSourceFilePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
 import { connectedProductionSummary, resetInterruptedProductions } from "@/lib/canvas/canvas-workflow-production";
-import { connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
+import { connectedStyleReferenceFileNames, connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
 import { useCanvasStyleReferenceIntake } from "./use-canvas-style-reference-intake";
 import { useCanvasWorkflowDemo } from "./use-canvas-workflow-demo";
 import { useCanvasWorkflowOutputImport } from "./use-canvas-workflow-output-import";
 import { useCanvasWorkflowQcBadges } from "./use-canvas-workflow-qc-badges";
+import { useCanvasIntakeRoleVisibility } from "./use-canvas-intake-role-visibility";
 import { useCanvasWorkflowRepairedProjection } from "./use-canvas-workflow-repaired-projection";
 import { useCanvasWorkflowReceiving } from "./use-canvas-workflow-receiving";
 import { receivingSelections, snapNodesIntoReceivingBox } from "@/lib/canvas/canvas-workflow-receiving";
@@ -363,6 +364,7 @@ function InfiniteCanvasPage() {
         warn: (text) => void message.warning(text),
     });
     const workflowOutputImport = useCanvasWorkflowOutputImport({ nodes, setNodes });
+    useCanvasIntakeRoleVisibility({ nodes, connections, setNodes });
     useCanvasWorkflowQcBadges({ nodes, setNodes });
     const workflowRepairedProjection = useCanvasWorkflowRepairedProjection({
         nodesRef,
@@ -2686,6 +2688,8 @@ function InfiniteCanvasPage() {
                                         node={contentNode}
                                         connectedOriginalCount={connectedBatchOriginalImageIds(contentNode.id, nodes, connections).length}
                                         connectedStyleReferenceCount={connectedStyleReferenceImageIds(contentNode.id, nodes, connections).length}
+                                        connectedOriginalFileNames={connectedBatchOriginalFileNames(contentNode.id, nodes, connections)}
+                                        connectedStyleReferenceFileNames={connectedStyleReferenceFileNames(contentNode.id, nodes, connections)}
                                         onChange={batchIntake.updateFacts}
                                         onRegister={batchIntake.requestRegistration}
                                         onSupplementStyle={styleReferenceIntake.requestSupplement}

@@ -3,6 +3,7 @@ import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck } f
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { BATCH_INTAKE_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_MAIN_COUNT, BATCH_INTAKE_MAIN_COUNT, BATCH_INTAKE_TOTAL, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
+import { batchRegistrationButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasBatchIntakeMetadata, CanvasNodeData } from "@/types/canvas";
@@ -13,6 +14,8 @@ export function CanvasBatchInfoNode({
     node,
     connectedOriginalCount,
     connectedStyleReferenceCount,
+    connectedOriginalFileNames,
+    connectedStyleReferenceFileNames,
     onChange,
     onRegister,
     onSupplementStyle,
@@ -20,6 +23,8 @@ export function CanvasBatchInfoNode({
     node: CanvasNodeData;
     connectedOriginalCount: number;
     connectedStyleReferenceCount: number;
+    connectedOriginalFileNames: string[];
+    connectedStyleReferenceFileNames: string[];
     onChange: (nodeId: string, patch: Partial<EditableFacts>) => void;
     onRegister: (nodeId: string) => void;
     onSupplementStyle: (nodeId: string) => void;
@@ -68,6 +73,7 @@ export function CanvasBatchInfoNode({
                     <div className="mt-1 border-t pt-2" style={{ borderColor: theme.node.stroke }}>
                         <div className="flex items-center justify-between gap-3"><span style={{ color: theme.node.muted }}>风格参考</span><span className="font-medium">已连 {connectedStyleReferenceCount} 张</span></div>
                         <div className="mt-1 text-[11px] leading-5" style={{ color: styleState.status === "failed" || styleBlocked ? "#f87171" : theme.node.muted }}>{styleReferenceText(styleState.status, styleState.receipt?.fileCount, styleState.errorMessage)}</div>
+                        <IntakeFileList label="即将补登的风格参考图" names={connectedStyleReferenceFileNames} emptyText="尚未连接风格参考图" />
                         <button
                             type="button"
                             className="mt-2 inline-flex min-h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-55"
@@ -78,7 +84,7 @@ export function CanvasBatchInfoNode({
                             onClick={(event) => { event.stopPropagation(); onSupplementStyle(node.id); }}
                         >
                             {styleBusy ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
-                            {styleBlocked ? "补登已硬停止" : styleBusy ? "正在补登风格参考" : styleState.status === "completed" ? "继续补登风格参考" : "补登风格参考"}
+                            {styleSupplementButtonLabel(connectedStyleReferenceCount, styleBusy, styleBlocked)}
                         </button>
                     </div>
                 </div>
@@ -141,21 +147,24 @@ export function CanvasBatchInfoNode({
             </div>
 
             {!completed ? (
-                <button
-                    type="button"
-                    className="mt-auto inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-55"
-                    style={{ borderColor: integrityBlocked ? "#ef4444" : theme.node.activeStroke, background: integrityBlocked ? "transparent" : theme.node.activeStroke, color: integrityBlocked ? "#f87171" : theme.node.panel }}
-                    disabled={busy || integrityBlocked}
-                    onMouseDown={stopEvent}
-                    onPointerDown={stopEvent}
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        onRegister(node.id);
-                    }}
-                >
-                    {busy ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
-                    {integrityBlocked ? "已硬停止，请等待裁决" : busy ? "正在登记，不会生图" : "登记批次（不生图、不收费）"}
-                </button>
+                <div className="mt-auto grid gap-2">
+                    <IntakeFileList label="即将登记的产品原图" names={connectedOriginalFileNames} emptyText="尚未连接产品原图" />
+                    <button
+                        type="button"
+                        className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-55"
+                        style={{ borderColor: integrityBlocked ? "#ef4444" : theme.node.activeStroke, background: integrityBlocked ? "transparent" : theme.node.activeStroke, color: integrityBlocked ? "#f87171" : theme.node.panel }}
+                        disabled={busy || integrityBlocked}
+                        onMouseDown={stopEvent}
+                        onPointerDown={stopEvent}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onRegister(node.id);
+                        }}
+                    >
+                        {busy ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+                        {batchRegistrationButtonLabel(connectedOriginalCount, busy, integrityBlocked)}
+                    </button>
+                </div>
             ) : null}
         </div>
     );
@@ -186,6 +195,16 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
         <div className="flex items-center justify-between gap-3">
             <span style={{ color: theme.node.muted }}>{label}</span>
             <span className="text-right font-medium">{value}</span>
+        </div>
+    );
+}
+
+function IntakeFileList({ label, names, emptyText }: { label: string; names: string[]; emptyText: string }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    return (
+        <div className="grid gap-1 rounded-lg border px-2.5 py-2 text-[11px]" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
+            <span style={{ color: theme.node.muted }}>{label}</span>
+            {names.length ? names.map((name, index) => <span key={`${name}-${index}`} className="truncate" title={name}>{name}</span>) : <span style={{ color: theme.node.muted }}>{emptyText}</span>}
         </div>
     );
 }
