@@ -62,6 +62,9 @@
 | 54 | `web/src/components/canvas/canvas-node.tsx` + `web/src/components/canvas/canvas-workflow-node.tsx` + `web/src/pages/canvas/project.tsx` | 收货框机器入口、拖入/替换/拖出与确认按钮 | completed 机器可创建唯一收货框；复用组拖拽并只接纳有来源和 SHA 的持久化图片，收满才显示确认 | 保持底层拖拽引擎不变，同时让错误补证节点无法计数 | 2026-07-24 |
 | 55 | `web/tests/canvas-workflow-receiving.test.ts` + `web/dist/` | 收货关账回归与最新运行副本 | 新增 8 项覆盖计数、替换、拖出、确认门、载荷、鉴权提交和关账恢复；提交前重建 dist | 锁定 NC-03 交互并避免启动器加载旧前端 | 2026-07-24 |
 | 56 | `web/src/lib/canvas/canvas-workflow-delivery.ts` + `web/src/pages/canvas/use-canvas-workflow-qc-badges.ts` + `web/tests/canvas-workflow-delivery.test.ts` | QC 角标引用稳定与缓存命中守卫 | 相同角标保留原节点和原数组引用；缓存仅在角标确有差异时写回节点，并补充连续应用、单节点引用和守卫回归 | 切断 `nodes` effect 的重复状态写回，避免打开画布触发 React 无限更新 | 2026-07-24 |
+| 57 | `web/src/components/agent/agent-panel.tsx` | 原面板内容入口 | 仅替换 1 个导入和 1 个渲染锚点，接入只读批次问答外壳 | 在同一右侧栏提供“批次问答（只读）/通用 Agent（原有）”切换；原通用 Agent 组件保持不变并持续挂载 | 2026-07-25 |
+| 58 | `CHANGELOG.md` | `Unreleased` | 新增一条 M3-a 只读批次问答的用户可感知记录 | 让只读范围、单问限制和超时行为进入既有发布记录 | 2026-07-25 |
+| 59 | `docs/content/docs/progress/pending-test.mdx` | “待测试”清单 | 新增只读问答切换、三问、重复拒绝和超时终止人工验收项 | 自动测试和真实问答后仍保留界面切换的用户亲手验收入口 | 2026-07-25 |
 
 ## 新增文件
 
@@ -85,6 +88,9 @@
 - `web/tests/canvas-workflow-production.test.ts`：覆盖演示/真实模式隔离、单卡单机素材门、费用估算鉴权、确认命令、同页单次提交和续跑/超时。
 - `web/tests/canvas-workflow-output-import.test.ts`：覆盖正式图片原字节转存、无 data URI、地址/哈希/字节拒绝与防重复导入。
 - `web/tests/canvas-style-reference-intake.test.ts`：覆盖信息卡直连、精确凭证、整批预检、单次上传、硬停止和刷新不续传。
+- `web/src/lib/canvas/canvas-readonly-assistant.ts`：M3-a 固定 17373 问答端点、现有令牌鉴权、8 条/8 KiB 历史、300 秒轮询终止与相同进度引用稳定合同。
+- `web/src/components/canvas/canvas-readonly-assistant-panel.tsx`：只读批次问答界面与原通用 Agent 切换外壳；不提供附件、工具或停止后重试入口，等待中显示固定人话进度。
+- `web/tests/canvas-readonly-assistant.test.ts`：覆盖固定回环端点、令牌、终态轮询、300 秒硬上限、引用稳定、历史容量和重复提交人话拒绝。
 
 ## 上游同步纪律
 
