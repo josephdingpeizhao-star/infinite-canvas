@@ -58,6 +58,7 @@ import { batchSourceFilePatch, connectedBatchOriginalFileNames, connectedBatchOr
 import { connectedProductionSummary, resetInterruptedProductions, resolveProductionSelection } from "@/lib/canvas/canvas-workflow-production";
 import { connectedStyleReferenceFileNames, connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
+import { useCanvasBatchMultiIntake } from "./use-canvas-batch-multi-intake";
 import { useCanvasStyleReferenceIntake } from "./use-canvas-style-reference-intake";
 import { useCanvasWorkflowDemo } from "./use-canvas-workflow-demo";
 import { useCanvasWorkflowOutputImport } from "./use-canvas-workflow-output-import";
@@ -361,6 +362,13 @@ function InfiniteCanvasPage() {
         connectionsRef,
         setNodes,
         warn: (text) => void message.warning(text),
+    });
+    const batchMultiIntake = useCanvasBatchMultiIntake({
+        nodesRef,
+        connectionsRef,
+        setNodes,
+        setConnections,
+        requestRegistration: batchIntake.requestRegistration,
     });
     const workflowProduction = useCanvasWorkflowProduction({
         nodes,
@@ -2747,6 +2755,7 @@ function InfiniteCanvasPage() {
                                         connectedStyleReferenceFileNames={connectedStyleReferenceFileNames(contentNode.id, nodes, connections)}
                                         onChange={batchIntake.updateFacts}
                                         onRegister={batchIntake.requestRegistration}
+                                        onSelectOriginals={batchMultiIntake.selectOriginalFiles}
                                         onSupplementStyle={styleReferenceIntake.requestSupplement}
                                     />
                                 ) : contentNode.type === CanvasNodeType.Workflow ? (
