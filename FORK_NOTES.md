@@ -81,6 +81,11 @@
 | 73 | `CHANGELOG.md` | `Unreleased` | 新增 M3-b 用户可感知记录 | 说明说人话只生成草稿，仍经目标机器原费用卡和门禁 | 2026-07-25 |
 | 74 | `docs/content/docs/progress/pending-test.mdx` | “待测试/已完成”清单 | NC-01 三项按 2026-07-25 真人结果标记完成；新增 M3-b 草稿卡、0 元全链、关账拒绝和解析边界人工验收 | 区分已完成防呆验收与仍需顾问现场复核的蓝图收官交互 | 2026-07-25 |
 | 75 | `web/dist/` | 最新生产构建运行副本 | 提交前按 M3-b 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载旧面板，确保草稿卡和同一按钮接线在下次启动时生效 | 2026-07-25 |
+| 76 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 已登记信息卡完成态区域 | 在风格补登区之后挂载独立的二段确认“移入回收站”按钮 | 回收入口只出现在已有批次信息卡，不改页面控制器、节点类型或原登记流程 | 2026-07-26 |
+| 77 | `web/src/lib/canvas/canvas-batch-recycle.ts` | 固定 17373 回收请求与按钮状态合同 | 新增固定回环地址、现有令牌、严格同批次回执、安全错误、二段确认及无自动重试纯函数 | 浏览器不得自报路径或来源，任何非可信回执都必须停住并由用户手动重试 | 2026-07-26 |
+| 78 | `web/src/components/canvas/canvas-batch-recycle-button.tsx` | `CanvasBatchRecycleButton` | 新增二段确认、提交中与成功禁用、防双击、人话失败和事件阻止 | 防止误触或重复回收；失败保留信息卡和现场，不在后台自动再次请求 | 2026-07-26 |
+| 79 | `web/tests/canvas-batch-recycle.test.ts` | 回收按钮与 17373 请求合同 | 新增 6 项测试，覆盖固定路由/令牌/空 JSON、严格回执、确认状态、安全失败与零自动重试 | 锁定 RC-01 前端最小权限与 fail-closed 行为，不修改既有测试正文 | 2026-07-26 |
+| 80 | `web/dist/` | 最新生产构建运行副本 | 提交前按 RC-01 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载陈旧前端，确保批次回收按钮与请求合同在下次启动时生效 | 2026-07-26 |
 
 ## 新增文件
 
@@ -115,6 +120,9 @@
 - `web/src/pages/canvas/use-canvas-intake-role-visibility.ts`：页面私有角色同步 hook；仅在角色确有变化时写回节点，避免重复渲染。
 - `web/src/components/canvas/canvas-image-badge-stack.tsx`：复用图片右上角挂点同时渲染角色与既有 QC 角标，QC 文案和三色映射保持原样。
 - `web/tests/canvas-intake-role-guardrails.test.ts`：覆盖前端全文文案、重复/跨角色哈希拒绝、角色序号与断线、引用稳定、文件清单及角色/QC 角标栈共存。
+- `web/src/lib/canvas/canvas-batch-recycle.ts`：RC-01 固定 17373 回收端点、现有令牌、严格同批次回执、安全错误、二段确认状态和无自动重试合同。
+- `web/src/components/canvas/canvas-batch-recycle-button.tsx`：信息卡内“移入回收站”按钮；二段确认、提交中防双击、成功禁用，失败后只允许用户重新确认。
+- `web/tests/canvas-batch-recycle.test.ts`：新增 6 项覆盖固定 POST、空 JSON、令牌、严格回执、按钮状态、安全失败和零自动重试。
 
 ## 上游同步纪律
 
