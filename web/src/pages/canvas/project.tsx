@@ -33,6 +33,7 @@ import { CanvasNodeUpscaleDialog, type CanvasImageUpscaleParams } from "@/compon
 import { buildNodeGenerationContext, buildNodeGenerationInputs, buildNodeResponseMessages, hydrateNodeGenerationContext, type NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-hover-toolbar";
 import { CanvasBatchInfoNode } from "@/components/canvas/canvas-batch-info-node";
+import { CanvasDeleteProjectsDialog } from "@/components/canvas/canvas-delete-projects-dialog";
 import { CanvasWorkflowCostCard } from "@/components/canvas/canvas-workflow-cost-card";
 import { CanvasWorkflowProductionCostCard } from "@/components/canvas/canvas-workflow-production-cost-card";
 import { CanvasWorkflowNode, CanvasWorkflowNodePanel } from "@/components/canvas/canvas-workflow-node";
@@ -289,7 +290,6 @@ function InfiniteCanvasPage() {
     const openProject = useCanvasStore((state) => state.openProject);
     const updateProject = useCanvasStore((state) => state.updateProject);
     const renameProject = useCanvasStore((state) => state.renameProject);
-    const deleteProjects = useCanvasStore((state) => state.deleteProjects);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
@@ -312,6 +312,7 @@ function InfiniteCanvasPage() {
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("lines");
     const [showImageInfo, setShowImageInfo] = useState(false);
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+    const [deleteCurrentOpen, setDeleteCurrentOpen] = useState(false);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
     const [projectLoaded, setProjectLoaded] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
@@ -1171,10 +1172,8 @@ function InfiniteCanvasPage() {
     }, [createProject, navigate]);
 
     const deleteCurrentProject = useCallback(() => {
-        deleteProjects([projectId]);
-        cleanupAssetImages();
-        navigate("/canvas");
-    }, [cleanupAssetImages, deleteProjects, navigate, projectId]);
+        setDeleteCurrentOpen(true);
+    }, []);
 
     const handleCanvasMouseDown = useCallback(
         (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -3053,6 +3052,11 @@ function InfiniteCanvasPage() {
                     <p className="text-sm opacity-60">这会删除当前画布上的所有节点和连线。</p>
                 </Modal>
 
+                <CanvasDeleteProjectsDialog
+                    projectIds={deleteCurrentOpen ? [projectId] : []}
+                    onDeleted={() => navigate("/canvas")}
+                    onClosed={() => setDeleteCurrentOpen(false)}
+                />
                 <AssetPickerModal open={assetPickerOpen} onInsert={handleAssetInsert} onClose={() => setAssetPickerOpen(false)} />
             </section>
         </main>
@@ -3127,7 +3131,7 @@ function CanvasTopBar({
                                 { key: "projects", icon: <Images className="size-4" />, label: "我的画布", onClick: onProjects },
                                 { type: "divider" },
                                 { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
-                                { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
+                                { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前项目", onClick: onDeleteProject },
                                 { type: "divider" },
                                 { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
                                 { type: "divider" },

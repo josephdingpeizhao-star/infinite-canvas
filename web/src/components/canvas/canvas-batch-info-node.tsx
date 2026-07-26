@@ -3,7 +3,6 @@ import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck } f
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { BATCH_INTAKE_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_MAIN_COUNT, BATCH_INTAKE_MAIN_COUNT, BATCH_INTAKE_TOTAL, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
-import { CanvasBatchRecycleButton } from "@/components/canvas/canvas-batch-recycle-button";
 import { batchRegistrationButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -88,7 +87,6 @@ export function CanvasBatchInfoNode({
                             {styleSupplementButtonLabel(connectedStyleReferenceCount, styleBusy, styleBlocked)}
                         </button>
                     </div>
-                    {batchId ? <CanvasBatchRecycleButton batchId={batchId} /> : null}
                 </div>
             ) : (
                 <>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { App, Button } from "antd";
 import { Download, FileUp, Plus } from "lucide-react";
@@ -19,6 +19,7 @@ export default function CanvasPage() {
     const [searchParams] = useSearchParams();
     const inputRef = useRef<HTMLInputElement>(null);
     const autoOpenRef = useRef(false);
+    const [deleteAllRequested, setDeleteAllRequested] = useState(false);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const projects = useCanvasStore((state) => state.projects);
     const createProject = useCanvasStore((state) => state.createProject);
@@ -81,13 +82,13 @@ export default function CanvasPage() {
                                 <Button disabled={!hydrated} icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `无限画布-${selectedIds.length}个项目`)}>
                                     导出选中
                                 </Button>
-                                <Button disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>
+                                <Button disabled={!hydrated} onClick={() => { setDeleteAllRequested(false); setDeleteIds(selectedIds); }}>
                                     删除选中
                                 </Button>
                             </>
                         ) : null}
                         {projects.length ? (
-                            <Button disabled={!hydrated} onClick={() => setDeleteIds(projects.map((project) => project.id))}>
+                            <Button disabled={!hydrated} onClick={() => { setDeleteAllRequested(true); setDeleteIds(projects.map((project) => project.id)); }}>
                                 删除全部
                             </Button>
                         ) : null}
@@ -120,7 +121,7 @@ export default function CanvasPage() {
             </div>
 
             <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
-            <CanvasDeleteProjectsDialog />
+            <CanvasDeleteProjectsDialog deleteAll={deleteAllRequested} onClosed={() => setDeleteAllRequested(false)} />
         </main>
     );
 }
