@@ -55,6 +55,7 @@ import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistan
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
 import { batchSourceFilePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
+import { MATERIAL_UPLOAD_ACCEPT, materialFileKind, materialUploadFocus, runMaterialUploadBatch, type MaterialFileKind, type MaterialUploadMode } from "@/lib/canvas/canvas-material-upload";
 import { connectedProductionSummary, resetInterruptedProductions, resolveProductionSelection } from "@/lib/canvas/canvas-workflow-production";
 import { connectedStyleReferenceFileNames, connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
@@ -252,7 +253,7 @@ function InfiniteCanvasPage() {
     const setAgentCanvasContext = useAgentStore((state) => state.setCanvasContext);
     const containerRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
-    const uploadTargetRef = useRef<{ nodeId?: string; position?: Position } | null>(null);
+    const uploadTargetRef = useRef<{ mode: MaterialUploadMode; nodeId?: string; position?: Position } | null>(null);
     const clipboardRef = useRef<CanvasClipboard | null>(null);
     const historyRef = useRef<{ past: CanvasHistoryEntry[]; future: CanvasHistoryEntry[] }>({ past: [], future: [] });
     const lastHistoryRef = useRef<CanvasHistoryEntry | null>(null);
@@ -1485,6 +1486,47 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId(null);
     }, []);
 
+    const uploadMaterialFileNode = useCallback(async (file: File, kind: MaterialFileKind): Promise<CanvasNodeData> => {
+        if (kind === "audio") {
+            const audio = await uploadMediaFile(file, "audio");
+            const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
+            return {
+                id: `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                type: CanvasNodeType.Audio,
+                title: file.name,
+                position: { x: 0, y: 0 },
+                width: spec.width,
+                height: spec.height,
+                metadata: audioMetadata(audio),
+            };
+        }
+        if (kind === "video") {
+            const video = await uploadMediaFile(file, "video");
+            const nextSize = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
+            return {
+                id: `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                type: CanvasNodeType.Video,
+                title: file.name,
+                position: { x: 0, y: 0 },
+                width: nextSize.width,
+                height: nextSize.height,
+                metadata: videoMetadata(video),
+            };
+        }
+
+        const [image, sourceFile] = await Promise.all([uploadImage(file), createBatchSourceFile(file)]);
+        const nextSize = fitNodeSize(image.width, image.height);
+        return {
+            id: `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            type: CanvasNodeType.Image,
+            title: file.name,
+            position: { x: 0, y: 0 },
+            width: nextSize.width,
+            height: nextSize.height,
+            metadata: imageMetadata(image, sourceFile),
+        };
+    }, []);
+
     const createTextNodeFromClipboard = useCallback(
         (text: string) => {
             const trimmed = text.trim();
@@ -1986,37 +2028,49 @@ function InfiniteCanvasPage() {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, fontSize } } : node)));
     }, []);
 
-    const handleUploadRequest = useCallback((nodeId?: string, position?: Position) => {
-        uploadTargetRef.current = { nodeId, position };
-        imageInputRef.current?.click();
+    const handleUploadRequest = useCallback((mode: MaterialUploadMode, nodeId?: string, position?: Position) => {
+        const input = imageInputRef.current;
+        if (!input) return;
+        input.multiple = mode === "multiple";
+        uploadTargetRef.current = { mode, nodeId, position };
+        input.click();
     }, []);
 
     const handleImageInputChange = useCallback(
         async (event: ReactChangeEvent<HTMLInputElement>) => {
-            const file = event.target.files?.[0];
+            const files = Array.from(event.target.files || []);
             const target = uploadTargetRef.current;
-            if (!file || (!file.type.startsWith("image/") && !file.type.startsWith("video/") && !isAudioFile(file))) return;
+            const mode = target?.mode || "single";
+            uploadTargetRef.current = null;
+            event.target.value = "";
+            if (files.length === 0) return;
+            if ((mode === "single" || target?.nodeId) && files.length > 1) {
+                message.warning("此入口一次只能选择 1 个素材，请重新选择。");
+                return;
+            }
 
             if (target?.nodeId) {
-                if (isAudioFile(file)) {
+                const [file] = files;
+                const kind = materialFileKind(file);
+                if (!kind) {
+                    message.warning("该文件不是支持的图片、视频或音频素材。");
+                    return;
+                }
+                if (kind === "audio") {
                     const audio = await uploadMediaFile(file, "audio");
                     const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
                     setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? { ...node, type: CanvasNodeType.Audio, title: file.name, position: { x: node.position.x + node.width / 2 - spec.width / 2, y: node.position.y + node.height / 2 - spec.height / 2 }, width: spec.width, height: spec.height, metadata: { ...node.metadata, ...audioMetadata(audio), errorDetails: undefined } } : node)));
                     setSelectedNodeIds(new Set([target.nodeId]));
                     setSelectedConnectionId(null);
-                    uploadTargetRef.current = null;
-                    event.target.value = "";
                     return;
                 }
-                if (file.type.startsWith("video/")) {
+                if (kind === "video") {
                     const video = await uploadMediaFile(file, "video");
                     const nextSize = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                     setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? { ...node, type: CanvasNodeType.Video, title: file.name, position: { x: node.position.x + node.width / 2 - nextSize.width / 2, y: node.position.y + node.height / 2 - nextSize.height / 2 }, width: nextSize.width, height: nextSize.height, metadata: { ...node.metadata, ...videoMetadata(video), errorDetails: undefined } } : node)));
                     setSelectedNodeIds(new Set([target.nodeId]));
                     setSelectedConnectionId(null);
                     setDialogNodeId(target.nodeId);
-                    uploadTargetRef.current = null;
-                    event.target.value = "";
                     return;
                 }
                 const [image, sourceFile] = await Promise.all([uploadImage(file), createBatchSourceFile(file)]);
@@ -2055,27 +2109,63 @@ function InfiniteCanvasPage() {
                 setSelectedNodeIds(new Set([target.nodeId]));
                 setSelectedConnectionId(null);
                 setDialogNodeId(target.nodeId);
-            } else {
-                const position = target?.position || screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
-                void (isAudioFile(file) ? createAudioFileNode(file, position) : file.type.startsWith("video/") ? createVideoFileNode(file, position) : createImageFileNode(file, position));
+                return;
             }
 
-            uploadTargetRef.current = null;
-            event.target.value = "";
+            const anchor = target?.position || screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
+            const uploadedNodes: CanvasNodeData[] = [];
+            const result = await runMaterialUploadBatch({
+                files,
+                mode,
+                anchor,
+                uploadFile: async (file, kind) => {
+                    const node = await uploadMaterialFileNode(file, kind);
+                    uploadedNodes.push(node);
+                    return node;
+                },
+                commitNode: (update) => setNodes((current) => update(current)),
+            });
+            const focus = materialUploadFocus(uploadedNodes.slice(0, result.uploadedCount));
+            if (focus.selectedNodeId) {
+                setSelectedNodeIds(new Set([focus.selectedNodeId]));
+                setSelectedConnectionId(null);
+                if (focus.dialogNodeId) setDialogNodeId(focus.dialogNodeId);
+            }
+            if (result.status === "rejected") message.warning(result.message);
+            if (result.status === "failed") message.error(result.message);
         },
-        [createAudioFileNode, createImageFileNode, createVideoFileNode, screenToCanvas, size.height, size.width],
+        [message, screenToCanvas, size.height, size.width, uploadMaterialFileNode],
     );
 
     const handleDrop = useCallback(
-        (event: ReactDragEvent<HTMLDivElement>) => {
+        async (event: ReactDragEvent<HTMLDivElement>) => {
             event.preventDefault();
-            const file = Array.from(event.dataTransfer.files).find((item) => item.type.startsWith("image/") || item.type.startsWith("video/") || isAudioFile(item));
-            if (!file) return;
+            const files = Array.from(event.dataTransfer.files);
+            if (files.length === 0) return;
 
-            const pos = screenToCanvas(event.clientX, event.clientY);
-            void (isAudioFile(file) ? createAudioFileNode(file, pos) : file.type.startsWith("video/") ? createVideoFileNode(file, pos) : createImageFileNode(file, pos));
+            const anchor = screenToCanvas(event.clientX, event.clientY);
+            const uploadedNodes: CanvasNodeData[] = [];
+            const result = await runMaterialUploadBatch({
+                files,
+                mode: "multiple",
+                anchor,
+                uploadFile: async (file, kind) => {
+                    const node = await uploadMaterialFileNode(file, kind);
+                    uploadedNodes.push(node);
+                    return node;
+                },
+                commitNode: (update) => setNodes((current) => update(current)),
+            });
+            const focus = materialUploadFocus(uploadedNodes.slice(0, result.uploadedCount));
+            if (focus.selectedNodeId) {
+                setSelectedNodeIds(new Set([focus.selectedNodeId]));
+                setSelectedConnectionId(null);
+                if (focus.dialogNodeId) setDialogNodeId(focus.dialogNodeId);
+            }
+            if (result.status === "rejected") message.warning(result.message);
+            if (result.status === "failed") message.error(result.message);
         },
-        [createAudioFileNode, createImageFileNode, createVideoFileNode, screenToCanvas],
+        [message, screenToCanvas, uploadMaterialFileNode],
     );
 
     const startTitleEditing = useCallback(() => {
@@ -2632,7 +2722,7 @@ function InfiniteCanvasPage() {
                     onProjects={() => navigate("/canvas")}
                     onCreateProject={createAndOpenProject}
                     onDeleteProject={deleteCurrentProject}
-                    onImportImage={() => handleUploadRequest()}
+                    onImportImage={() => handleUploadRequest("single")}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
                     agentOpen={agentPanelOpen}
@@ -2827,7 +2917,7 @@ function InfiniteCanvasPage() {
                     onIncreaseFont={(node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2))}
                     onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
                     onGenerateImage={generateImageFromTextNode}
-                    onUpload={(node) => handleUploadRequest(node.id)}
+                    onUpload={(node) => handleUploadRequest("single", node.id)}
                     onDownload={downloadNodeImage}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
                     onMaskEdit={(node) => setMaskEditNodeId(node.id)}
@@ -2859,7 +2949,7 @@ function InfiniteCanvasPage() {
                     onAddGroup={() => createNode(CanvasNodeType.Group)}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
-                    onUpload={() => handleUploadRequest()}
+                    onUpload={() => handleUploadRequest("multiple")}
                     onDelete={() => deleteNodes(new Set(selectedNodeIds))}
                     onClear={() => setClearConfirmOpen(true)}
                     onDeselect={deselectCanvas}
@@ -2910,7 +3000,7 @@ function InfiniteCanvasPage() {
                     />
                 ) : null}
 
-                <input ref={imageInputRef} type="file" accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" className="hidden" onChange={handleImageInputChange} />
+                <input ref={imageInputRef} type="file" accept={MATERIAL_UPLOAD_ACCEPT} multiple className="hidden" onChange={handleImageInputChange} />
 
                 <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} />
 
