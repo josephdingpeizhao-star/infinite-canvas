@@ -86,13 +86,6 @@
 | 78 | `web/src/components/canvas/canvas-batch-recycle-button.tsx` | `CanvasBatchRecycleButton` | 新增二段确认、提交中与成功禁用、防双击、人话失败和事件阻止 | 防止误触或重复回收；失败保留信息卡和现场，不在后台自动再次请求 | 2026-07-26 |
 | 79 | `web/tests/canvas-batch-recycle.test.ts` | 回收按钮与 17373 请求合同 | 新增 6 项测试，覆盖固定路由/令牌/空 JSON、严格回执、确认状态、安全失败与零自动重试 | 锁定 RC-01 前端最小权限与 fail-closed 行为，不修改既有测试正文 | 2026-07-26 |
 | 80 | `web/dist/` | 最新生产构建运行副本 | 提交前按 RC-01 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载陈旧前端，确保批次回收按钮与请求合同在下次启动时生效 | 2026-07-26 |
-| 81 | `web/src/lib/canvas/canvas-batch-multi-intake.ts` | MU-01 批量预检、连线计划与避让布局合同 | 新增单次 12 张上限、全批 SHA-256 预检、NC-01 选择器复用、稳定节点/连线计划和确定性无碰撞布局 | 批量入口只编排既有单图通道；批内重复、已连原图重复和机器连线歧义均在发号前整批拒绝 | 2026-07-26 |
-| 82 | `web/src/pages/canvas/use-canvas-batch-multi-intake.ts` | MU-01 页面私有批量控制器 | 新增同步防重锁、`batch_intake` 健康预检、逐图复用原 localforage 通道、已知凭证失败清理、写回前二次门禁及一次登记调用 | 保证失败时零部分节点/连线、零自动重试；成功后继续走原 8 秒确认和逐图交付，不新增上传或登记管线 | 2026-07-26 |
-| 83 | `web/src/components/canvas/canvas-batch-multi-intake-button.tsx` | `CanvasBatchMultiIntakeButton` | 新增 1–12 张图片多选、数量+角色文案、执行中禁用和内联人话结果 | 让美工在信息卡登记前一次选择多角度产品原图，同时防止快速重复点击 | 2026-07-26 |
-| 84 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 未完成状态面板 | 只增加一个批量回调参数，并在既有文件清单前挂载批量入口 | 保持完成态、风格补登、回收与原登记按钮行为不变 | 2026-07-26 |
-| 85 | `web/src/pages/canvas/project.tsx` | MU-01 恰三个纯接线点 | 仅导入新 hook、在控制器区接入既有 refs/setters/登记回调、向信息卡传一个批量回调 | 复用原画布状态和登记路径，避免经 Agent `applyOps` 污染撤销快照；单图、拖拽、连线、生产和 Agent 行为不改 | 2026-07-26 |
-| 86 | `web/tests/canvas-batch-multi-intake.test.ts` | MU-01 批量入口回归 | 新增 16 项测试，覆盖整批预检、引用稳定、防重复点击、部分失败清理、12 张上限、布局、连线与一次登记 | 锁定 fail-closed、零部分画布写入和 NC-01 语义复用，不修改既有测试正文 | 2026-07-26 |
-| 87 | `web/dist/` | 最新生产构建运行副本 | 提交前按 MU-01 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载旧前端，确保批量入口、预检与自动连线在下次画布启动时生效 | 2026-07-26 |
 
 ## 新增文件
 
@@ -130,10 +123,6 @@
 - `web/src/lib/canvas/canvas-batch-recycle.ts`：RC-01 固定 17373 回收端点、现有令牌、严格同批次回执、安全错误、二段确认状态和无自动重试合同。
 - `web/src/components/canvas/canvas-batch-recycle-button.tsx`：信息卡内“移入回收站”按钮；二段确认、提交中防双击、成功禁用，失败后只允许用户重新确认。
 - `web/tests/canvas-batch-recycle.test.ts`：新增 6 项覆盖固定 POST、空 JSON、令牌、严格回执、按钮状态、安全失败和零自动重试。
-- `web/src/lib/canvas/canvas-batch-multi-intake.ts`：MU-01 单次 12 张上限、整批 SHA-256/NC-01 预检、产品原图节点与到唯一工作流机器的连线计划，以及不移动旧节点的确定性避让布局合同。
-- `web/src/pages/canvas/use-canvas-batch-multi-intake.ts`：页面私有批量控制器；先做健康和双端门禁，再逐图复用原 localforage 凭证通道，全部成功后一次写回并调用原登记入口。
-- `web/src/components/canvas/canvas-batch-multi-intake-button.tsx`：信息卡未完成态的 1–12 张产品原图多选按钮；显示数量+角色文案、执行中禁用和人话结果。
-- `web/tests/canvas-batch-multi-intake.test.ts`：新增 16 项覆盖上限/重复/连线歧义拒绝、健康失败、防双击、部分失败清理、布局、引用稳定与一次登记。
 
 ## 上游同步纪律
 

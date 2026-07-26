@@ -3,7 +3,6 @@ import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck } f
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { BATCH_INTAKE_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_MAIN_COUNT, BATCH_INTAKE_MAIN_COUNT, BATCH_INTAKE_TOTAL, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
-import { CanvasBatchMultiIntakeButton } from "@/components/canvas/canvas-batch-multi-intake-button";
 import { CanvasBatchRecycleButton } from "@/components/canvas/canvas-batch-recycle-button";
 import { batchRegistrationButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
@@ -20,7 +19,6 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceFileNames,
     onChange,
     onRegister,
-    onSelectOriginals,
     onSupplementStyle,
 }: {
     node: CanvasNodeData;
@@ -30,7 +28,6 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceFileNames: string[];
     onChange: (nodeId: string, patch: Partial<EditableFacts>) => void;
     onRegister: (nodeId: string) => void;
-    onSelectOriginals: (nodeId: string, files: File[]) => Promise<string | undefined>;
     onSupplementStyle: (nodeId: string) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -153,11 +150,6 @@ export function CanvasBatchInfoNode({
 
             {!completed ? (
                 <div className="mt-auto grid gap-2">
-                    <CanvasBatchMultiIntakeButton
-                        cardId={node.id}
-                        disabled={!editable || busy || integrityBlocked}
-                        onSelect={onSelectOriginals}
-                    />
                     <IntakeFileList label="即将登记的产品原图" names={connectedOriginalFileNames} emptyText="尚未连接产品原图" />
                     <button
                         type="button"
