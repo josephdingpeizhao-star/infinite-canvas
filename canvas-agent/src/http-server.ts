@@ -5,6 +5,18 @@ import { CanvasSession } from "./canvas-session.js";
 import { archiveCodexThread, codexReasoningEffort, interruptCodexTurn, listCodexThreads, readCodexThread, resumeCodexThread, runClaudeTurn, runCodexTurn, startCodexThread, summarizeCodexThread, verifyCodexThreadWorkspace, withAgentPrompt } from "./agents.js";
 import type { AgentAttachment } from "./types.js";
 
+export function startupBannerLines(config: Pick<CanvasAgentConfig, "url" | "token">, interactive: boolean) {
+    const lines = [
+        "Infinite Canvas Agent",
+        `Local URL: ${config.url}`,
+        "Codex MCP is not installed by this command.",
+        "Optional MCP add: codex mcp add infinite-canvas -- npx -y @basketikun/canvas-agent mcp",
+        "Remove manually added MCP: codex mcp remove infinite-canvas",
+    ];
+    if (interactive) lines.splice(2, 0, `Connect token: ${config.token}`);
+    return lines;
+}
+
 export function startHttpServer() {
     const config = loadConfig(true);
     const port = Number(process.env.PORT) || Number(new URL(config.url).port) || DEFAULT_PORT;
@@ -116,12 +128,7 @@ export function startHttpServer() {
     app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => res.status(500).json({ ok: false, error: error.message }));
 
     app.listen(port, "127.0.0.1", () => {
-        console.log("Infinite Canvas Agent");
-        console.log(`Local URL: ${config.url}`);
-        console.log(`Connect token: ${config.token}`);
-        console.log("Codex MCP is not installed by this command.");
-        console.log("Optional MCP add: codex mcp add infinite-canvas -- npx -y @basketikun/canvas-agent mcp");
-        console.log("Remove manually added MCP: codex mcp remove infinite-canvas");
+        for (const line of startupBannerLines(config, Boolean(process.stdout.isTTY))) console.log(line);
     });
 }
 
