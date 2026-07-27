@@ -1,12 +1,14 @@
-import { CanvasNodeType, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
+import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
 export const BATCH_INTAKE_MAIN_COUNT = 6;
 export const BATCH_INTAKE_DETAIL_COUNT = 8;
 export const BATCH_INTAKE_TOTAL = 14;
-export const BATCH_INTAKE_HANDHELD_MAIN_COUNT = 2;
-export const BATCH_INTAKE_HANDHELD_DETAIL_COUNT = 1;
 export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
+export const BATCH_CATEGORY_ORIGIN = "http://127.0.0.1:17373";
+export const BATCH_CATEGORY_URL = `${BATCH_CATEGORY_ORIGIN}/batch-categories`;
+export const BATCH_INTAKE_CONTRACT_SHA256 = "648ba41f14b093bdbdf873f0005ea96e8fad775893f5ece19f7a8799bc42dd43";
+export const BATCH_CATEGORY_UNAVAILABLE_MESSAGE = "产品品类暂时无法读取，请重启工作台并刷新画布后再登记。";
 export const DUPLICATE_PRODUCT_IMAGE_MESSAGE =
     "同一张图被重复加入本次产品原图登记，不能建批。" +
     "请删除重复项，只保留一张；产品原图连工作流机器，风格参考图连信息卡。";
@@ -40,15 +42,19 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
     const status = value && BATCH_INTAKE_STATUSES.has(value.status) ? value.status : "draft";
     return {
         status,
-        productType: typeof value?.productType === "string" ? value.productType : "",
+        category: nonemptyString(value?.category),
+        contractHash: nonemptyString(value?.contractHash),
+        productType: nonemptyString(value?.productType),
+        productLengthCm: finiteNumber(value?.productLengthCm),
+        productWidthCm: finiteNumber(value?.productWidthCm),
         productHeightCm: finiteNumber(value?.productHeightCm),
-        allowClearWater: typeof value?.allowClearWater === "boolean" ? value.allowClearWater : false,
-        prohibitPouringAndHeating: typeof value?.prohibitPouringAndHeating === "boolean" ? value.prohibitPouringAndHeating : true,
-        skipMissingDAngle: typeof value?.skipMissingDAngle === "boolean" ? value.skipMissingDAngle : true,
+        allowClearWater: typeof value?.allowClearWater === "boolean" ? value.allowClearWater : undefined,
+        prohibitPouringAndHeating: typeof value?.prohibitPouringAndHeating === "boolean" ? value.prohibitPouringAndHeating : undefined,
+        skipMissingDAngle: typeof value?.skipMissingDAngle === "boolean" ? value.skipMissingDAngle : undefined,
         mainImageCount: BATCH_INTAKE_MAIN_COUNT,
         detailImageCount: BATCH_INTAKE_DETAIL_COUNT,
-        handheldMainCount: BATCH_INTAKE_HANDHELD_MAIN_COUNT,
-        handheldDetailCount: BATCH_INTAKE_HANDHELD_DETAIL_COUNT,
+        handheldMainCount: nonnegativeInteger(value?.handheldMainCount),
+        handheldDetailCount: nonnegativeInteger(value?.handheldDetailCount),
         facts: value?.facts,
         requestId: nonemptyString(value?.requestId),
         requestedAt: finiteTimestamp(value?.requestedAt),
@@ -64,22 +70,89 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
     };
 }
 
-export function validateBatchIntakeFacts(state: CanvasBatchIntakeMetadata): { ok: true; facts: CanvasBatchIntakeFacts } | { ok: false; message: string } {
-    const productType = state.productType.trim();
-    if (!productType) return { ok: false, message: "请填写产品品类。" };
-    if (!Number.isInteger(state.productHeightCm) || (state.productHeightCm || 0) <= 0) return { ok: false, message: "产品高度必须填写正整数厘米。" };
+export function validateBatchIntakeFacts(
+    state: CanvasBatchIntakeMetadata,
+    category: CanvasBatchCategoryMetadata | undefined,
+    contractHash: string,
+): { ok: true; facts: CanvasBatchIntakeFacts } | { ok: false; message: string } {
+    if (!category || state.category !== category.key || state.contractHash !== contractHash || contractHash !== BATCH_INTAKE_CONTRACT_SHA256) {
+        return { ok: false, message: BATCH_CATEGORY_UNAVAILABLE_MESSAGE };
+    }
+    const dimensions: Record<CanvasBatchDimensionKey, number | undefined> = {
+        length_cm: state.productLengthCm,
+        width_cm: state.productWidthCm,
+        height_cm: state.productHeightCm,
+    };
+    for (const field of category.form.dimensions.fields) {
+        const value = dimensions[field.key];
+        if (value === undefined && !category.form.dimensions.required.includes(field.key)) continue;
+        if (!Number.isInteger(value) || value! < field.minimum || value! > field.maximum) {
+            return { ok: false, message: `${field.label}必须填写 ${field.minimum}–${field.maximum} 的整数${field.unit}。` };
+        }
+    }
+    for (const [label, value, bounds] of [
+        ["主图手持", state.handheldMainCount, category.form.handheld.main],
+        ["详情图手持", state.handheldDetailCount, category.form.handheld.detail],
+    ] as const) {
+        if (!Number.isInteger(value) || value! < bounds.minimum || value! > bounds.maximum) {
+            return { ok: false, message: `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。` };
+        }
+    }
+    if ([state.allowClearWater, state.prohibitPouringAndHeating, state.skipMissingDAngle].some((value) => typeof value !== "boolean")) {
+        return { ok: false, message: "高级选项没有准备完整，请重新选择产品品类。" };
+    }
     return {
         ok: true,
         facts: {
-            product_type: productType,
-            height_cm: state.productHeightCm!,
-            handheld_main: BATCH_INTAKE_HANDHELD_MAIN_COUNT,
-            handheld_detail: BATCH_INTAKE_HANDHELD_DETAIL_COUNT,
-            allow_clear_water: state.allowClearWater,
-            forbid_pouring_and_heating: state.prohibitPouringAndHeating,
-            missing_d_no_retake: state.skipMissingDAngle,
+            product_type: category.product_noun,
+            length_cm: dimensions.length_cm ?? null,
+            width_cm: dimensions.width_cm ?? null,
+            height_cm: dimensions.height_cm!,
+            handheld_main: state.handheldMainCount!,
+            handheld_detail: state.handheldDetailCount!,
+            allow_clear_water: state.allowClearWater!,
+            forbid_pouring_and_heating: state.prohibitPouringAndHeating!,
+            missing_d_no_retake: state.skipMissingDAngle!,
         },
     };
+}
+
+export function categoryDefaultPatch(category: CanvasBatchCategoryMetadata, contractHash: string) {
+    const option = (field: CanvasBatchAdvancedOptionKey) => category.form.advanced_options.find((item) => item.field === field)!;
+    return {
+        category: category.key,
+        contractHash,
+        productType: category.product_noun,
+        productLengthCm: undefined,
+        productWidthCm: undefined,
+        productHeightCm: undefined,
+        handheldMainCount: category.form.handheld.main.default,
+        handheldDetailCount: category.form.handheld.detail.default,
+        allowClearWater: option("allow_clear_water").default,
+        prohibitPouringAndHeating: option("forbid_pouring_and_heating").default,
+        skipMissingDAngle: option("missing_d_no_retake").default,
+    };
+}
+
+export async function fetchBatchCategoryCatalog(token: string, fetcher: typeof fetch = globalThis.fetch): Promise<CanvasBatchCategoryCatalog> {
+    if (!token.trim()) throw new Error(BATCH_CATEGORY_UNAVAILABLE_MESSAGE);
+    let response: Response;
+    try {
+        response = await fetcher(BATCH_CATEGORY_URL, {
+            method: "GET",
+            headers: { "X-Canvas-Agent-Token": token.trim() },
+        });
+    } catch {
+        throw new Error(BATCH_CATEGORY_UNAVAILABLE_MESSAGE);
+    }
+    let payload: unknown;
+    try {
+        payload = await response.json();
+    } catch {
+        throw new Error(BATCH_CATEGORY_UNAVAILABLE_MESSAGE);
+    }
+    if (!response.ok || !validCategoryCatalog(payload)) throw new Error(BATCH_CATEGORY_UNAVAILABLE_MESSAGE);
+    return { contractHash: payload.contractHash, categories: payload.categories };
 }
 
 export function resolveBatchIntakeSelection(batchInfoNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): ({ ok: true } & BatchIntakeSelection) | { ok: false; message: string } {
@@ -129,14 +202,25 @@ export function connectedBatchOriginalFileNames(batchInfoNodeId: string, nodes: 
     return connectedBatchOriginalImageIds(batchInfoNodeId, nodes, connections).map((id) => nodesById.get(id)?.metadata?.sourceFile?.name || nodesById.get(id)?.title || id);
 }
 
-export function buildBatchIntakeCommand(state: CanvasBatchIntakeMetadata, selection: BatchIntakeSelection, requestId: string, now: number) {
-    const factsResult = validateBatchIntakeFacts(state);
+export function buildBatchIntakeCommand(
+    state: CanvasBatchIntakeMetadata,
+    category: CanvasBatchCategoryMetadata | undefined,
+    contractHash: string,
+    selection: BatchIntakeSelection,
+    requestId: string,
+    now: number,
+) {
+    const factsResult = validateBatchIntakeFacts(state, category, contractHash);
     if (!factsResult.ok) throw new Error(factsResult.message);
     return {
         content: `# batch-intake\n# request-id: ${requestId}\n# requested-at: ${now}\nbuild: batch`,
         state: {
             ...state,
+            category: category!.key,
+            contractHash,
             productType: factsResult.facts.product_type,
+            productLengthCm: factsResult.facts.length_cm ?? undefined,
+            productWidthCm: factsResult.facts.width_cm ?? undefined,
             productHeightCm: factsResult.facts.height_cm,
             facts: factsResult.facts,
             status: "queued" as const,
@@ -285,6 +369,58 @@ async function readUploadResponse(response: Response): Promise<Record<string, un
 
 function validSourceFile(value: CanvasBatchSourceFile) {
     return Boolean(value.name && Number.isInteger(value.size) && value.size > 0 && typeof value.type === "string" && Number.isFinite(value.lastModified) && value.lastModified >= 0 && SHA256_PATTERN.test(value.sha256));
+}
+
+function validCategoryCatalog(value: unknown): value is { ok: true; contractHash: string; categories: CanvasBatchCategoryMetadata[] } {
+    if (!value || typeof value !== "object") return false;
+    const payload = value as Record<string, unknown>;
+    if (payload.ok !== true || payload.contractHash !== BATCH_INTAKE_CONTRACT_SHA256 || !Array.isArray(payload.categories) || !payload.categories.length) return false;
+    const keys = new Set<string>();
+    for (const category of payload.categories) {
+        if (!validCategory(category) || keys.has(category.key)) return false;
+        keys.add(category.key);
+    }
+    return true;
+}
+
+function validCategory(value: unknown): value is CanvasBatchCategoryMetadata {
+    if (!value || typeof value !== "object") return false;
+    const category = value as CanvasBatchCategoryMetadata;
+    if (![category.key, category.display_name, category.product_noun].every((item) => typeof item === "string" && item.length > 0)) return false;
+    const dimensions = category.form?.dimensions;
+    const dimensionKeys = new Set<CanvasBatchDimensionKey>(["length_cm", "width_cm", "height_cm"]);
+    if (!dimensions || !Array.isArray(dimensions.required) || !Array.isArray(dimensions.fields) || dimensions.fields.length !== 3) return false;
+    if (dimensions.required.some((item) => !dimensionKeys.has(item)) || new Set(dimensions.fields.map((item) => item.key)).size !== 3) return false;
+    if (
+        dimensions.fields.some(
+            (field) =>
+                !dimensionKeys.has(field.key) ||
+                !field.label ||
+                !field.unit ||
+                !validIntegerBounds(field.minimum, field.maximum),
+        )
+    )
+        return false;
+    if (!validIntegerBounds(category.form.handheld?.main?.minimum, category.form.handheld?.main?.maximum, category.form.handheld?.main?.default)) return false;
+    if (!validIntegerBounds(category.form.handheld?.detail?.minimum, category.form.handheld?.detail?.maximum, category.form.handheld?.detail?.default)) return false;
+    const advancedKeys = new Set<CanvasBatchAdvancedOptionKey>(["allow_clear_water", "forbid_pouring_and_heating", "missing_d_no_retake"]);
+    const advanced = category.form.advanced_options;
+    return (
+        Array.isArray(advanced) &&
+        advanced.length === 3 &&
+        new Set(advanced.map((item) => item.field)).size === 3 &&
+        advanced.every((item) => advancedKeys.has(item.field) && typeof item.default === "boolean" && Boolean(item.label) && Boolean(item.description))
+    );
+}
+
+function validIntegerBounds(minimum: unknown, maximum: unknown, defaultValue?: unknown) {
+    return (
+        Number.isInteger(minimum) &&
+        Number.isInteger(maximum) &&
+        (minimum as number) >= 0 &&
+        (maximum as number) >= (minimum as number) &&
+        (defaultValue === undefined || (Number.isInteger(defaultValue) && (defaultValue as number) >= (minimum as number) && (defaultValue as number) <= (maximum as number)))
+    );
 }
 
 function uniqueStrings(value: unknown) {

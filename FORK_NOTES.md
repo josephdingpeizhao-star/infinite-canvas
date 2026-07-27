@@ -98,6 +98,15 @@
 | 95 | `docs/content/docs/progress/pending-test.mdx` | “DL-01 项目级删除”待测试小节 | 登记一次性新批次的四入口、Windows 回收站、共享引用、失败续做、空画布与 RC-01 保留边界真人验收 | 自动测试不触碰真实批次，最终文件送达和项目隔离仍须真人核对 | 2026-07-26 |
 | 96 | `web/dist/` | 最新生产构建运行副本 | 提交前已按 DL-01 源代码重新执行生产构建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 避免启动器加载旧前端，确保项目级删除、加重确认与信息卡按钮移除在下次启动时生效 | 2026-07-26 |
 | 97 | `canvas-agent/src/http-server.ts` + `canvas-agent/src/http-server.test.ts` | 启动横幅令牌行的 TTY 门控与两态回归 | 仅在 stdout 为交互终端时显示连接令牌；重定向或管道下保留其他横幅行但不输出令牌，并新增独立测试锁定两态 | 让无窗启动器可完整记录 agent stdout/stderr 而不把令牌写入日志，同时保持人工终端配对体验 | 2026-07-27 |
+| 98 | `web/src/types/canvas.ts` | 批次信息、品类元数据与九字段载荷类型 | 增加 category、长宽高、可变手持、契约摘要和端点表单结构；14 张总数类型保持不变 | 让卡片、登记载荷和主仓品类端点使用同一字段语义 | 2026-07-27 |
+| 99 | `web/src/constant/canvas.ts` | 新建信息卡默认元数据 | 移除前端自带的品类、手持和高级开关默认值，只保留草稿状态与固定 6+8 总数 | 默认值必须实时来自主仓配方，不能在 dist 中复制第二份 | 2026-07-27 |
+| 100 | `web/src/lib/canvas/canvas-batch-intake.ts` | 品类端点、摘要门禁、配方驱动校验与九字段命令 | 鉴权读取 17373 `/batch-categories`，严格校验字段契约摘要；按端点元数据生成默认值、尺寸/手持校验和 category + 九字段载荷 | 元数据不可用或双端摘要不一致时在发号前 fail-closed，不回退自由文本 | 2026-07-27 |
+| 101 | `web/src/pages/canvas/use-canvas-batch-intake.ts` | 品类目录加载、草稿初始化与登记入口 | 令牌变化时读取品类；新卡/旧草稿按已装配方初始化，切换品类重置为该配方默认；登记复用同一目录做最终校验 | 让渲染与提交共用一次实时元数据，避免组件复制业务规则 | 2026-07-27 |
+| 102 | `web/src/components/canvas/canvas-batch-advanced-options.tsx` | 高级选项折叠区 | 新增默认收起的受控折叠区，逐项渲染端点下发的人话标题、说明和原字段方向开关 | 日常隐藏工程开关，特殊批次仍可覆盖且落盘语义不变 | 2026-07-27 |
+| 103 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 品类下拉、三维、手持输入、动态摘要及完成回执 | 自由文本改为已安装品类下拉；显示配方必填维度与范围、0 起手持输入、默认收起高级项和动态“共 14 张”行；元数据失败禁用登记 | 完成品类友好表单，保持一个信息卡和一个工作流按钮 | 2026-07-27 |
+| 104 | `web/src/pages/canvas/project.tsx` | 信息卡渲染接线 | 向原信息卡挂点传入批次 hook 的实时品类目录和加载状态 | 只增加两项状态接线，不改变其他节点、工具栏或工作流入口 | 2026-07-27 |
+| 105 | `web/tests/canvas-batch-intake.test.ts` | CAT-01 品类表单与载荷回归 | 将七字段/固定手持断言升级为九字段，新增端点鉴权/失败、双端摘要、盘子三维、0/6/8 边界、下拉、折叠、动态汇总和开关双向映射测试 | 锁定单一事实源与 fail-closed 行为，原图 SHA、连线和零费用演示断言不放宽 | 2026-07-27 |
+| 106 | `web/dist/` | CAT-01 最新生产运行副本 | 提交前按本次源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 重启工作台并刷新画布后加载新品类信息卡；端点文案/默认值/范围更新本身无需再次构建 | 2026-07-27 |
 
 ## 退役锚点（编号不复用）
 
@@ -115,10 +124,11 @@
 - `web/src/components/canvas/canvas-workflow-cost-card.tsx`：每次演示开始前不可跳过的 0 元费用确认卡。
 - `web/src/pages/canvas/use-canvas-workflow-demo.ts`：页面私有的 0 元确认门；确认后只把 `run/retry: renders` 命令写入画布状态，并负责未接单/进度停顿的人话降级，不再生成图片。
 - `web/tests/canvas-workflow-demo.test.ts`：保留原 7 项断言，并新增后台命令、重跑、未接单和中断状态合同。
-- `web/src/lib/canvas/canvas-batch-intake.ts`：M2-a 七项事实、连线门禁、中文路由、磁盘原图 SHA-256 证据和回环 raw POST 合同；任何哈希异常硬停止且不重试。
-- `web/src/components/canvas/canvas-batch-info-node.tsx`：画布原生信息卡，直接填写品类、高度和三个开关，并显示固定张数、人话状态及成功回执。
-- `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
-- `web/tests/canvas-batch-intake.test.ts`：覆盖七项事实、单卡单机原图连线、中文编码、首次 File 与浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
+- `web/src/lib/canvas/canvas-batch-intake.ts`：M2-a/CAT-01 九项事实、17373 品类目录、载荷摘要、配方驱动尺寸/手持校验、连线门禁、磁盘原图 SHA-256 证据和 17372 raw POST 合同；品类或哈希异常都在发号前硬停止且不重试。
+- `web/src/components/canvas/canvas-batch-info-node.tsx`：画布原生信息卡，通过已安装品类下拉填写长宽高和两项手持数量，高级选项默认收起；元数据不可用时禁用下拉与登记。
+- `web/src/components/canvas/canvas-batch-advanced-options.tsx`：只渲染品类端点下发的人话标题、说明与默认方向，不持有任何业务文案或默认值。
+- `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；加载并复用品类目录，只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
+- `web/tests/canvas-batch-intake.test.ts`：覆盖九项事实、品类目录与摘要、三维/手持边界、下拉/折叠/失败态、单卡单机原图连线、中文编码、浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
 - `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令、中断状态和同页单次提交合同；不实现后台工序路由。
 - `web/src/components/canvas/canvas-workflow-production-cost-card.tsx`：真实费用唯一确认卡，显示剩余张数、约计美元金额和约计时长；取消不写画布状态。
 - `web/src/pages/canvas/use-canvas-workflow-production.ts`：页面私有真实费用控制器；只在确认后写生产命令，同一页面内同一机器/批次只允许一次提交；无信息卡时明确把开始动作交还 M1 演示。
@@ -150,3 +160,4 @@
 
 - 基线：ebd8ae2（2026-07-09 origin/main）
 - 锁定 tag / 手动有意识合并；合并后运行主仓库 `python -m unittest discover -s tests` 与桥接冒烟（`spike_canvas_push.py --health --push-live ...`）。
+- CAT-01 载荷摘要只覆盖字段名、类型和必填结构语义。品类表单文案、默认值与手持范围实时来自 17373，不进入摘要，也不要求重建 `web/dist`；只有真正新增、删除或改变载荷字段结构时，才同步主仓 `categories/_shared/batch-intake-contract.json` 与 `BATCH_INTAKE_CONTRACT_SHA256` 并重建 dist。

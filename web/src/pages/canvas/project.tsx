@@ -2834,6 +2834,8 @@ function InfiniteCanvasPage() {
                                         connectedStyleReferenceCount={connectedStyleReferenceImageIds(contentNode.id, nodes, connections).length}
                                         connectedOriginalFileNames={connectedBatchOriginalFileNames(contentNode.id, nodes, connections)}
                                         connectedStyleReferenceFileNames={connectedStyleReferenceFileNames(contentNode.id, nodes, connections)}
+                                        categoryCatalog={batchIntake.categoryCatalog}
+                                        categoryCatalogStatus={batchIntake.categoryCatalogStatus}
                                         onChange={batchIntake.updateFacts}
                                         onRegister={batchIntake.requestRegistration}
                                         onSupplementStyle={styleReferenceIntake.requestSupplement}

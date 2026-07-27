@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { BatchIntakeIntegrityError, buildBatchIntakeCommand, expireBatchIntakeState, readBatchIntakeState, resolveBatchIntakeSelection, uploadBatchSourceImages, validateBatchIntakeFacts } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, BatchIntakeIntegrityError, buildBatchIntakeCommand, categoryDefaultPatch, expireBatchIntakeState, fetchBatchCategoryCatalog, readBatchIntakeState, resolveBatchIntakeSelection, uploadBatchSourceImages, validateBatchIntakeFacts } from "@/lib/canvas/canvas-batch-intake";
 import { getImageBlob } from "@/services/image-storage";
 import { useAgentStore } from "@/stores/use-agent-store";
-import { CanvasNodeType, type CanvasBatchIntakeMetadata, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasBatchCategoryCatalog, type CanvasBatchIntakeMetadata, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
-type EditableFacts = Pick<CanvasBatchIntakeMetadata, "productType" | "productHeightCm" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle">;
+type EditableFacts = Pick<
+    CanvasBatchIntakeMetadata,
+    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+>;
 
 type BatchIntakeControllerOptions = {
     nodes: CanvasNodeData[];
@@ -20,6 +23,37 @@ export function useCanvasBatchIntake({ nodes, nodesRef, connectionsRef, setNodes
     const token = useAgentStore((state) => state.token);
     const startedRequestsRef = useRef(new Set<string>());
     const requestControllersRef = useRef(new Map<string, AbortController>());
+    const [categoryCatalog, setCategoryCatalog] = useState<CanvasBatchCategoryCatalog>();
+    const [categoryCatalogStatus, setCategoryCatalogStatus] = useState<"loading" | "ready" | "error">("loading");
+
+    useEffect(() => {
+        let active = true;
+        setCategoryCatalog(undefined);
+        setCategoryCatalogStatus("loading");
+        void fetchBatchCategoryCatalog(token)
+            .then((catalog) => {
+                if (!active) return;
+                setCategoryCatalog(catalog);
+                setCategoryCatalogStatus("ready");
+                setNodes((current) =>
+                    current.map((node) => {
+                        if (node.type !== CanvasNodeType.BatchInfo) return node;
+                        const state = readBatchIntakeState(node.metadata);
+                        if (state.status !== "draft" && state.status !== "failed") return node;
+                        const category = catalog.categories.find((item) => item.key === state.category) || catalog.categories[0]!;
+                        if (hasCurrentCategoryForm(state, category.key, category.product_noun, catalog.contractHash)) return node;
+                        return resetDraftNode(node, state, categoryDefaultPatch(category, catalog.contractHash));
+                    }),
+                );
+            })
+            .catch(() => {
+                if (!active) return;
+                setCategoryCatalogStatus("error");
+            });
+        return () => {
+            active = false;
+        };
+    }, [setNodes, token]);
 
     const updateFacts = useCallback(
         (nodeId: string, patch: Partial<EditableFacts>) => {
@@ -28,34 +62,13 @@ export function useCanvasBatchIntake({ nodes, nodesRef, connectionsRef, setNodes
                     if (node.id !== nodeId || node.type !== CanvasNodeType.BatchInfo) return node;
                     const state = readBatchIntakeState(node.metadata);
                     if (state.status !== "draft" && state.status !== "failed") return node;
-                    return {
-                        ...node,
-                        metadata: {
-                            ...node.metadata,
-                            content: undefined,
-                            batchIntake: {
-                                ...state,
-                                ...patch,
-                                status: "draft",
-                                requestId: undefined,
-                                requestedAt: undefined,
-                                updatedAt: undefined,
-                                workflowNodeId: undefined,
-                                sourceImageNodeIds: undefined,
-                                batchId: undefined,
-                                uploadBaseUrl: undefined,
-                                expectedCount: undefined,
-                                receivedCount: undefined,
-                                errorMessage: undefined,
-                                receipt: undefined,
-                                facts: undefined,
-                            },
-                        },
-                    };
+                    const selected = patch.category ? categoryCatalog?.categories.find((item) => item.key === patch.category) : undefined;
+                    const effectivePatch = selected && categoryCatalog ? categoryDefaultPatch(selected, categoryCatalog.contractHash) : patch;
+                    return resetDraftNode(node, state, effectivePatch);
                 }),
             );
         },
-        [setNodes],
+        [categoryCatalog, setNodes],
     );
 
     const requestRegistration = useCallback(
@@ -73,9 +86,10 @@ export function useCanvasBatchIntake({ nodes, nodesRef, connectionsRef, setNodes
             }
             if (state.status === "queued" || state.status === "upload_ready" || state.status === "uploading") return;
 
-            const facts = validateBatchIntakeFacts(state);
+            const category = categoryCatalog?.categories.find((item) => item.key === state.category);
+            const facts = validateBatchIntakeFacts(state, category, categoryCatalog?.contractHash || "");
             if (!facts.ok) {
-                warn(facts.message);
+                warn(categoryCatalogStatus === "ready" ? facts.message : BATCH_CATEGORY_UNAVAILABLE_MESSAGE);
                 return;
             }
             const selection = resolveBatchIntakeSelection(nodeId, nodesRef.current, connectionsRef.current);
@@ -85,10 +99,10 @@ export function useCanvasBatchIntake({ nodes, nodesRef, connectionsRef, setNodes
             }
 
             const requestId = nanoid(10);
-            const command = buildBatchIntakeCommand(state, selection, requestId, Date.now());
+            const command = buildBatchIntakeCommand(state, category, categoryCatalog!.contractHash, selection, requestId, Date.now());
             setNodes((current) => current.map((node) => (node.id === nodeId && node.type === CanvasNodeType.BatchInfo ? { ...node, metadata: { ...node.metadata, content: command.content, batchIntake: command.state } } : node)));
         },
-        [connectionsRef, nodesRef, setNodes, warn],
+        [categoryCatalog, categoryCatalogStatus, connectionsRef, nodesRef, setNodes, warn],
     );
 
     const updateRequestState = useCallback(
@@ -205,7 +219,47 @@ export function useCanvasBatchIntake({ nodes, nodesRef, connectionsRef, setNodes
 
     useEffect(() => cancelAll, [cancelAll]);
 
-    return { updateFacts, requestRegistration, cancelNodes, cancelAll };
+    return { updateFacts, requestRegistration, cancelNodes, cancelAll, categoryCatalog, categoryCatalogStatus };
+}
+
+function resetDraftNode(node: CanvasNodeData, state: CanvasBatchIntakeMetadata, patch: Partial<CanvasBatchIntakeMetadata>): CanvasNodeData {
+    return {
+        ...node,
+        metadata: {
+            ...node.metadata,
+            content: undefined,
+            batchIntake: {
+                ...state,
+                ...patch,
+                status: "draft",
+                requestId: undefined,
+                requestedAt: undefined,
+                updatedAt: undefined,
+                workflowNodeId: undefined,
+                sourceImageNodeIds: undefined,
+                batchId: undefined,
+                uploadBaseUrl: undefined,
+                expectedCount: undefined,
+                receivedCount: undefined,
+                errorMessage: undefined,
+                receipt: undefined,
+                facts: undefined,
+            },
+        },
+    };
+}
+
+function hasCurrentCategoryForm(state: CanvasBatchIntakeMetadata, category: string, productNoun: string, contractHash: string) {
+    return (
+        state.category === category &&
+        state.productType === productNoun &&
+        state.contractHash === contractHash &&
+        Number.isInteger(state.handheldMainCount) &&
+        Number.isInteger(state.handheldDetailCount) &&
+        typeof state.allowClearWater === "boolean" &&
+        typeof state.prohibitPouringAndHeating === "boolean" &&
+        typeof state.skipMissingDAngle === "boolean"
+    );
 }
 
 function sameIds(first: string[], second: string[]) {

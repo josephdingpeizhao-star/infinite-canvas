@@ -41,14 +41,8 @@ export const NODE_SPECS = {
         metadata: {
             batchIntake: {
                 status: "draft",
-                productType: "",
-                allowClearWater: false,
-                prohibitPouringAndHeating: true,
-                skipMissingDAngle: true,
                 mainImageCount: 6,
                 detailImageCount: 8,
-                handheldMainCount: 2,
-                handheldDetailCount: 1,
             },
         },
     },

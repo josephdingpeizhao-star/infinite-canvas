@@ -99,12 +99,47 @@ export type CanvasBatchSourceFile = {
 };
 export type CanvasBatchIntakeFacts = {
     product_type: string;
+    length_cm: number | null;
+    width_cm: number | null;
     height_cm: number;
-    handheld_main: 2;
-    handheld_detail: 1;
+    handheld_main: number;
+    handheld_detail: number;
     allow_clear_water: boolean;
     forbid_pouring_and_heating: boolean;
     missing_d_no_retake: boolean;
+};
+export type CanvasBatchDimensionKey = "length_cm" | "width_cm" | "height_cm";
+export type CanvasBatchAdvancedOptionKey = "allow_clear_water" | "forbid_pouring_and_heating" | "missing_d_no_retake";
+export type CanvasBatchCategoryMetadata = {
+    key: string;
+    display_name: string;
+    product_noun: string;
+    form: {
+        dimensions: {
+            required: CanvasBatchDimensionKey[];
+            fields: Array<{
+                key: CanvasBatchDimensionKey;
+                label: string;
+                unit: string;
+                minimum: number;
+                maximum: number;
+            }>;
+        };
+        handheld: {
+            main: { default: number; minimum: number; maximum: number };
+            detail: { default: number; minimum: number; maximum: number };
+        };
+        advanced_options: Array<{
+            field: CanvasBatchAdvancedOptionKey;
+            default: boolean;
+            label: string;
+            description: string;
+        }>;
+    };
+};
+export type CanvasBatchCategoryCatalog = {
+    contractHash: string;
+    categories: CanvasBatchCategoryMetadata[];
 };
 export type CanvasBatchIntakeReceipt = {
     batchId: string;
@@ -113,15 +148,19 @@ export type CanvasBatchIntakeReceipt = {
 };
 export type CanvasBatchIntakeMetadata = {
     status: CanvasBatchIntakeStatus;
-    productType: string;
+    category?: string;
+    contractHash?: string;
+    productType?: string;
+    productLengthCm?: number;
+    productWidthCm?: number;
     productHeightCm?: number;
-    allowClearWater: boolean;
-    prohibitPouringAndHeating: boolean;
-    skipMissingDAngle: boolean;
+    allowClearWater?: boolean;
+    prohibitPouringAndHeating?: boolean;
+    skipMissingDAngle?: boolean;
     mainImageCount: 6;
     detailImageCount: 8;
-    handheldMainCount: 2;
-    handheldDetailCount: 1;
+    handheldMainCount?: number;
+    handheldDetailCount?: number;
     facts?: CanvasBatchIntakeFacts;
     requestId?: string;
     requestedAt?: number;

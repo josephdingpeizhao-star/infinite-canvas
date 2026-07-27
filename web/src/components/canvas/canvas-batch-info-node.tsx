@@ -1,14 +1,18 @@
-import { Switch } from "antd";
+import { useState } from "react";
 import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck } from "lucide-react";
 
+import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { BATCH_INTAKE_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_DETAIL_COUNT, BATCH_INTAKE_HANDHELD_MAIN_COUNT, BATCH_INTAKE_MAIN_COUNT, BATCH_INTAKE_TOTAL, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, BATCH_INTAKE_DETAIL_COUNT, BATCH_INTAKE_MAIN_COUNT, BATCH_INTAKE_TOTAL, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
 import { batchRegistrationButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasBatchIntakeMetadata, CanvasNodeData } from "@/types/canvas";
+import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchIntakeMetadata, CanvasNodeData } from "@/types/canvas";
 
-type EditableFacts = Pick<CanvasBatchIntakeMetadata, "productType" | "productHeightCm" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle">;
+type EditableFacts = Pick<
+    CanvasBatchIntakeMetadata,
+    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+>;
 
 export function CanvasBatchInfoNode({
     node,
@@ -16,6 +20,8 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceCount,
     connectedOriginalFileNames,
     connectedStyleReferenceFileNames,
+    categoryCatalog,
+    categoryCatalogStatus,
     onChange,
     onRegister,
     onSupplementStyle,
@@ -25,13 +31,17 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceCount: number;
     connectedOriginalFileNames: string[];
     connectedStyleReferenceFileNames: string[];
+    categoryCatalog?: CanvasBatchCategoryCatalog;
+    categoryCatalogStatus: "loading" | "ready" | "error";
     onChange: (nodeId: string, patch: Partial<EditableFacts>) => void;
     onRegister: (nodeId: string) => void;
     onSupplementStyle: (nodeId: string) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const state = readBatchIntakeState(node.metadata);
-    const editable = state.status === "draft" || state.status === "failed";
+    const [advancedExpanded, setAdvancedExpanded] = useState(false);
+    const category = categoryCatalog?.categories.find((item) => item.key === state.category);
+    const editable = (state.status === "draft" || state.status === "failed") && categoryCatalogStatus === "ready";
     const busy = state.status === "queued" || state.status === "upload_ready" || state.status === "uploading";
     const completed = state.status === "completed";
     const integrityBlocked = state.status === "integrity_blocked";
@@ -63,13 +73,15 @@ export function CanvasBatchInfoNode({
                 <div className="grid gap-2 rounded-xl border p-3 text-xs" style={{ borderColor: theme.node.activeStroke, background: theme.node.panel }}>
                     <ReceiptRow label="批次号" value={batchId || "登记完成"} />
                     <ReceiptRow label="接收原图" value={`${imageCount} 张`} />
-                    <ReceiptRow label="品类" value={state.productType} />
-                    <ReceiptRow label="高度" value={`${state.productHeightCm} 厘米`} />
-                    <ReceiptRow label="清水场景" value={state.allowClearWater ? "允许" : "不允许"} />
-                    <ReceiptRow label="倾倒与加热" value={state.prohibitPouringAndHeating ? "禁止" : "不禁止"} />
-                    <ReceiptRow label="缺少 D 角度" value={state.skipMissingDAngle ? "不补拍" : "需要补拍"} />
+                    <ReceiptRow label="品类" value={category?.display_name || state.category || "品类信息暂不可用"} />
+                    {category ? category.form.dimensions.fields.filter((field) => dimensionValue(state, field.key) !== undefined).map((field) => (
+                        <ReceiptRow key={field.key} label={field.label} value={`${dimensionValue(state, field.key)} ${field.unit}`} />
+                    )) : null}
                     <ReceiptRow label="固定张数" value="主图 6 + 详情 8" />
-                    <ReceiptRow label="固定手持" value="主图 2 + 详情 1" />
+                    <ReceiptRow label="手持数量" value={`主图 ${state.handheldMainCount ?? "—"} + 详情 ${state.handheldDetailCount ?? "—"}`} />
+                    {category ? category.form.advanced_options.map((option) => (
+                        <ReceiptRow key={option.field} label={option.label} value={advancedValue(state, option.field) ? "开" : "关"} />
+                    )) : null}
                     <div className="mt-1 border-t pt-2" style={{ borderColor: theme.node.stroke }}>
                         <div className="flex items-center justify-between gap-3"><span style={{ color: theme.node.muted }}>风格参考</span><span className="font-medium">已连 {connectedStyleReferenceCount} 张</span></div>
                         <div className="mt-1 text-[11px] leading-5" style={{ color: styleState.status === "failed" || styleBlocked ? "#f87171" : theme.node.muted }}>{styleReferenceText(styleState.status, styleState.receipt?.fileCount, styleState.errorMessage)}</div>
@@ -99,41 +111,70 @@ export function CanvasBatchInfoNode({
                     <div className="grid gap-2">
                         <label className="grid gap-1 text-[11px]" style={{ color: theme.node.muted }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
                             产品品类
-                            <input
-                                className="h-9 cursor-text rounded-lg border bg-transparent px-3 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                            <select
+                                className="h-9 cursor-pointer rounded-lg border px-3 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60"
                                 style={{ borderColor: theme.node.stroke, color: theme.node.text, background: theme.node.panel }}
-                                value={state.productType}
+                                value={category?.key || ""}
                                 disabled={!editable}
-                                placeholder="例如：餐具"
-                                onChange={(event) => onChange(node.id, { productType: event.target.value })}
-                            />
+                                onChange={(event) => onChange(node.id, { category: event.target.value })}
+                            >
+                                <option value="" disabled>{categoryCatalogStatus === "loading" ? "正在读取品类…" : "请选择产品品类"}</option>
+                                {(categoryCatalog?.categories || []).map((item) => <option key={item.key} value={item.key}>{item.display_name}</option>)}
+                            </select>
                         </label>
-                        <label className="grid gap-1 text-[11px]" style={{ color: theme.node.muted }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
-                            产品高度（厘米，正整数）
-                            <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                className="h-9 cursor-text rounded-lg border bg-transparent px-3 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                                style={{ borderColor: theme.node.stroke, color: theme.node.text, background: theme.node.panel }}
-                                value={state.productHeightCm ?? ""}
-                                disabled={!editable}
-                                placeholder="例如：25"
-                                onChange={(event) => onChange(node.id, { productHeightCm: event.target.value === "" ? undefined : Number(event.target.value) })}
-                            />
-                        </label>
+                        {category ? (
+                            <div className="grid grid-cols-3 gap-2">
+                                {category.form.dimensions.fields.map((field) => (
+                                    <NumberField
+                                        key={field.key}
+                                        label={`${field.label}${category.form.dimensions.required.includes(field.key) ? " *" : ""}`}
+                                        value={dimensionValue(state, field.key)}
+                                        minimum={field.minimum}
+                                        maximum={field.maximum}
+                                        unit={field.unit}
+                                        disabled={!editable}
+                                        onChange={(value) => onChange(node.id, { [dimensionStateKey(field.key)]: value })}
+                                    />
+                                ))}
+                            </div>
+                        ) : null}
                     </div>
 
-                    <div className="grid gap-1.5 rounded-xl border p-2.5 text-xs" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
-                        <FactSwitch label="允许清水场景" checked={state.allowClearWater} disabled={!editable} onChange={(allowClearWater) => onChange(node.id, { allowClearWater })} />
-                        <FactSwitch label="禁止倾倒与加热" checked={state.prohibitPouringAndHeating} disabled={!editable} onChange={(prohibitPouringAndHeating) => onChange(node.id, { prohibitPouringAndHeating })} />
-                        <FactSwitch label="缺少 D 角度时不补拍" checked={state.skipMissingDAngle} disabled={!editable} onChange={(skipMissingDAngle) => onChange(node.id, { skipMissingDAngle })} />
-                    </div>
+                    {category ? (
+                        <>
+                            <div className="grid grid-cols-2 gap-2">
+                                <NumberField
+                                    label="主图手持"
+                                    value={state.handheldMainCount}
+                                    minimum={category.form.handheld.main.minimum}
+                                    maximum={category.form.handheld.main.maximum}
+                                    disabled={!editable}
+                                    onChange={(handheldMainCount) => onChange(node.id, { handheldMainCount })}
+                                />
+                                <NumberField
+                                    label="详情图手持"
+                                    value={state.handheldDetailCount}
+                                    minimum={category.form.handheld.detail.minimum}
+                                    maximum={category.form.handheld.detail.maximum}
+                                    disabled={!editable}
+                                    onChange={(handheldDetailCount) => onChange(node.id, { handheldDetailCount })}
+                                />
+                            </div>
+                            <CanvasBatchAdvancedOptions
+                                category={category}
+                                state={state}
+                                editable={editable}
+                                expanded={advancedExpanded}
+                                onExpandedChange={setAdvancedExpanded}
+                                onChange={(patch) => onChange(node.id, patch)}
+                            />
+                        </>
+                    ) : null}
 
                     <div className="flex items-center justify-between rounded-xl border px-3 py-2 text-[11px]" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
                         <span>共 {BATCH_INTAKE_TOTAL} 张</span>
                         <span>
-                            手持：主 {BATCH_INTAKE_HANDHELD_MAIN_COUNT} + 详情 {BATCH_INTAKE_HANDHELD_DETAIL_COUNT}
+                            手持：主 {state.handheldMainCount ?? "—"} + 详情 {state.handheldDetailCount ?? "—"}
                         </span>
                     </div>
                 </>
@@ -143,7 +184,7 @@ export function CanvasBatchInfoNode({
                 className="min-h-11 rounded-xl border px-3 py-2 text-[11px] leading-5"
                 style={{ borderColor: integrityBlocked ? "#ef4444" : theme.node.stroke, background: theme.node.panel, color: state.status === "failed" || integrityBlocked ? "#f87171" : theme.node.muted }}
             >
-                {statusText(state, connectedOriginalCount)}
+                {categoryCatalogStatus === "loading" && !completed ? "正在读取已安装的产品品类…" : categoryCatalogStatus === "error" && !completed ? BATCH_CATEGORY_UNAVAILABLE_MESSAGE : statusText(state, connectedOriginalCount)}
             </div>
 
             {!completed ? (
@@ -151,9 +192,9 @@ export function CanvasBatchInfoNode({
                     <IntakeFileList label="即将登记的产品原图" names={connectedOriginalFileNames} emptyText="尚未连接产品原图" />
                     <button
                         type="button"
-                        className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-55"
+                        className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55"
                         style={{ borderColor: integrityBlocked ? "#ef4444" : theme.node.activeStroke, background: integrityBlocked ? "transparent" : theme.node.activeStroke, color: integrityBlocked ? "#f87171" : theme.node.panel }}
-                        disabled={busy || integrityBlocked}
+                        disabled={busy || integrityBlocked || categoryCatalogStatus !== "ready" || !category}
                         onMouseDown={stopEvent}
                         onPointerDown={stopEvent}
                         onClick={(event) => {
@@ -170,13 +211,60 @@ export function CanvasBatchInfoNode({
     );
 }
 
-function FactSwitch({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
+function NumberField({
+    label,
+    value,
+    minimum,
+    maximum,
+    unit,
+    disabled,
+    onChange,
+}: {
+    label: string;
+    value?: number;
+    minimum: number;
+    maximum: number;
+    unit?: string;
+    disabled: boolean;
+    onChange: (value: number | undefined) => void;
+}) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <label className="flex items-center justify-between gap-3" onMouseDown={stopEvent} onPointerDown={stopEvent}>
-            <span>{label}</span>
-            <Switch size="small" checked={checked} disabled={disabled} onChange={onChange} />
+        <label className="grid min-w-0 gap-1 text-[11px]" style={{ color: theme.node.muted }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
+            <span className="truncate" title={label}>{label}</span>
+            <span className="relative">
+                <input
+                    type="number"
+                    min={minimum}
+                    max={maximum}
+                    step={1}
+                    className="h-9 w-full cursor-text rounded-lg border bg-transparent px-2.5 pr-7 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{ borderColor: theme.node.stroke, color: theme.node.text, background: theme.node.panel }}
+                    value={value ?? ""}
+                    disabled={disabled}
+                    placeholder={`${minimum}–${maximum}`}
+                    onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))}
+                />
+                {unit ? <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: theme.node.muted }}>{unit}</span> : null}
+            </span>
         </label>
     );
+}
+
+function dimensionStateKey(key: CanvasBatchDimensionKey): "productLengthCm" | "productWidthCm" | "productHeightCm" {
+    if (key === "length_cm") return "productLengthCm";
+    if (key === "width_cm") return "productWidthCm";
+    return "productHeightCm";
+}
+
+function dimensionValue(state: CanvasBatchIntakeMetadata, key: CanvasBatchDimensionKey) {
+    return state[dimensionStateKey(key)];
+}
+
+function advancedValue(state: CanvasBatchIntakeMetadata, field: CanvasBatchCategoryMetadata["form"]["advanced_options"][number]["field"]) {
+    if (field === "allow_clear_water") return Boolean(state.allowClearWater);
+    if (field === "forbid_pouring_and_heating") return Boolean(state.prohibitPouringAndHeating);
+    return Boolean(state.skipMissingDAngle);
 }
 
 function SummaryCell({ label, value }: { label: string; value: string }) {
