@@ -15,6 +15,7 @@ import {
     buildBatchUploadUrl,
     createBatchSourceFile,
     categoryDefaultPatch,
+    categorySwitchPatch,
     expireBatchIntakeState,
     fetchBatchCategoryCatalog,
     readBatchIntakeState,
@@ -44,7 +45,8 @@ const CUP: CanvasBatchCategoryMetadata = {
     product_noun: "杯子",
     form: {
         dimensions: { required: ["height_cm"], fields: DIMENSION_FIELDS },
-        handheld: { main: { default: 2, minimum: 0, maximum: 6 }, detail: { default: 1, minimum: 0, maximum: 8 } },
+        image_counts: { main: { default: 6, minimum: 1, maximum: 30 }, detail: { default: 8, minimum: 1, maximum: 30 } },
+        handheld: { main: { default: 2, minimum: 0 }, detail: { default: 1, minimum: 0 } },
         advanced_options: ADVANCED_OPTIONS,
     },
 };
@@ -113,7 +115,7 @@ describe("canvas batch intake", () => {
         expect(CanvasNodeType.BatchInfo).toBe("batch-info");
     });
 
-    test("keeps category-driven dimensions, hand counts, and fixed 6+8 through UTF-8 JSON persistence", () => {
+    test("keeps category-driven dimensions, image counts, and hand counts through UTF-8 JSON persistence", () => {
         const serialized = JSON.stringify(batchInfo("card", { productLengthCm: 12, productWidthCm: 10, handheldMainCount: 6, handheldDetailCount: 8 }).metadata);
         const state = readBatchIntakeState(JSON.parse(serialized));
         expect(state).toMatchObject({
@@ -135,20 +137,76 @@ describe("canvas batch intake", () => {
         expect(new TextDecoder().decode(new TextEncoder().encode(serialized))).toBe(serialized);
     });
 
-    test("uses recipe dimension requirements and accepts hand-count boundaries without changing fixed 6+8", () => {
+    test("uses recipe count boundaries and enforces each dynamic hand-count ceiling", () => {
         expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { productHeightCm: 0 }).metadata), CUP, CATALOG.contractHash)).toEqual({ ok: false, message: "高必须填写 1–9999 的整数厘米。" });
         expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { productHeightCm: 25.5 }).metadata), CUP, CATALOG.contractHash)).toEqual({ ok: false, message: "高必须填写 1–9999 的整数厘米。" });
         expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { handheldMainCount: 0, handheldDetailCount: 0 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({
             ok: true,
             facts: { handheld_main: 0, handheld_detail: 0 },
         });
-        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { handheldMainCount: 6, handheldDetailCount: 8 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
-        for (const patch of [{ handheldMainCount: -1 }, { handheldMainCount: 7 }, { handheldDetailCount: 9 }, { handheldDetailCount: 1.5 }]) {
+        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { mainImageCount: 1, detailImageCount: 1, handheldMainCount: 1, handheldDetailCount: 1 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
+        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { mainImageCount: 30, detailImageCount: 30, handheldMainCount: 30, handheldDetailCount: 30 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
+        for (const patch of [{ mainImageCount: 0 }, { mainImageCount: 31 }, { mainImageCount: -1 }, { mainImageCount: 1.5 }, { mainImageCount: "6" }, { detailImageCount: 0 }, { detailImageCount: 31 }]) {
             expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", patch).metadata), CUP, CATALOG.contractHash).ok).toBe(false);
         }
+        for (const patch of [{ handheldMainCount: -1 }, { mainImageCount: 6, handheldMainCount: 7 }, { detailImageCount: 8, handheldDetailCount: 9 }, { handheldDetailCount: 1.5 }]) {
+            expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", patch).metadata), CUP, CATALOG.contractHash).ok).toBe(false);
+        }
+        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { mainImageCount: 3, handheldMainCount: 4 }).metadata), CUP, CATALOG.contractHash)).toEqual({ ok: false, message: "主图手持必须填写 0–3 的整数。" });
         const plateState = readBatchIntakeState(batchInfo("plate", { ...categoryDefaultPatch(PLATE, CATALOG.contractHash), productHeightCm: 4 }).metadata);
         expect(validateBatchIntakeFacts(plateState, PLATE, CATALOG.contractHash)).toEqual({ ok: false, message: "长必须填写 1–9999 的整数厘米。" });
         expect(validateBatchIntakeFacts({ ...plateState, productLengthCm: 30, productWidthCm: 28 }, PLATE, CATALOG.contractHash)).toMatchObject({ ok: true });
+    });
+
+    test("keeps entered dimensions across category switches and revalidates the new required set", () => {
+        const changedPlate: CanvasBatchCategoryMetadata = {
+            ...PLATE,
+            form: {
+                ...PLATE.form,
+                image_counts: { main: { default: 3, minimum: 1, maximum: 30 }, detail: { default: 2, minimum: 1, maximum: 30 } },
+                handheld: { main: { default: 3, minimum: 0 }, detail: { default: 2, minimum: 0 } },
+                advanced_options: PLATE.form.advanced_options.map((option) => option.field === "allow_clear_water" ? { ...option, default: true } : option),
+            },
+        };
+        const cupState = readBatchIntakeState(batchInfo("cup", {
+            mainImageCount: 9,
+            detailImageCount: 7,
+            handheldMainCount: 5,
+            handheldDetailCount: 4,
+            allowClearWater: false,
+        }).metadata);
+        const switchedToPlate = { ...cupState, ...categorySwitchPatch(cupState, changedPlate, CATALOG.contractHash) };
+        expect(switchedToPlate).toMatchObject({
+            category: "盘子",
+            productLengthCm: undefined,
+            productWidthCm: undefined,
+            productHeightCm: 25,
+            mainImageCount: 3,
+            detailImageCount: 2,
+            handheldMainCount: 3,
+            handheldDetailCount: 2,
+            allowClearWater: true,
+        });
+        expect(validateBatchIntakeFacts(switchedToPlate, changedPlate, CATALOG.contractHash)).toEqual({
+            ok: false,
+            message: "长必须填写 1–9999 的整数厘米。",
+        });
+
+        const plateState = readBatchIntakeState(batchInfo("plate", {
+            ...categoryDefaultPatch(PLATE, CATALOG.contractHash),
+            productLengthCm: 30,
+            productWidthCm: 28,
+            productHeightCm: 4,
+        }).metadata);
+        const switchedToCup = { ...plateState, ...categorySwitchPatch(plateState, CUP, CATALOG.contractHash) };
+        expect(switchedToCup).toMatchObject({
+            category: "杯类",
+            productLengthCm: 30,
+            productWidthCm: 28,
+            productHeightCm: 4,
+        });
+        expect(validateBatchIntakeFacts(switchedToCup, CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
+        expect(validateBatchIntakeFacts({ ...switchedToCup, productLengthCm: undefined, productWidthCm: undefined }, CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
     });
 
     test("loads the authenticated category catalog and rejects unavailable or mismatched contracts", async () => {
@@ -175,7 +233,8 @@ describe("canvas batch intake", () => {
             ...PLATE,
             form: {
                 ...PLATE.form,
-                handheld: { main: { default: 5, minimum: 0, maximum: 6 }, detail: { default: 7, minimum: 0, maximum: 8 } },
+                image_counts: { main: { default: 3, minimum: 1, maximum: 30 }, detail: { default: 2, minimum: 1, maximum: 30 } },
+                handheld: { main: { default: 3, minimum: 0 }, detail: { default: 2, minimum: 0 } },
                 advanced_options: PLATE.form.advanced_options.map((option) => option.field === "allow_clear_water" ? { ...option, default: true, label: "端点更新后的文案" } : option),
             },
         };
@@ -185,16 +244,20 @@ describe("canvas batch intake", () => {
         expect(command.state).toMatchObject({
             category: "盘子",
             contractHash: BATCH_INTAKE_CONTRACT_SHA256,
-            handheldMainCount: 5,
-            handheldDetailCount: 7,
+            handheldMainCount: 3,
+            handheldDetailCount: 2,
+            mainImageCount: 3,
+            detailImageCount: 2,
             allowClearWater: true,
             facts: {
                 product_type: "盘子",
                 length_cm: 30,
                 width_cm: 28,
                 height_cm: 4,
-                handheld_main: 5,
-                handheld_detail: 7,
+                main_image_count: 3,
+                detail_image_count: 2,
+                handheld_main: 3,
+                handheld_detail: 2,
                 allow_clear_water: true,
             },
         });
@@ -203,7 +266,7 @@ describe("canvas batch intake", () => {
     test("renders a category dropdown, dynamic hand summary, collapsed advanced options, and fail-closed metadata state", () => {
         const readyHtml = renderToStaticMarkup(
             createElement(CanvasBatchInfoNode, {
-                node: batchInfo("card", { handheldMainCount: 6, handheldDetailCount: 8 }),
+                node: batchInfo("card", { mainImageCount: 3, detailImageCount: 2, handheldMainCount: 3, handheldDetailCount: 2 }),
                 connectedOriginalCount: 1,
                 connectedStyleReferenceCount: 0,
                 connectedOriginalFileNames: ["cup.png"],
@@ -218,10 +281,29 @@ describe("canvas batch intake", () => {
         expect(readyHtml).toContain("<select");
         expect(readyHtml).toContain("杯类");
         expect(readyHtml).toContain("盘子");
-        expect(readyHtml).toContain("手持：主 6 + 详情 8");
+        expect(readyHtml).toContain('aria-label="主图张数"');
+        expect(readyHtml).toContain('aria-label="详情张数"');
+        expect(readyHtml).toContain("共 5 张");
+        expect(readyHtml).toContain("手持：主 3 + 详情 2");
         expect(readyHtml).toContain("高级选项");
         expect(readyHtml).toContain("已按【杯类】默认设置");
         expect(readyHtml).not.toContain(ADVANCED_OPTIONS[0]!.description);
+        const loweredCountHtml = renderToStaticMarkup(
+            createElement(CanvasBatchInfoNode, {
+                node: batchInfo("card", { mainImageCount: 3, handheldMainCount: 4 }),
+                connectedOriginalCount: 1,
+                connectedStyleReferenceCount: 0,
+                connectedOriginalFileNames: ["cup.png"],
+                connectedStyleReferenceFileNames: [],
+                categoryCatalog: CATALOG,
+                categoryCatalogStatus: "ready",
+                onChange: () => undefined,
+                onRegister: () => undefined,
+                onSupplementStyle: () => undefined,
+            }),
+        );
+        expect(loweredCountHtml).toContain('max="3"');
+        expect(loweredCountHtml).toContain("主图手持不能超过本批 3 张；请先把主图手持改小。");
 
         const failedHtml = renderToStaticMarkup(
             createElement(CanvasBatchInfoNode, {
@@ -330,6 +412,8 @@ describe("canvas batch intake", () => {
                 length_cm: null,
                 width_cm: null,
                 height_cm: 25,
+                main_image_count: 6,
+                detail_image_count: 8,
                 handheld_main: 2,
                 handheld_detail: 1,
                 allow_clear_water: false,
@@ -337,7 +421,7 @@ describe("canvas batch intake", () => {
                 missing_d_no_retake: true,
             },
         });
-        expect(Object.keys(command.state.facts)).toEqual(["product_type", "length_cm", "width_cm", "height_cm", "handheld_main", "handheld_detail", "allow_clear_water", "forbid_pouring_and_heating", "missing_d_no_retake"]);
+        expect(Object.keys(command.state.facts)).toEqual(["product_type", "length_cm", "width_cm", "height_cm", "main_image_count", "detail_image_count", "handheld_main", "handheld_detail", "allow_clear_water", "forbid_pouring_and_heating", "missing_d_no_retake"]);
         expect(command.content).not.toContain("run: renders");
         expect(command.content).not.toContain("retry: renders");
     });

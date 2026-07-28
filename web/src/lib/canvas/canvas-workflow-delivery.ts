@@ -1,15 +1,14 @@
 import { CanvasNodeType, type CanvasNodeData, type CanvasWorkflowQcBadgeMetadata, type CanvasWorkflowRepairedProjectionMetadata } from "@/types/canvas";
+import { readExpectedImageSet, readProductionState, WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "@/lib/canvas/canvas-workflow-production";
 
 const PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
-const CONFIG_IDS = new Set([
-    ...Array.from({ length: 6 }, (_, index) => `main_${String(index + 1).padStart(2, "0")}`),
-    ...Array.from({ length: 8 }, (_, index) => `detail_${String(index + 1).padStart(2, "0")}`),
-]);
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 export type WorkflowQcSummary = {
     ok: true;
     batchId: string;
+    totalCount: number;
+    expectedConfigIds: string[];
     reportSha256: string;
     images: Array<{ configId: string; status: "pass" | "fail" | "needs_review"; issueCount: number; topCategories: string[] }>;
 };
@@ -31,7 +30,7 @@ export async function fetchWorkflowQcSummary(batchId: string, token: string, fet
     if (response.status === 404) return null;
     if (!response.ok) throw new Error("qc summary unavailable");
     const payload: unknown = await response.json();
-    if (!validQcSummary(payload, batchId)) throw new Error("qc summary invalid");
+    if (!validQcSummary(payload, batchId)) throw new Error(qcCountError(payload) ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : "qc summary invalid");
     return payload;
 }
 
@@ -78,21 +77,29 @@ export function buildRepairedProjectionRequest(batchId: string, requestId: strin
 }
 
 export function repairedProjectionCanStart(node: CanvasNodeData) {
-    return node.type === CanvasNodeType.Workflow && node.metadata?.workflowProduction?.status === "completed" && node.metadata?.workflowRepairedProjection?.status !== "queued" && node.metadata?.workflowRepairedProjection?.status !== "running";
+    return node.type === CanvasNodeType.Workflow && readProductionState(node.metadata).status === "completed" && node.metadata?.workflowRepairedProjection?.status !== "queued" && node.metadata?.workflowRepairedProjection?.status !== "running";
 }
 
 function validQcSummary(payload: unknown, batchId: string): payload is WorkflowQcSummary {
     if (!payload || typeof payload !== "object") return false;
     const value = payload as Partial<WorkflowQcSummary>;
-    if (value.ok !== true || value.batchId !== batchId || !SHA256_PATTERN.test(value.reportSha256 || "") || !Array.isArray(value.images) || value.images.length !== 14) return false;
+    const countInfo = readExpectedImageSet(value.totalCount, value.expectedConfigIds);
+    if (value.ok !== true || value.batchId !== batchId || !countInfo || !SHA256_PATTERN.test(value.reportSha256 || "") || !Array.isArray(value.images) || value.images.length !== countInfo.totalCount) return false;
+    const configIds = new Set(countInfo.expectedConfigIds);
     const seen = new Set<string>();
     for (const image of value.images) {
-        if (!image || typeof image !== "object" || !CONFIG_IDS.has(image.configId) || seen.has(image.configId)) return false;
+        if (!image || typeof image !== "object" || !configIds.has(image.configId) || seen.has(image.configId)) return false;
         if (!["pass", "fail", "needs_review"].includes(image.status) || !Number.isInteger(image.issueCount) || image.issueCount < 0 || !Array.isArray(image.topCategories) || image.topCategories.length > 3 || image.topCategories.some((item) => typeof item !== "string")) return false;
         if ((image.status === "fail") !== (image.issueCount > 0)) return false;
         seen.add(image.configId);
     }
-    return seen.size === 14;
+    return seen.size === countInfo.totalCount;
+}
+
+function qcCountError(payload: unknown) {
+    if (!payload || typeof payload !== "object") return false;
+    const value = payload as Partial<WorkflowQcSummary>;
+    return value.ok === true && !readExpectedImageSet(value.totalCount, value.expectedConfigIds);
 }
 
 function qcBadgeMatches(current: CanvasWorkflowQcBadgeMetadata | undefined, next: WorkflowQcSummary["images"][number]) {

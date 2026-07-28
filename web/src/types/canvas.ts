@@ -40,7 +40,8 @@ export type CanvasWorkflowProductionStatus = "idle" | "queued" | "running" | "pa
 export type CanvasWorkflowProductionMetadata = {
     status: CanvasWorkflowProductionStatus;
     producedCount: number;
-    totalCount: 14;
+    totalCount?: number;
+    expectedConfigIds?: string[];
     requestId?: string;
     batchId?: string;
     requestedAt?: number;
@@ -86,6 +87,8 @@ export type CanvasWorkflowReceivingBoxMetadata = {
     batchId: string;
     workflowNodeId: string;
     selectionCount: number;
+    totalCount?: number;
+    expectedConfigIds?: string[];
     message?: string;
     closedAt?: string;
 };
@@ -102,6 +105,8 @@ export type CanvasBatchIntakeFacts = {
     length_cm: number | null;
     width_cm: number | null;
     height_cm: number;
+    main_image_count: number;
+    detail_image_count: number;
     handheld_main: number;
     handheld_detail: number;
     allow_clear_water: boolean;
@@ -125,9 +130,13 @@ export type CanvasBatchCategoryMetadata = {
                 maximum: number;
             }>;
         };
-        handheld: {
+        image_counts: {
             main: { default: number; minimum: number; maximum: number };
             detail: { default: number; minimum: number; maximum: number };
+        };
+        handheld: {
+            main: { default: number; minimum: number };
+            detail: { default: number; minimum: number };
         };
         advanced_options: Array<{
             field: CanvasBatchAdvancedOptionKey;
@@ -157,8 +166,8 @@ export type CanvasBatchIntakeMetadata = {
     allowClearWater?: boolean;
     prohibitPouringAndHeating?: boolean;
     skipMissingDAngle?: boolean;
-    mainImageCount: 6;
-    detailImageCount: 8;
+    mainImageCount?: number;
+    detailImageCount?: number;
     handheldMainCount?: number;
     handheldDetailCount?: number;
     facts?: CanvasBatchIntakeFacts;

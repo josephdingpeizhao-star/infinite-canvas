@@ -8,9 +8,11 @@ import {
     expireProductionState,
     fetchProductionQuote,
     isProductionStartBlocked,
+    readExpectedImageSet,
     readProductionState,
     reserveProductionSubmission,
     resolveProductionSelection,
+    WORKFLOW_COUNT_DATA_MISSING_MESSAGE,
 } from "../src/lib/canvas/canvas-workflow-production";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
@@ -45,7 +47,23 @@ function card(status = "completed"): CanvasNodeData {
                 detailImageCount: 8,
                 handheldMainCount: 2,
                 handheldDetailCount: 1,
-                receipt: { batchId: "杯子_20260719", imageCount: 2, facts: {} },
+                receipt: {
+                    batchId: "杯子_20260719",
+                    imageCount: 2,
+                    facts: {
+                        product_type: "杯子",
+                        length_cm: null,
+                        width_cm: null,
+                        height_cm: 25,
+                        main_image_count: 6,
+                        detail_image_count: 8,
+                        handheld_main: 2,
+                        handheld_detail: 1,
+                        allow_clear_water: true,
+                        forbid_pouring_and_heating: true,
+                        missing_d_no_retake: true,
+                    },
+                },
             },
         },
     } as CanvasNodeData;
@@ -64,6 +82,17 @@ function image(): CanvasNodeData {
 }
 
 const connection = (id: string, fromNodeId: string, toNodeId: string): CanvasConnection => ({ id, fromNodeId, toNodeId });
+const configIds = (mainCount: number, detailCount: number) => [
+    ...Array.from({ length: mainCount }, (_, index) => `main_${String(index + 1).padStart(2, "0")}`),
+    ...Array.from({ length: detailCount }, (_, index) => `detail_${String(index + 1).padStart(2, "0")}`),
+];
+const productionMetadata = (status: "queued" | "running" | "paused" | "completed" | "failed", producedCount: number, mainCount = 6, detailCount = 8) => ({
+    status,
+    producedCount,
+    totalCount: mainCount + detailCount,
+    expectedConfigIds: configIds(mainCount, detailCount),
+    batchId: "cup",
+});
 
 describe("canvas workflow production", () => {
     test("uses demo mode only when no information card is connected", () => {
@@ -107,7 +136,7 @@ describe("canvas workflow production", () => {
         const calls: Array<{ url: string; init?: RequestInit }> = [];
         const quote = await fetchProductionQuote("杯子_20260719", "canvas-token", async (input, init) => {
             calls.push({ url: String(input), init });
-            return new Response(JSON.stringify({ ok: true, batchId: "杯子_20260719", totalCount: 14, readyCount: 0, remainingCount: 14, estimatedUnitUsd: 0.06, estimatedTotalUsd: 0.84, estimatedMinutes: 55 }), { status: 200 });
+            return new Response(JSON.stringify({ ok: true, batchId: "杯子_20260719", totalCount: 14, expectedConfigIds: configIds(6, 8), readyCount: 0, remainingCount: 14, estimatedUnitUsd: 0.06, estimatedTotalUsd: 0.84, estimatedMinutes: 55 }), { status: 200 });
         });
         expect(quote).toMatchObject({ remainingCount: 14, estimatedTotalUsd: 0.84 });
         expect(calls[0]?.url).toBe("http://127.0.0.1:17373/workflow-production/%E6%9D%AF%E5%AD%90_20260719/quote");
@@ -117,11 +146,11 @@ describe("canvas workflow production", () => {
     });
 
     test("writes only existing run-controller syntax after fee confirmation", () => {
-        const first = buildProductionCommand(readProductionState(undefined), "cup", "request-001", 1_000);
+        const first = buildProductionCommand(readProductionState({ workflowProduction: productionMetadata("failed", 0, 3, 2) }), "cup", "request-001", 1_000);
         expect(first.content).toContain("run: next");
         expect(first.content).not.toContain("run: renders");
         expect(first.state).toMatchObject({ status: "queued", batchId: "cup", requestId: "request-001", producedCount: 0 });
-        const partial = readProductionState({ workflowProduction: { status: "paused", producedCount: 1, batchId: "cup" } });
+        const partial = readProductionState({ workflowProduction: productionMetadata("paused", 1, 3, 2) });
         expect(buildProductionCommand(partial, "cup", "request-002", 2_000).content).toContain("retry: renders");
     });
 
@@ -136,27 +165,27 @@ describe("canvas workflow production", () => {
     });
 
     test("completed continuation is eligible and emits exactly run next while retries stay unchanged", () => {
-        const completed = readProductionState({ workflowProduction: { status: "completed", producedCount: 14, batchId: "cup" } });
+        const completed = readProductionState({ workflowProduction: productionMetadata("completed", 14) });
         expect(isProductionStartBlocked(completed)).toBe(false);
         const completedCommand = buildProductionCommand(completed, "cup", "request-completed", 3_000);
         expect(completedCommand.content.split("\n").at(-1)).toBe("run: next");
         expect(completedCommand.content).not.toContain("retry: renders");
 
-        const paused = readProductionState({ workflowProduction: { status: "paused", producedCount: 14, batchId: "cup" } });
+        const paused = readProductionState({ workflowProduction: productionMetadata("paused", 14) });
         expect(buildProductionCommand(paused, "cup", "request-paused", 4_000).content.split("\n").at(-1)).toBe("retry: renders");
-        const failed = readProductionState({ workflowProduction: { status: "failed", producedCount: 5, batchId: "cup" } });
+        const failed = readProductionState({ workflowProduction: productionMetadata("failed", 5) });
         expect(buildProductionCommand(failed, "cup", "request-failed", 5_000).content.split("\n").at(-1)).toBe("retry: renders");
     });
 
     test("completed copy prefers the backend message and otherwise stays route neutral", () => {
-        expect(completedProductionStatusText("质检完成，QC 报告已生成。")).toBe("质检完成，QC 报告已生成。");
-        expect(completedProductionStatusText()).toBe("14 张真实图片已上桌。点击继续后，机器会按当前批次状态处理下一步。");
-        expect(completedProductionStatusText()).not.toContain("停在质检前");
+        expect(completedProductionStatusText("质检完成，QC 报告已生成。", 5)).toBe("质检完成，QC 报告已生成。");
+        expect(completedProductionStatusText(undefined, 5)).toBe("5 张真实图片已上桌。点击继续后，机器会按当前批次状态处理下一步。");
+        expect(completedProductionStatusText(undefined, 5)).not.toContain("停在质检前");
         expect(COMPLETED_PRODUCTION_ACTION_LABEL).toBe("继续/质检");
     });
 
     test("completed continuation keeps one submission per machine and batch", () => {
-        const completed = readProductionState({ workflowProduction: { status: "completed", producedCount: 14, batchId: "cup" } });
+        const completed = readProductionState({ workflowProduction: productionMetadata("completed", 14) });
         if (isProductionStartBlocked(completed)) throw new Error("completed must remain eligible for the guarded submission path");
         const submissions = new Set<string>();
         expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(true);
@@ -165,11 +194,29 @@ describe("canvas workflow production", () => {
     });
 
     test("expires only an unacknowledged command and preserves finished images", () => {
-        const queued = buildProductionCommand(readProductionState(undefined), "cup", "request-001", 1_000).state;
+        const queued = buildProductionCommand(readProductionState({ workflowProduction: productionMetadata("failed", 0, 3, 2) }), "cup", "request-001", 1_000).state;
         expect(expireProductionState(queued, 8_999)).toEqual(queued);
         expect(expireProductionState(queued, 9_000)).toMatchObject({ status: "failed", producedCount: 0 });
-        const running = readProductionState({ workflowProduction: { status: "running", producedCount: 5, batchId: "cup", updatedAt: 1_000 } });
+        const running = readProductionState({ workflowProduction: { ...productionMetadata("running", 5, 3, 2), updatedAt: 1_000 } });
         expect(expireProductionState(running, 720_999)).toEqual(running);
         expect(expireProductionState(running, 721_000)).toMatchObject({ status: "failed", producedCount: 5 });
+    });
+
+    test("fails closed when a real production response omits the batch count facts", async () => {
+        const missing = readProductionState({ workflowProduction: { status: "running", producedCount: 1, batchId: "cup" } });
+        expect(missing).toMatchObject({ status: "failed", errorMessage: WORKFLOW_COUNT_DATA_MISSING_MESSAGE });
+        await expect(
+            fetchProductionQuote("cup", "token", async () =>
+                new Response(JSON.stringify({ ok: true, batchId: "cup", totalCount: 5, readyCount: 0, remainingCount: 5, estimatedUnitUsd: 0.06, estimatedTotalUsd: 0.3, estimatedMinutes: 39 }), { status: 200 }),
+            ),
+        ).rejects.toThrow(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
+    });
+
+    test("accepts only ordered batch-defined identifiers from 1+1 through 30+30", () => {
+        expect(readExpectedImageSet(2, configIds(1, 1))).toMatchObject({ mainCount: 1, detailCount: 1, totalCount: 2 });
+        expect(readExpectedImageSet(60, configIds(30, 30))).toMatchObject({ mainCount: 30, detailCount: 30, totalCount: 60 });
+        expect(readExpectedImageSet(5, ["main_01", "main_03", "main_02", "detail_01", "detail_02"])).toBeUndefined();
+        expect(readExpectedImageSet(5, ["main_01", "main_02", "main_03", "detail_01", "detail_01"])).toBeUndefined();
+        expect(readExpectedImageSet(1, ["main_01"])).toBeUndefined();
     });
 });

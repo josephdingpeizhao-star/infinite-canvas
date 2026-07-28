@@ -3,7 +3,7 @@ import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck } f
 
 import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, BATCH_INTAKE_DETAIL_COUNT, BATCH_INTAKE_MAIN_COUNT, BATCH_INTAKE_TOTAL, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
 import { batchRegistrationButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -11,7 +11,7 @@ import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBat
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
-    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
 >;
 
 export function CanvasBatchInfoNode({
@@ -50,6 +50,11 @@ export function CanvasBatchInfoNode({
     const styleState = readStyleReferenceState(node.metadata);
     const styleBusy = styleState.status === "queued" || styleState.status === "upload_ready" || styleState.status === "uploading";
     const styleBlocked = styleState.status === "integrity_blocked";
+    const countError = category ? imageCountError(state, category) : undefined;
+    const totalCount =
+        category && validImageCount(state.mainImageCount, category.form.image_counts.main) && validImageCount(state.detailImageCount, category.form.image_counts.detail)
+            ? state.mainImageCount + state.detailImageCount
+            : undefined;
 
     return (
         <div className="flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto p-4" style={{ color: theme.node.text }}>
@@ -77,7 +82,7 @@ export function CanvasBatchInfoNode({
                     {category ? category.form.dimensions.fields.filter((field) => dimensionValue(state, field.key) !== undefined).map((field) => (
                         <ReceiptRow key={field.key} label={field.label} value={`${dimensionValue(state, field.key)} ${field.unit}`} />
                     )) : null}
-                    <ReceiptRow label="固定张数" value="主图 6 + 详情 8" />
+                    <ReceiptRow label="本批张数" value={`主图 ${state.mainImageCount ?? "—"} + 详情 ${state.detailImageCount ?? "—"}`} />
                     <ReceiptRow label="手持数量" value={`主图 ${state.handheldMainCount ?? "—"} + 详情 ${state.handheldDetailCount ?? "—"}`} />
                     {category ? category.form.advanced_options.map((option) => (
                         <ReceiptRow key={option.field} label={option.label} value={advancedValue(state, option.field) ? "开" : "关"} />
@@ -104,8 +109,22 @@ export function CanvasBatchInfoNode({
                 <>
                     <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                         <SummaryCell label="已连原图" value={`${connectedOriginalCount} 张`} />
-                        <SummaryCell label="主图" value={`${BATCH_INTAKE_MAIN_COUNT} 张`} />
-                        <SummaryCell label="详情" value={`${BATCH_INTAKE_DETAIL_COUNT} 张`} />
+                        <ImageCountField
+                            label="主图"
+                            value={state.mainImageCount}
+                            minimum={category?.form.image_counts.main.minimum}
+                            maximum={category?.form.image_counts.main.maximum}
+                            disabled={!editable || !category}
+                            onChange={(mainImageCount) => onChange(node.id, { mainImageCount })}
+                        />
+                        <ImageCountField
+                            label="详情"
+                            value={state.detailImageCount}
+                            minimum={category?.form.image_counts.detail.minimum}
+                            maximum={category?.form.image_counts.detail.maximum}
+                            disabled={!editable || !category}
+                            onChange={(detailImageCount) => onChange(node.id, { detailImageCount })}
+                        />
                     </div>
 
                     <div className="grid gap-2">
@@ -147,7 +166,7 @@ export function CanvasBatchInfoNode({
                                     label="主图手持"
                                     value={state.handheldMainCount}
                                     minimum={category.form.handheld.main.minimum}
-                                    maximum={category.form.handheld.main.maximum}
+                                    maximum={validImageCount(state.mainImageCount, category.form.image_counts.main) ? state.mainImageCount : category.form.image_counts.main.maximum}
                                     disabled={!editable}
                                     onChange={(handheldMainCount) => onChange(node.id, { handheldMainCount })}
                                 />
@@ -155,7 +174,7 @@ export function CanvasBatchInfoNode({
                                     label="详情图手持"
                                     value={state.handheldDetailCount}
                                     minimum={category.form.handheld.detail.minimum}
-                                    maximum={category.form.handheld.detail.maximum}
+                                    maximum={validImageCount(state.detailImageCount, category.form.image_counts.detail) ? state.detailImageCount : category.form.image_counts.detail.maximum}
                                     disabled={!editable}
                                     onChange={(handheldDetailCount) => onChange(node.id, { handheldDetailCount })}
                                 />
@@ -172,7 +191,7 @@ export function CanvasBatchInfoNode({
                     ) : null}
 
                     <div className="flex items-center justify-between rounded-xl border px-3 py-2 text-[11px]" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
-                        <span>共 {BATCH_INTAKE_TOTAL} 张</span>
+                        <span>共 {totalCount ?? "—"} 张</span>
                         <span>
                             手持：主 {state.handheldMainCount ?? "—"} + 详情 {state.handheldDetailCount ?? "—"}
                         </span>
@@ -184,7 +203,7 @@ export function CanvasBatchInfoNode({
                 className="min-h-11 rounded-xl border px-3 py-2 text-[11px] leading-5"
                 style={{ borderColor: integrityBlocked ? "#ef4444" : theme.node.stroke, background: theme.node.panel, color: state.status === "failed" || integrityBlocked ? "#f87171" : theme.node.muted }}
             >
-                {categoryCatalogStatus === "loading" && !completed ? "正在读取已安装的产品品类…" : categoryCatalogStatus === "error" && !completed ? BATCH_CATEGORY_UNAVAILABLE_MESSAGE : statusText(state, connectedOriginalCount)}
+                {categoryCatalogStatus === "loading" && !completed ? "正在读取已安装的产品品类…" : categoryCatalogStatus === "error" && !completed ? BATCH_CATEGORY_UNAVAILABLE_MESSAGE : countError || statusText(state, connectedOriginalCount)}
             </div>
 
             {!completed ? (
@@ -251,6 +270,45 @@ function NumberField({
     );
 }
 
+function ImageCountField({
+    label,
+    value,
+    minimum,
+    maximum,
+    disabled,
+    onChange,
+}: {
+    label: string;
+    value?: number;
+    minimum?: number;
+    maximum?: number;
+    disabled: boolean;
+    onChange: (value: number | undefined) => void;
+}) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    return (
+        <label className="grid gap-1 rounded-xl border px-2 py-2" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
+            <span>{label}</span>
+            <span className="relative">
+                <input
+                    aria-label={`${label}张数`}
+                    type="number"
+                    min={minimum}
+                    max={maximum}
+                    step={1}
+                    className="h-6 w-full cursor-text rounded-md border bg-transparent px-1.5 pr-5 text-center text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{ borderColor: theme.node.stroke, color: theme.node.text }}
+                    value={value ?? ""}
+                    disabled={disabled}
+                    placeholder={minimum !== undefined && maximum !== undefined ? `${minimum}–${maximum}` : "—"}
+                    onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))}
+                />
+                <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px]">张</span>
+            </span>
+        </label>
+    );
+}
+
 function dimensionStateKey(key: CanvasBatchDimensionKey): "productLengthCm" | "productWidthCm" | "productHeightCm" {
     if (key === "length_cm") return "productLengthCm";
     if (key === "width_cm") return "productWidthCm";
@@ -259,6 +317,22 @@ function dimensionStateKey(key: CanvasBatchDimensionKey): "productLengthCm" | "p
 
 function dimensionValue(state: CanvasBatchIntakeMetadata, key: CanvasBatchDimensionKey) {
     return state[dimensionStateKey(key)];
+}
+
+function imageCountError(state: CanvasBatchIntakeMetadata, category: CanvasBatchCategoryMetadata) {
+    for (const [label, value, bounds] of [
+        ["主图张数", state.mainImageCount, category.form.image_counts.main],
+        ["详情图张数", state.detailImageCount, category.form.image_counts.detail],
+    ] as const) {
+        if (!Number.isInteger(value) || value! < bounds.minimum || value! > bounds.maximum) return `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。`;
+    }
+    if (Number.isInteger(state.handheldMainCount) && state.handheldMainCount! > state.mainImageCount!) return `主图手持不能超过本批 ${state.mainImageCount} 张；请先把主图手持改小。`;
+    if (Number.isInteger(state.handheldDetailCount) && state.handheldDetailCount! > state.detailImageCount!) return `详情图手持不能超过本批 ${state.detailImageCount} 张；请先把详情图手持改小。`;
+    return undefined;
+}
+
+function validImageCount(value: number | undefined, bounds: { minimum: number; maximum: number }): value is number {
+    return Number.isInteger(value) && value! >= bounds.minimum && value! <= bounds.maximum;
 }
 
 function advancedValue(state: CanvasBatchIntakeMetadata, field: CanvasBatchCategoryMetadata["form"]["advanced_options"][number]["field"]) {

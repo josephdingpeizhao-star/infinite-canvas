@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, BatchIntakeIntegrityError, buildBatchIntakeCommand, categoryDefaultPatch, expireBatchIntakeState, fetchBatchCategoryCatalog, readBatchIntakeState, resolveBatchIntakeSelection, uploadBatchSourceImages, validateBatchIntakeFacts } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, BatchIntakeIntegrityError, buildBatchIntakeCommand, categoryDefaultPatch, categorySwitchPatch, expireBatchIntakeState, fetchBatchCategoryCatalog, readBatchIntakeState, resolveBatchIntakeSelection, uploadBatchSourceImages, validateBatchIntakeFacts } from "@/lib/canvas/canvas-batch-intake";
 import { getImageBlob } from "@/services/image-storage";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasBatchCategoryCatalog, type CanvasBatchIntakeMetadata, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
-    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
 >;
 
 type BatchIntakeControllerOptions = {
@@ -63,7 +63,7 @@ export function useCanvasBatchIntake({ nodes, nodesRef, connectionsRef, setNodes
                     const state = readBatchIntakeState(node.metadata);
                     if (state.status !== "draft" && state.status !== "failed") return node;
                     const selected = patch.category ? categoryCatalog?.categories.find((item) => item.key === patch.category) : undefined;
-                    const effectivePatch = selected && categoryCatalog ? categoryDefaultPatch(selected, categoryCatalog.contractHash) : patch;
+                    const effectivePatch = selected && categoryCatalog ? categorySwitchPatch(state, selected, categoryCatalog.contractHash) : patch;
                     return resetDraftNode(node, state, effectivePatch);
                 }),
             );
@@ -254,6 +254,8 @@ function hasCurrentCategoryForm(state: CanvasBatchIntakeMetadata, category: stri
         state.category === category &&
         state.productType === productNoun &&
         state.contractHash === contractHash &&
+        Number.isInteger(state.mainImageCount) &&
+        Number.isInteger(state.detailImageCount) &&
         Number.isInteger(state.handheldMainCount) &&
         Number.isInteger(state.handheldDetailCount) &&
         typeof state.allowClearWater === "boolean" &&

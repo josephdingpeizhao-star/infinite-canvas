@@ -1,10 +1,11 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 
 import { applyQcSummaryToNodes, fetchWorkflowQcSummary, qcSummaryNeedsApplication, type WorkflowQcSummary } from "@/lib/canvas/canvas-workflow-delivery";
+import { WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "@/lib/canvas/canvas-workflow-production";
 import { useAgentStore } from "@/stores/use-agent-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
-export function useCanvasWorkflowQcBadges({ nodes, setNodes }: { nodes: CanvasNodeData[]; setNodes: Dispatch<SetStateAction<CanvasNodeData[]>> }) {
+export function useCanvasWorkflowQcBadges({ nodes, setNodes, warn }: { nodes: CanvasNodeData[]; setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>; warn: (message: string) => void }) {
     const token = useAgentStore((state) => state.token);
     const started = useRef(new Set<string>());
     const cache = useRef(new Map<string, WorkflowQcSummary>());
@@ -30,7 +31,17 @@ export function useCanvasWorkflowQcBadges({ nodes, setNodes }: { nodes: CanvasNo
                     cache.current.set(batchId, summary);
                     setNodes((items) => applyQcSummaryToNodes(items, batchId, summary));
                 })
-                .catch(() => undefined);
+                .catch((error) => {
+                    if (!(error instanceof Error) || error.message !== WORKFLOW_COUNT_DATA_MISSING_MESSAGE) return;
+                    setNodes((items) =>
+                        items.map((node) => {
+                            if (node.metadata?.workflowProductionOutput?.batchId !== batchId || !node.metadata.workflowProductionQc) return node;
+                            const { workflowProductionQc: _removed, ...metadata } = node.metadata;
+                            return { ...node, metadata };
+                        }),
+                    );
+                    warn(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
+                });
         });
-    }, [nodes, setNodes, token]);
+    }, [nodes, setNodes, token, warn]);
 }

@@ -1,13 +1,10 @@
 import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
-export const BATCH_INTAKE_MAIN_COUNT = 6;
-export const BATCH_INTAKE_DETAIL_COUNT = 8;
-export const BATCH_INTAKE_TOTAL = 14;
 export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
 export const BATCH_CATEGORY_ORIGIN = "http://127.0.0.1:17373";
 export const BATCH_CATEGORY_URL = `${BATCH_CATEGORY_ORIGIN}/batch-categories`;
-export const BATCH_INTAKE_CONTRACT_SHA256 = "648ba41f14b093bdbdf873f0005ea96e8fad775893f5ece19f7a8799bc42dd43";
+export const BATCH_INTAKE_CONTRACT_SHA256 = "463e993e54610602f6e6118153d91d727329e3c9c7ccf175db5f894f9997bc82";
 export const BATCH_CATEGORY_UNAVAILABLE_MESSAGE = "产品品类暂时无法读取，请重启工作台并刷新画布后再登记。";
 export const DUPLICATE_PRODUCT_IMAGE_MESSAGE =
     "同一张图被重复加入本次产品原图登记，不能建批。" +
@@ -51,8 +48,8 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
         allowClearWater: typeof value?.allowClearWater === "boolean" ? value.allowClearWater : undefined,
         prohibitPouringAndHeating: typeof value?.prohibitPouringAndHeating === "boolean" ? value.prohibitPouringAndHeating : undefined,
         skipMissingDAngle: typeof value?.skipMissingDAngle === "boolean" ? value.skipMissingDAngle : undefined,
-        mainImageCount: BATCH_INTAKE_MAIN_COUNT,
-        detailImageCount: BATCH_INTAKE_DETAIL_COUNT,
+        mainImageCount: positiveInteger(value?.mainImageCount),
+        detailImageCount: positiveInteger(value?.detailImageCount),
         handheldMainCount: nonnegativeInteger(value?.handheldMainCount),
         handheldDetailCount: nonnegativeInteger(value?.handheldDetailCount),
         facts: value?.facts,
@@ -91,8 +88,16 @@ export function validateBatchIntakeFacts(
         }
     }
     for (const [label, value, bounds] of [
-        ["主图手持", state.handheldMainCount, category.form.handheld.main],
-        ["详情图手持", state.handheldDetailCount, category.form.handheld.detail],
+        ["主图张数", state.mainImageCount, category.form.image_counts.main],
+        ["详情图张数", state.detailImageCount, category.form.image_counts.detail],
+    ] as const) {
+        if (!Number.isInteger(value) || value! < bounds.minimum || value! > bounds.maximum) {
+            return { ok: false, message: `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。` };
+        }
+    }
+    for (const [label, value, bounds] of [
+        ["主图手持", state.handheldMainCount, { minimum: category.form.handheld.main.minimum, maximum: state.mainImageCount! }],
+        ["详情图手持", state.handheldDetailCount, { minimum: category.form.handheld.detail.minimum, maximum: state.detailImageCount! }],
     ] as const) {
         if (!Number.isInteger(value) || value! < bounds.minimum || value! > bounds.maximum) {
             return { ok: false, message: `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。` };
@@ -108,6 +113,8 @@ export function validateBatchIntakeFacts(
             length_cm: dimensions.length_cm ?? null,
             width_cm: dimensions.width_cm ?? null,
             height_cm: dimensions.height_cm!,
+            main_image_count: state.mainImageCount!,
+            detail_image_count: state.detailImageCount!,
             handheld_main: state.handheldMainCount!,
             handheld_detail: state.handheldDetailCount!,
             allow_clear_water: state.allowClearWater!,
@@ -126,11 +133,22 @@ export function categoryDefaultPatch(category: CanvasBatchCategoryMetadata, cont
         productLengthCm: undefined,
         productWidthCm: undefined,
         productHeightCm: undefined,
+        mainImageCount: category.form.image_counts.main.default,
+        detailImageCount: category.form.image_counts.detail.default,
         handheldMainCount: category.form.handheld.main.default,
         handheldDetailCount: category.form.handheld.detail.default,
         allowClearWater: option("allow_clear_water").default,
         prohibitPouringAndHeating: option("forbid_pouring_and_heating").default,
         skipMissingDAngle: option("missing_d_no_retake").default,
+    };
+}
+
+export function categorySwitchPatch(state: CanvasBatchIntakeMetadata, category: CanvasBatchCategoryMetadata, contractHash: string) {
+    return {
+        ...categoryDefaultPatch(category, contractHash),
+        productLengthCm: state.productLengthCm,
+        productWidthCm: state.productWidthCm,
+        productHeightCm: state.productHeightCm,
     };
 }
 
@@ -401,8 +419,10 @@ function validCategory(value: unknown): value is CanvasBatchCategoryMetadata {
         )
     )
         return false;
-    if (!validIntegerBounds(category.form.handheld?.main?.minimum, category.form.handheld?.main?.maximum, category.form.handheld?.main?.default)) return false;
-    if (!validIntegerBounds(category.form.handheld?.detail?.minimum, category.form.handheld?.detail?.maximum, category.form.handheld?.detail?.default)) return false;
+    if (!validIntegerBounds(category.form.image_counts?.main?.minimum, category.form.image_counts?.main?.maximum, category.form.image_counts?.main?.default, 1)) return false;
+    if (!validIntegerBounds(category.form.image_counts?.detail?.minimum, category.form.image_counts?.detail?.maximum, category.form.image_counts?.detail?.default, 1)) return false;
+    if (!validMinimumDefault(category.form.handheld?.main?.minimum, category.form.handheld?.main?.default)) return false;
+    if (!validMinimumDefault(category.form.handheld?.detail?.minimum, category.form.handheld?.detail?.default)) return false;
     const advancedKeys = new Set<CanvasBatchAdvancedOptionKey>(["allow_clear_water", "forbid_pouring_and_heating", "missing_d_no_retake"]);
     const advanced = category.form.advanced_options;
     return (
@@ -413,14 +433,18 @@ function validCategory(value: unknown): value is CanvasBatchCategoryMetadata {
     );
 }
 
-function validIntegerBounds(minimum: unknown, maximum: unknown, defaultValue?: unknown) {
+function validIntegerBounds(minimum: unknown, maximum: unknown, defaultValue?: unknown, floor = 0) {
     return (
         Number.isInteger(minimum) &&
         Number.isInteger(maximum) &&
-        (minimum as number) >= 0 &&
+        (minimum as number) >= floor &&
         (maximum as number) >= (minimum as number) &&
         (defaultValue === undefined || (Number.isInteger(defaultValue) && (defaultValue as number) >= (minimum as number) && (defaultValue as number) <= (maximum as number)))
     );
+}
+
+function validMinimumDefault(minimum: unknown, defaultValue: unknown) {
+    return Number.isInteger(minimum) && (minimum as number) >= 0 && Number.isInteger(defaultValue) && (defaultValue as number) >= (minimum as number);
 }
 
 function uniqueStrings(value: unknown) {
@@ -441,4 +465,8 @@ function finiteTimestamp(value: unknown) {
 
 function nonnegativeInteger(value: unknown) {
     return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function positiveInteger(value: unknown) {
+    return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }

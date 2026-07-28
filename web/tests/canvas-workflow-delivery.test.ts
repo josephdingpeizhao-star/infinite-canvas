@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { applyQcSummaryToNodes, buildQcSummaryUrl, buildRepairedProjectionRequest, fetchWorkflowQcSummary, qcBadgeView, qcSummaryNeedsApplication, repairedProjectionCanStart, type WorkflowQcSummary } from "../src/lib/canvas/canvas-workflow-delivery";
+import { WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "../src/lib/canvas/canvas-workflow-production";
 import { importProductionOutput } from "../src/lib/canvas/canvas-workflow-output-import";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
@@ -9,6 +10,8 @@ const SHA = "a".repeat(64);
 const summary: WorkflowQcSummary = {
     ok: true,
     batchId: "cup",
+    totalCount: CONFIG_IDS.length,
+    expectedConfigIds: CONFIG_IDS,
     reportSha256: "b".repeat(64),
     images: CONFIG_IDS.map((configId) => ({ configId, status: configId === "main_01" ? "fail" : configId === "detail_03" ? "needs_review" : "pass", issueCount: configId === "main_01" ? 2 : 0, topCategories: configId === "main_01" ? ["text"] : [] })),
 };
@@ -45,8 +48,26 @@ describe("workflow delivery badges and repaired projection", () => {
         expect(header).toBe("token");
     });
 
+    test("accepts a non-default five-image QC summary without inventing slots", async () => {
+        const expectedConfigIds = ["main_01", "main_02", "main_03", "detail_01", "detail_02"];
+        const fiveImageSummary: WorkflowQcSummary = {
+            ...summary,
+            totalCount: 5,
+            expectedConfigIds,
+            images: expectedConfigIds.map((configId) => ({ configId, status: "pass", issueCount: 0, topCategories: [] })),
+        };
+        const result = await fetchWorkflowQcSummary("cup", "token", async () => new Response(JSON.stringify(fiveImageSummary), { status: 200 }));
+        expect(result?.expectedConfigIds).toEqual(expectedConfigIds);
+        expect(result?.images).toHaveLength(5);
+    });
+
     test("treats a missing QC report as a silent no-badge result", async () => {
         expect(await fetchWorkflowQcSummary("cup", "token", async () => new Response("", { status: 404 }))).toBeNull();
+    });
+
+    test("fails closed when a QC response omits its batch count facts", async () => {
+        const { totalCount: _totalCount, expectedConfigIds: _expectedConfigIds, ...missingCounts } = summary;
+        await expect(fetchWorkflowQcSummary("cup", "token", async () => new Response(JSON.stringify(missingCounts), { status: 200 }))).rejects.toThrow(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
     });
 
     test("applies all three states only to verified render nodes", () => {
@@ -92,7 +113,7 @@ describe("workflow delivery badges and repaired projection", () => {
     });
 
     test("allows the pure projection entry only after production completed", () => {
-        const machine = { id: "machine", type: CanvasNodeType.Workflow, title: "machine", position: { x: 0, y: 0 }, width: 420, height: 300, metadata: { workflowProduction: { status: "completed", producedCount: 14, totalCount: 14 as const } } };
+        const machine = { id: "machine", type: CanvasNodeType.Workflow, title: "machine", position: { x: 0, y: 0 }, width: 420, height: 300, metadata: { workflowProduction: { status: "completed", producedCount: 14, totalCount: 14, expectedConfigIds: CONFIG_IDS } } };
         expect(repairedProjectionCanStart(machine)).toBe(true);
         expect(repairedProjectionCanStart({ ...machine, metadata: { workflowProduction: { ...machine.metadata.workflowProduction, status: "running" } } })).toBe(false);
     });

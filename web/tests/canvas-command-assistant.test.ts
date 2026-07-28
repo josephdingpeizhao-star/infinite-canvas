@@ -216,13 +216,15 @@ describe("canvas command assistant", () => {
     test("assistant commands pass through existing demo and real command builders only after confirmation", () => {
         const demo = buildWorkflowDemoCommand(readWorkflowDemoState(undefined), "demo-1", 1_000, "run: next");
         expect(demo.content.split("\n").at(-1)).toBe("run: next");
-        const production = buildProductionCommand(readProductionState(undefined), "cup", "real-1", 2_000, "retry: qc");
+        const productionState = readProductionState({ workflowProduction: { status: "idle", producedCount: 0, totalCount: 5, expectedConfigIds: ["main_01", "main_02", "main_03", "detail_01", "detail_02"] } });
+        const production = buildProductionCommand(productionState, "cup", "real-1", 2_000, "retry: qc");
         expect(production.content.split("\n").at(-1)).toBe("retry: qc");
         expect(() => buildProductionCommand(readProductionState(undefined), "cup", "bad-1", 3_000, "run: build_batch" as never)).toThrow("封闭命令");
     });
 
     test("machine buttons retain their existing default demo and production commands", () => {
         expect(buildWorkflowDemoCommand(readWorkflowDemoState(undefined), "demo-default", 1_000).content.split("\n").at(-1)).toBe("run: renders");
-        expect(buildProductionCommand(readProductionState(undefined), "cup", "real-default", 2_000).content.split("\n").at(-1)).toBe("run: next");
+        const productionState = readProductionState({ workflowProduction: { status: "idle", producedCount: 0, totalCount: 5, expectedConfigIds: ["main_01", "main_02", "main_03", "detail_01", "detail_02"] } });
+        expect(buildProductionCommand(productionState, "cup", "real-default", 2_000).content.split("\n").at(-1)).toBe("run: next");
     });
 });

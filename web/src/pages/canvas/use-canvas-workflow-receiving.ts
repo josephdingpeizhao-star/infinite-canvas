@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, t
 import { nanoid } from "nanoid";
 
 import { buildAcceptancePayload, createReceivingBox, fetchAcceptanceStatus, receivingBoxId, receivingSelections, submitAcceptanceCloseout } from "@/lib/canvas/canvas-workflow-receiving";
-import { resolveProductionSelection } from "@/lib/canvas/canvas-workflow-production";
+import { readExpectedImageSet, resolveProductionSelection, WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "@/lib/canvas/canvas-workflow-production";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
@@ -29,6 +29,8 @@ export function useCanvasWorkflowReceiving({
             checked.current.add(state.batchId);
             void fetchAcceptanceStatus(state.batchId, token)
                 .then((status) => {
+                    const expected = readExpectedImageSet(state.totalCount, state.expectedConfigIds);
+                    if (!expected || !sameIds(status.expectedConfigIds, expected.expectedConfigIds)) throw new Error(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
                     if (status.status !== "closed") return;
                     setNodes((items) =>
                         items.map((node) =>
@@ -38,9 +40,17 @@ export function useCanvasWorkflowReceiving({
                         ),
                     );
                 })
-                .catch(() => undefined);
+                .catch((error) => {
+                    if (!(error instanceof Error) || error.message !== WORKFLOW_COUNT_DATA_MISSING_MESSAGE) return;
+                    setNodes((items) =>
+                        items.map((node) =>
+                            node.id === box.id ? { ...node, metadata: { ...node.metadata, workflowReceivingBox: { ...state, status: "failed", message: WORKFLOW_COUNT_DATA_MISSING_MESSAGE } } } : node,
+                        ),
+                    );
+                    warn(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
+                });
         });
-    }, [nodes, setNodes, token]);
+    }, [nodes, setNodes, token, warn]);
 
     const ensureBox = useCallback(
         (nodeId: string) => {
@@ -52,7 +62,14 @@ export function useCanvasWorkflowReceiving({
             const machine = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Workflow);
             if (!machine) return;
             const id = receivingBoxId(selection.batchId);
-            setNodes((items) => (items.some((node) => node.id === id) ? items : [...items, createReceivingBox(machine, selection.batchId)]));
+            let box: CanvasNodeData;
+            try {
+                box = createReceivingBox(machine, selection.batchId);
+            } catch (error) {
+                warn(error instanceof Error ? error.message : WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
+                return;
+            }
+            setNodes((items) => (items.some((node) => node.id === id) ? items : [...items, box]));
         },
         [connectionsRef, nodesRef, setNodes, warn],
     );
@@ -66,12 +83,13 @@ export function useCanvasWorkflowReceiving({
             try {
                 payload = buildAcceptancePayload(box, nodesRef.current, nanoid(12));
             } catch (error) {
-                warn(error instanceof Error ? error.message : "必须先收满 14 个不同图位。");
+                warn(error instanceof Error ? error.message : WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
                 return;
             }
+            const selectionCount = payload.selections.length;
             setNodes((items) =>
                 items.map((node) =>
-                    node.id === boxId ? { ...node, metadata: { ...node.metadata, workflowReceivingBox: { ...state, status: "submitting", selectionCount: 14, message: "正在核对 14 张收货图片…" } } } : node,
+                    node.id === boxId ? { ...node, metadata: { ...node.metadata, workflowReceivingBox: { ...state, status: "submitting", selectionCount, message: `正在核对 ${selectionCount} 张收货图片…` } } } : node,
                 ),
             );
             void submitAcceptanceCloseout(state.batchId, token, payload)
@@ -79,7 +97,7 @@ export function useCanvasWorkflowReceiving({
                     setNodes((items) =>
                         items.map((node) =>
                             node.id === boxId
-                                ? { ...node, metadata: { ...node.metadata, workflowReceivingBox: { ...state, status: "closed", selectionCount: 14, closedAt: result.closedAt, message: "已关账" } } }
+                                ? { ...node, metadata: { ...node.metadata, workflowReceivingBox: { ...state, status: "closed", selectionCount, closedAt: result.closedAt, message: "已关账" } } }
                                 : node,
                         ),
                     );
@@ -97,4 +115,8 @@ export function useCanvasWorkflowReceiving({
         [nodesRef, setNodes, token, warn],
     );
     return { ensureBox, confirmCloseout };
+}
+
+function sameIds(first: string[], second: string[]) {
+    return first.length === second.length && first.every((item, index) => item === second[index]);
 }

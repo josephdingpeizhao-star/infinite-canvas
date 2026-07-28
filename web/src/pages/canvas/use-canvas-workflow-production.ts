@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, isProductionStartBlocked, readProductionState, reserveProductionSubmission, resolveProductionSelection, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
+import { buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, isProductionStartBlocked, readProductionState, reserveProductionSubmission, resolveProductionSelection, WORKFLOW_COUNT_DATA_MISSING_MESSAGE, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
@@ -50,6 +50,10 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
                 return true;
             }
             const state = readProductionState(workflow.metadata);
+            if (state.errorMessage === WORKFLOW_COUNT_DATA_MISSING_MESSAGE) {
+                warn(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
+                return true;
+            }
             if (isProductionStartBlocked(state)) return true;
             try {
                 const quote = await fetchProductionQuote(selection.batchId, token);
@@ -100,7 +104,11 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
             items.map((node) => {
                 if (node.id !== current.nodeId || node.type !== CanvasNodeType.Workflow) return node;
                 const command = buildProductionCommand(
-                    readProductionState(node.metadata),
+                    {
+                        ...readProductionState(node.metadata),
+                        totalCount: current.quote.totalCount,
+                        expectedConfigIds: [...current.quote.expectedConfigIds],
+                    },
                     selection.batchId,
                     requestId,
                     now,
@@ -147,7 +155,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
 
 function safeQuoteError(error: unknown) {
     const message = error instanceof Error ? error.message : "";
-    return message === "本机真实制作服务尚未就绪，请重新启动画布服务后再试。" || message === "本机真实制作服务没有返回可信的费用估算，本次没有开始。"
+    return message === "本机真实制作服务尚未就绪，请重新启动画布服务后再试。" || message === "本机真实制作服务没有返回可信的费用估算，本次没有开始。" || message === WORKFLOW_COUNT_DATA_MISSING_MESSAGE
         ? message
         : "无法取得可信的费用估算，本次没有开始。";
 }

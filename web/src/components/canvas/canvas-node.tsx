@@ -10,6 +10,7 @@ import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canv
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { usesCustomNodeContent } from "@/lib/canvas/canvas-workflow-demo";
 import { qcBadgeView } from "@/lib/canvas/canvas-workflow-delivery";
+import { readExpectedImageSet, WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "@/lib/canvas/canvas-workflow-production";
 import { CanvasImageBadgeStack } from "./canvas-image-badge-stack";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -455,6 +456,7 @@ function WorkflowFallbackContent({ theme }: NodeContentRendererProps) {
 
 function GroupNodeContent({ node, theme, groupChildCount, onConfirmReceiving }: NodeContentRendererProps) {
     const receiving = node.metadata?.workflowReceivingBox;
+    const receivingCountInfo = readExpectedImageSet(receiving?.totalCount, receiving?.expectedConfigIds);
     return (
         <div className="pointer-events-none flex h-full w-full flex-col p-4">
             <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: theme.node.text }}>
@@ -463,16 +465,16 @@ function GroupNodeContent({ node, theme, groupChildCount, onConfirmReceiving }: 
                 </span>
                 <span>{receiving ? "已收货" : "组"}</span>
                 <span className="ml-auto rounded-full px-2 py-1 text-[11px] font-medium" style={{ background: theme.node.fill, color: theme.node.muted }}>
-                    {receiving ? `已收 ${groupChildCount}/14` : `${groupChildCount} 个节点`}
+                    {receiving ? receivingCountInfo ? `已收 ${groupChildCount}/${receivingCountInfo.totalCount}` : "张数待刷新" : `${groupChildCount} 个节点`}
                 </span>
             </div>
             <div className="mt-3 flex-1 rounded-2xl border border-dashed" style={{ borderColor: theme.node.stroke, background: `${theme.node.fill}55` }} />
             {receiving ? (
                 <div className="mt-3 flex items-center gap-3">
                     <span className="text-xs" style={{ color: theme.node.muted }}>
-                        {receiving.status === "closed" ? "已关账" : receiving.message || "把满意图片拖进框内。"}
+                        {receiving.status === "closed" ? "已关账" : receivingCountInfo ? receiving.message || "把满意图片拖进框内。" : WORKFLOW_COUNT_DATA_MISSING_MESSAGE}
                     </span>
-                    {groupChildCount === 14 && receiving.status !== "closed" ? (
+                    {receivingCountInfo && groupChildCount === receivingCountInfo.totalCount && receiving.status !== "closed" ? (
                         <button
                             type="button"
                             className="pointer-events-auto ml-auto h-9 rounded-lg px-4 text-xs font-semibold disabled:opacity-50"

@@ -374,7 +374,7 @@ function InfiniteCanvasPage() {
     });
     const workflowOutputImport = useCanvasWorkflowOutputImport({ nodes, setNodes });
     useCanvasIntakeRoleVisibility({ nodes, connections, setNodes });
-    useCanvasWorkflowQcBadges({ nodes, setNodes });
+    useCanvasWorkflowQcBadges({ nodes, setNodes, warn: warnWorkflow });
     const workflowRepairedProjection = useCanvasWorkflowRepairedProjection({
         nodesRef,
         connectionsRef,
@@ -2802,7 +2802,7 @@ function InfiniteCanvasPage() {
                             mentionReferences={mentionReferencesByNodeId.get(node.id) || []}
                             renderPanel={(panelNode) =>
                                 panelNode.type === CanvasNodeType.BatchInfo ? null : panelNode.type === CanvasNodeType.Workflow ? (
-                                    <CanvasWorkflowNodePanel productionBatchId={connectedProductionSummary(panelNode.id, nodes, connections)?.batchId} onClose={() => setDialogNodeId(null)} />
+                                    <CanvasWorkflowNodePanel production={connectedProductionSummary(panelNode.id, nodes, connections)} onClose={() => setDialogNodeId(null)} />
                                 ) : panelNode.type === CanvasNodeType.Config ? (
                                     <CanvasConfigComposer
                                         value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}

@@ -107,6 +107,20 @@
 | 104 | `web/src/pages/canvas/project.tsx` | 信息卡渲染接线 | 向原信息卡挂点传入批次 hook 的实时品类目录和加载状态 | 只增加两项状态接线，不改变其他节点、工具栏或工作流入口 | 2026-07-27 |
 | 105 | `web/tests/canvas-batch-intake.test.ts` | CAT-01 品类表单与载荷回归 | 将七字段/固定手持断言升级为九字段，新增端点鉴权/失败、双端摘要、盘子三维、0/6/8 边界、下拉、折叠、动态汇总和开关双向映射测试 | 锁定单一事实源与 fail-closed 行为，原图 SHA、连线和零费用演示断言不放宽 | 2026-07-27 |
 | 106 | `web/dist/` | CAT-01 最新生产运行副本 | 提交前按本次源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 重启工作台并刷新画布后加载新品类信息卡；端点文案/默认值/范围更新本身无需再次构建 | 2026-07-27 |
+| 107 | `web/src/types/canvas.ts` | CNT-01 批次事实、品类张数元数据与真实生产投影类型 | 新增主图/详情图张数字段、品类 `image_counts` 元数据，以及后端返回的 `totalCount` / `expectedConfigIds`；旧持久化对象允许字段缺失以便显示明确升级提示 | 类型只承载批次事实，不复制 6/8/14 业务默认值 | 2026-07-27 |
+| 108 | `web/src/constant/canvas.ts` | 新建信息卡空草稿 | 移除新卡元数据中的 6/8 默认值，只保留草稿状态 | 新卡默认值必须在品类目录读取成功后从配方写入 | 2026-07-27 |
+| 109 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/pages/canvas/use-canvas-batch-intake.ts` | 张数目录、动态门禁、品类切换与十一字段登记 | 同步新契约摘要；从品类元数据读取默认/范围，校验 1–30、手持不超过对应张数；切换品类时保留已填长宽高，张数、手持和高级选项按新品类默认重置，登记载荷带两项张数 | 卡片与登记共用同一校验，尺寸只按新品类必填集重校验，契约不一致继续在发号前关闭 | 2026-07-28 |
+| 110 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 顶部张数输入与动态汇总 | 固定主/详展示改为数字输入，动态显示总数与手持上限；张数调小导致手持越界时提示先改手持，不静默截断 | 用户逐批改数的唯一画布入口，比例与高级选项不变 | 2026-07-27 |
+| 111 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` | 报价、命令与真实进度张数事实 | 费用响应必须携带有序实际编号集；确认费用后把该事实写入生产状态，进度/续跑按实际总数读取；缺数时要求重启工作台并刷新画布 | 不重算费用、不改变确认卡与单页提交锁，只移除前端 14 张回退 | 2026-07-27 |
+| 112 | `web/src/components/canvas/canvas-workflow-node.tsx` + `web/src/pages/canvas/project.tsx` | 真实机器动态摘要与缺数提示接线 | 真实模式显示信息卡事实和后端实际进度，详情面板不再展示演示 6/8；QC 缺数警告复用页面原消息入口 | 演示模式的固定 6/8/14 与原按钮入口保持不变 | 2026-07-27 |
+| 113 | `web/src/lib/canvas/canvas-workflow-delivery.ts` + `web/src/pages/canvas/use-canvas-workflow-qc-badges.ts` | QC 摘要实际编号集与角标关闭策略 | QC 图片必须与响应中的实际编号集逐项一致；缺张数事实时移除该批旧角标并提示重启刷新 | 不改变 pass/fail/待核对判定或返修执行语义 | 2026-07-27 |
+| 114 | `web/src/lib/canvas/canvas-workflow-receiving.ts` + `web/src/pages/canvas/use-canvas-workflow-receiving.ts` + `web/src/components/canvas/canvas-node.tsx` | 已收货框实际图位与动态关账 | 收货框复制后端实际编号集，只接受该集合的正式/返修图；收满实际总数才放行，GET/POST 回执缺数或不一致时关闭 | 不从标题猜图位，不生成真实编号，也不改变关账请求字段 | 2026-07-27 |
+| 115 | `web/tests/canvas-batch-intake.test.ts` | 信息卡张数、尺寸切换与登记有限例外回归 | 更新品类夹具与字段集断言，新增 1/30、0/31/小数/字符串、动态手持上限、3+2 汇总、品类默认重置，以及杯→盘缺长宽拒绝、盘→杯保留长宽且不再必填覆盖 | 原图 SHA、连线、契约关闭及零费用演示断言不放宽 | 2026-07-28 |
+| 116 | `web/tests/canvas-workflow-production.test.ts` + `web/tests/canvas-command-assistant.test.ts` | 真实报价/进度与助手原门禁回归 | 生产夹具补实际编号集，覆盖 1+1、30+30、有序唯一编号和缺数关闭；助手测试只补后端张数事实，原封闭命令与确认语义不变 | 既有测试仅因固定总数改为批次事实而调整 | 2026-07-27 |
+| 117 | `web/tests/canvas-workflow-delivery.test.ts` + `web/tests/canvas-workflow-receiving.test.ts` | 非 14 张 QC/收货与缺数关闭回归 | 新增 3+2 QC、收满 5 图位关账、缺 `totalCount` / `expectedConfigIds` 拒绝；默认 14 张夹具仍保留兼容回归 | QC 判定与正式/返修 SHA 证据断言不放宽 | 2026-07-27 |
+| 118 | `CHANGELOG.md` | `Unreleased` | 新增 CNT-01 用户可感知记录 | 归纳逐批自由张数、全链联动与混跑缺数关闭 | 2026-07-27 |
+| 119 | `docs/content/docs/progress/pending-test.mdx` | “CNT-01 每批自由设置主图/详情图张数”待测试小节 | 登记默认/边界/切换/手持、3+2 全链、混跑防呆及演示保留的真人验收点 | 自动检查不替代首个非默认真实批次的费用、QC 与关账验收 | 2026-07-27 |
+| 120 | `web/dist/` | CNT-01 最新生产运行副本 | 尺寸切换修正后按最终 CNT-01 源代码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 重启工作台并刷新画布后加载可编辑张数、尺寸保留与全链缺数防呆 | 2026-07-28 |
 
 ## 退役锚点（编号不复用）
 

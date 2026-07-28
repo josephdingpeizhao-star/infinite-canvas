@@ -41,8 +41,6 @@ export const NODE_SPECS = {
         metadata: {
             batchIntake: {
                 status: "draft",
-                mainImageCount: 6,
-                detailImageCount: 8,
             },
         },
     },

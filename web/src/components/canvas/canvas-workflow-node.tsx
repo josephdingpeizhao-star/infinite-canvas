@@ -2,11 +2,11 @@ import { CheckCircle2, CircleAlert, Info, LoaderCircle, Play, Workflow } from "l
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_COUNT, WORKFLOW_DEMO_TOTAL } from "@/lib/canvas/canvas-workflow-demo";
-import { COMPLETED_PRODUCTION_ACTION_LABEL, completedProductionStatusText, readProductionState } from "@/lib/canvas/canvas-workflow-production";
+import { COMPLETED_PRODUCTION_ACTION_LABEL, completedProductionStatusText, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionStatus } from "@/types/canvas";
 
-export function CanvasWorkflowNode({ node, connectedImageCount, production, onStart, onProjectRepaired, onEnsureReceiving, onToggleDetails }: { node: CanvasNodeData; connectedImageCount: number; production?: { batchId: string; materialCount: number }; onStart: (nodeId: string) => void; onProjectRepaired: (nodeId: string) => void; onEnsureReceiving: (nodeId: string) => void; onToggleDetails: (nodeId: string) => void }) {
+export function CanvasWorkflowNode({ node, connectedImageCount, production, onStart, onProjectRepaired, onEnsureReceiving, onToggleDetails }: { node: CanvasNodeData; connectedImageCount: number; production?: ConnectedProductionSummary; onStart: (nodeId: string) => void; onProjectRepaired: (nodeId: string) => void; onEnsureReceiving: (nodeId: string) => void; onToggleDetails: (nodeId: string) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const demoState = readWorkflowDemoState(node.metadata);
     const productionState = readProductionState(node.metadata);
@@ -15,7 +15,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
     const queued = state.status === "queued";
     const awaitingConfirmation = !production && demoState.status === "awaiting_confirmation";
     const statusLabel = production ? productionStatusLabel(productionState.status) : workflowStatusLabel(demoState.status);
-    const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.message, productionState.errorMessage) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage);
+    const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.totalCount, productionState.message, productionState.errorMessage) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage);
 
     return (
         <div className="flex h-full w-full cursor-move flex-col gap-3 p-4" style={{ color: theme.node.text }}>
@@ -42,8 +42,8 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
 
             <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                 <SummaryCell label="已连接" value={`${production?.materialCount ?? connectedImageCount} 张`} />
-                <SummaryCell label="主图" value={`${WORKFLOW_DEMO_MAIN_COUNT} 张`} />
-                <SummaryCell label="详情" value={`${WORKFLOW_DEMO_DETAIL_COUNT} 张`} />
+                <SummaryCell label="主图" value={`${production ? production.mainImageCount ?? "—" : WORKFLOW_DEMO_MAIN_COUNT} 张`} />
+                <SummaryCell label="详情" value={`${production ? production.detailImageCount ?? "—" : WORKFLOW_DEMO_DETAIL_COUNT} 张`} />
             </div>
 
             <div className="min-h-12 rounded-xl border px-3 py-2 text-xs leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: state.status === "failed" ? "#f87171" : theme.node.muted }}>
@@ -117,22 +117,29 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
     );
 }
 
-export function CanvasWorkflowNodePanel({ productionBatchId, onClose }: { productionBatchId?: string; onClose: () => void }) {
+export function CanvasWorkflowNodePanel({ production, onClose }: { production?: ConnectedProductionSummary; onClose: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const fields = [
-        ["品类", "保温杯演示"],
-        ["高度", "24 厘米"],
-        ["主图", "6 张"],
-        ["详情图", "8 张"],
-        ["手持", "主图 2 张 + 详情 1 张"],
-    ];
+    const fields = production
+        ? [
+              ["品类", production.productType || "以批次档案为准"],
+              ["主图", production.mainImageCount === undefined ? "张数信息待重启刷新" : `${production.mainImageCount} 张`],
+              ["详情图", production.detailImageCount === undefined ? "张数信息待重启刷新" : `${production.detailImageCount} 张`],
+              ["手持", `主图 ${production.handheldMainCount ?? "—"} 张 + 详情 ${production.handheldDetailCount ?? "—"} 张`],
+          ]
+        : [
+              ["品类", "保温杯演示"],
+              ["高度", "24 厘米"],
+              ["主图", "6 张"],
+              ["详情图", "8 张"],
+              ["手持", "主图 2 张 + 详情 1 张"],
+          ];
     return (
         <div className="rounded-2xl border p-4 shadow-xl backdrop-blur" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <div className="text-sm font-semibold">{productionBatchId ? "真实制作信息" : "演示信息"}</div>
+                    <div className="text-sm font-semibold">{production ? "真实制作信息" : "演示信息"}</div>
                     <div className="mt-1 text-xs" style={{ color: theme.node.muted }}>
-                        {productionBatchId ? `当前批次：${productionBatchId}。九道工序在后台运行，不会铺到画布。` : "当前展示固定演示信息，暂不可修改。"}
+                        {production ? `当前批次：${production.batchId}。九道工序在后台运行，不会铺到画布。` : "当前展示固定演示信息，暂不可修改。"}
                     </div>
                 </div>
                 <button type="button" className="grid size-7 place-items-center rounded-lg text-base opacity-55 transition hover:opacity-100" onClick={onClose} aria-label="关闭演示信息">
@@ -148,7 +155,7 @@ export function CanvasWorkflowNodePanel({ productionBatchId, onClose }: { produc
                 ))}
             </div>
             <div className="mt-3 text-[11px]" style={{ color: theme.node.muted }}>
-                共 {WORKFLOW_DEMO_TOTAL} 张 · {productionBatchId ? "真实费用每次开始前单独确认" : "演示模式不产生任何费用"}
+                共 {production ? production.totalCount ?? "—" : WORKFLOW_DEMO_TOTAL} 张 · {production ? "真实费用每次开始前单独确认" : "演示模式不产生任何费用"}
             </div>
         </div>
     );
@@ -207,11 +214,11 @@ function productionStatusLabel(status: CanvasWorkflowProductionStatus) {
     return "待机";
 }
 
-function productionStatusText(status: CanvasWorkflowProductionStatus, producedCount: number, message?: string, errorMessage?: string) {
+function productionStatusText(status: CanvasWorkflowProductionStatus, producedCount: number, totalCount: number | undefined, message?: string, errorMessage?: string) {
     if (status === "queued") return "费用已确认，等待本机工作台接单。";
-    if (status === "running") return message || `正在制作，已完成 ${producedCount}/${WORKFLOW_DEMO_TOTAL} 张。`;
-    if (status === "paused") return `已完成 ${producedCount}/${WORKFLOW_DEMO_TOTAL} 张。成果都已保留；再次开始会从既有路由续跑。`;
-    if (status === "completed") return completedProductionStatusText(message);
+    if (status === "running") return message || `正在制作，已完成 ${producedCount}/${totalCount ?? "—"} 张。`;
+    if (status === "paused") return `已完成 ${producedCount}/${totalCount ?? "—"} 张。成果都已保留；再次开始会从既有路由续跑。`;
+    if (status === "completed") return completedProductionStatusText(message, totalCount);
     if (status === "failed") return errorMessage || "这一步没做好，机器已停下。已经完成的成果都保留了。";
     return "已连接已登记批次。点击开始后先核对真实费用，确认前不会执行。";
 }

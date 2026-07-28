@@ -1,11 +1,7 @@
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { readExpectedImageSet, WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "@/lib/canvas/canvas-workflow-production";
 
 const PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
-const CONFIG_IDS = [
-    ...Array.from({ length: 6 }, (_, index) => `main_${String(index + 1).padStart(2, "0")}`),
-    ...Array.from({ length: 8 }, (_, index) => `detail_${String(index + 1).padStart(2, "0")}`),
-];
-const CONFIG_ID_SET = new Set(CONFIG_IDS);
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 export type ReceivingSelection = { configId: string; source: "renders" | "repaired"; sha256: string };
@@ -15,6 +11,8 @@ export function receivingBoxId(batchId: string) {
 }
 
 export function createReceivingBox(machine: CanvasNodeData, batchId: string): CanvasNodeData {
+    const countInfo = readExpectedImageSet(machine.metadata?.workflowProduction?.totalCount, machine.metadata?.workflowProduction?.expectedConfigIds);
+    if (!countInfo) throw new Error(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
     return {
         id: receivingBoxId(batchId),
         type: CanvasNodeType.Group,
@@ -28,6 +26,8 @@ export function createReceivingBox(machine: CanvasNodeData, batchId: string): Ca
                 batchId,
                 workflowNodeId: machine.id,
                 selectionCount: 0,
+                totalCount: countInfo.totalCount,
+                expectedConfigIds: countInfo.expectedConfigIds,
                 message: "把满意的正式图或返修图拖进来。",
             },
         },
@@ -37,13 +37,16 @@ export function createReceivingBox(machine: CanvasNodeData, batchId: string): Ca
 export function receivingSelections(box: CanvasNodeData, nodes: CanvasNodeData[]): ReceivingSelection[] {
     const state = box.metadata?.workflowReceivingBox;
     if (box.type !== CanvasNodeType.Group || !state) return [];
+    const countInfo = readExpectedImageSet(state.totalCount, state.expectedConfigIds);
+    if (!countInfo) return [];
+    const configIdSet = new Set(countInfo.expectedConfigIds);
     const selected = new Map<string, ReceivingSelection>();
     nodes.forEach((node) => {
         if (node.metadata?.groupId !== box.id) return;
-        const proof = verifiedReceivingProof(node, state.batchId);
+        const proof = verifiedReceivingProof(node, state.batchId, configIdSet);
         if (proof) selected.set(proof.configId, proof);
     });
-    return CONFIG_IDS.flatMap((configId) => {
+    return countInfo.expectedConfigIds.flatMap((configId) => {
         const value = selected.get(configId);
         return value ? [value] : [];
     });
@@ -52,10 +55,13 @@ export function receivingSelections(box: CanvasNodeData, nodes: CanvasNodeData[]
 export function snapNodesIntoReceivingBox(movedIds: Set<string>, nodes: CanvasNodeData[], box: CanvasNodeData) {
     const state = box.metadata?.workflowReceivingBox;
     if (!state) return nodes;
+    const countInfo = readExpectedImageSet(state.totalCount, state.expectedConfigIds);
+    if (!countInfo) return nodes;
+    const configIdSet = new Set(countInfo.expectedConfigIds);
     const moving = nodes.filter((node) => movedIds.has(node.id));
     const winners = new Map<string, string>();
     moving.forEach((node) => {
-        const proof = verifiedReceivingProof(node, state.batchId);
+        const proof = verifiedReceivingProof(node, state.batchId, configIdSet);
         if (proof) winners.set(proof.configId, node.id);
     });
     if (!winners.size) return nodes;
@@ -70,7 +76,7 @@ export function snapNodesIntoReceivingBox(movedIds: Set<string>, nodes: CanvasNo
     const dx = bounds.right - bounds.left > right - left ? left - bounds.left : bounds.left < left ? left - bounds.left : bounds.right > right ? right - bounds.right : 0;
     const dy = bounds.bottom - bounds.top > bottom - top ? top - bounds.top : bounds.top < top ? top - bounds.top : bounds.bottom > bottom ? bottom - bounds.bottom : 0;
     return nodes.map((node) => {
-        const proof = verifiedReceivingProof(node, state.batchId);
+        const proof = verifiedReceivingProof(node, state.batchId, configIdSet);
         const winnerId = proof ? winners.get(proof.configId) : undefined;
         if (node.metadata?.groupId === box.id && winnerId && node.id !== winnerId) {
             const { groupId: _removed, ...metadata } = node.metadata || {};
@@ -84,19 +90,24 @@ export function snapNodesIntoReceivingBox(movedIds: Set<string>, nodes: CanvasNo
 export function buildAcceptancePayload(box: CanvasNodeData, nodes: CanvasNodeData[], requestId: string) {
     const state = box.metadata?.workflowReceivingBox;
     if (!state) throw new Error("已收货框信息不完整。");
+    const countInfo = readExpectedImageSet(state.totalCount, state.expectedConfigIds);
+    if (!countInfo) throw new Error(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
     const selections = receivingSelections(box, nodes);
-    if (selections.length !== 14) throw new Error("必须先收满 14 个不同图位。");
+    if (selections.length !== countInfo.totalCount) throw new Error(`必须先收满 ${countInfo.totalCount} 个不同图位。`);
     return { requestId, machineId: state.workflowNodeId, selections };
 }
 
 export function receivingBoxView(box: CanvasNodeData, nodes: CanvasNodeData[]) {
     const state = box.metadata?.workflowReceivingBox;
+    const countInfo = readExpectedImageSet(state?.totalCount, state?.expectedConfigIds);
     const count = receivingSelections(box, nodes).length;
     return {
         count,
-        label: `已收 ${count}/14`,
-        canConfirm: count === 14 && (state ? state.status !== "submitting" && state.status !== "closed" : false),
+        totalCount: countInfo?.totalCount,
+        label: countInfo ? `已收 ${count}/${countInfo.totalCount}` : WORKFLOW_COUNT_DATA_MISSING_MESSAGE,
+        canConfirm: Boolean(countInfo && count === countInfo.totalCount && state && state.status !== "submitting" && state.status !== "closed"),
         closed: state?.status === "closed",
+        errorMessage: countInfo ? undefined : WORKFLOW_COUNT_DATA_MISSING_MESSAGE,
     };
 }
 
@@ -106,7 +117,7 @@ export async function fetchAcceptanceStatus(batchId: string, token: string, fetc
     const response = await fetcher(url, { method: "GET", headers: { "X-Canvas-Agent-Token": token.trim() } });
     if (!response.ok) throw new Error("本机收货服务尚未就绪。");
     const payload: unknown = await response.json();
-    if (!validStatus(payload, batchId)) throw new Error("本机收货状态不可信。");
+    if (!validStatus(payload, batchId)) throw new Error(statusCountError(payload) ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : "本机收货状态不可信。");
     return payload;
 }
 
@@ -120,13 +131,16 @@ export async function submitAcceptanceCloseout(batchId: string, token: string, p
     });
     if (!response.ok) throw new Error(response.status === 409 ? "本批次已关账，不能重复关账。" : "关账核对没有通过，请保留画布并检查收货图片。");
     const result: unknown = await response.json();
-    if (!validStatus(result, batchId) || result.status !== "closed") throw new Error("本机没有返回可信的关账回执。");
+    const expectedIds = payload.selections.map((item) => item.configId);
+    if (!validStatus(result, batchId) || result.status !== "closed" || !sameIds(result.expectedConfigIds, expectedIds)) {
+        throw new Error(statusCountError(result) ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : "本机没有返回可信的关账回执。");
+    }
     return result;
 }
 
-function verifiedReceivingProof(node: CanvasNodeData, batchId: string): ReceivingSelection | null {
+function verifiedReceivingProof(node: CanvasNodeData, batchId: string, configIdSet: ReadonlySet<string>): ReceivingSelection | null {
     const proof = node.metadata?.workflowProductionOutput;
-    if (node.type !== CanvasNodeType.Image || !node.metadata?.storageKey || !proof || proof.batchId !== batchId || !CONFIG_ID_SET.has(proof.configId) || !SHA256_PATTERN.test(proof.sha256) || (proof.source !== "renders" && proof.source !== "repaired")) return null;
+    if (node.type !== CanvasNodeType.Image || !node.metadata?.storageKey || !proof || proof.batchId !== batchId || !configIdSet.has(proof.configId) || !SHA256_PATTERN.test(proof.sha256) || (proof.source !== "renders" && proof.source !== "repaired")) return null;
     return { configId: proof.configId, source: proof.source, sha256: proof.sha256 };
 }
 
@@ -134,10 +148,26 @@ function acceptanceUrl(batchId: string) {
     return batchId ? `${PRODUCTION_ORIGIN}/workflow-production/${encodeURIComponent(batchId)}/acceptance-closeout` : null;
 }
 
-function validStatus(payload: unknown, batchId: string): payload is { ok: true; batchId: string; status: "open" | "closed"; closedAt?: string } {
+function validStatus(payload: unknown, batchId: string): payload is { ok: true; batchId: string; status: "open" | "closed"; totalCount: number; expectedConfigIds: string[]; closedAt?: string } {
     if (!payload || typeof payload !== "object") return false;
-    const value = payload as { ok?: unknown; batchId?: unknown; status?: unknown; closedAt?: unknown };
-    return value.ok === true && value.batchId === batchId && (value.status === "open" || value.status === "closed") && (value.closedAt === undefined || typeof value.closedAt === "string");
+    const value = payload as { ok?: unknown; batchId?: unknown; status?: unknown; totalCount?: unknown; expectedConfigIds?: unknown; closedAt?: unknown };
+    return Boolean(
+        value.ok === true &&
+            value.batchId === batchId &&
+            (value.status === "open" || value.status === "closed") &&
+            readExpectedImageSet(value.totalCount, value.expectedConfigIds) &&
+            (value.closedAt === undefined || typeof value.closedAt === "string"),
+    );
+}
+
+function statusCountError(payload: unknown) {
+    if (!payload || typeof payload !== "object") return false;
+    const value = payload as { ok?: unknown; totalCount?: unknown; expectedConfigIds?: unknown };
+    return value.ok === true && !readExpectedImageSet(value.totalCount, value.expectedConfigIds);
+}
+
+function sameIds(first: string[], second: string[]) {
+    return first.length === second.length && first.every((item, index) => item === second[index]);
 }
 
 function nodeBounds(nodes: CanvasNodeData[]) {
