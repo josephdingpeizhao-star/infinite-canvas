@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
     COMPLETED_PRODUCTION_ACTION_LABEL,
+    applyProductionQuote,
     buildProductionCommand,
     buildProductionQuoteUrl,
     completedProductionStatusText,
@@ -205,11 +206,54 @@ describe("canvas workflow production", () => {
     test("fails closed when a real production response omits the batch count facts", async () => {
         const missing = readProductionState({ workflowProduction: { status: "running", producedCount: 1, batchId: "cup" } });
         expect(missing).toMatchObject({ status: "failed", errorMessage: WORKFLOW_COUNT_DATA_MISSING_MESSAGE });
+        expect(isProductionStartBlocked(missing)).toBe(false);
         await expect(
             fetchProductionQuote("cup", "token", async () =>
                 new Response(JSON.stringify({ ok: true, batchId: "cup", totalCount: 5, readyCount: 0, remainingCount: 5, estimatedUnitUsd: 0.06, estimatedTotalUsd: 0.3, estimatedMinutes: 39 }), { status: 200 }),
             ),
         ).rejects.toThrow(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
+    });
+
+    test("keeps the real failure reason ahead of a missing-count warning", () => {
+        const state = readProductionState({
+            workflowProduction: {
+                status: "failed",
+                producedCount: 1,
+                batchId: "cup",
+                errorMessage: "主图变量配置未通过：手持规则调用异常。",
+            },
+        });
+
+        expect(state).toMatchObject({
+            status: "failed",
+            errorMessage: "主图变量配置未通过：手持规则调用异常。",
+        });
+        expect(isProductionStartBlocked(state)).toBe(false);
+    });
+
+    test("repairs stale count facts from the authoritative quote before restarting", () => {
+        const stale = readProductionState({
+            workflowProduction: {
+                status: "failed",
+                producedCount: 1,
+                batchId: "cup",
+                errorMessage: WORKFLOW_COUNT_DATA_MISSING_MESSAGE,
+            },
+        });
+        const quote = {
+            totalCount: 5,
+            expectedConfigIds: configIds(3, 2),
+        };
+
+        const repaired = applyProductionQuote(stale, quote);
+        const command = buildProductionCommand(repaired, "cup", "request-self-heal", 6_000);
+
+        expect(command.state).toMatchObject({
+            status: "queued",
+            totalCount: 5,
+            expectedConfigIds: configIds(3, 2),
+            errorMessage: undefined,
+        });
     });
 
     test("accepts only ordered batch-defined identifiers from 1+1 through 30+30", () => {

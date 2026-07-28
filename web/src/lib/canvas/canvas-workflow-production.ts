@@ -45,6 +45,7 @@ export function readProductionState(metadata?: CanvasNodeMetadata): CanvasWorkfl
     const status = value && PRODUCTION_STATUSES.has(value.status) ? value.status : "idle";
     const countInfo = readExpectedImageSet(value?.totalCount, value?.expectedConfigIds);
     const missingCounts = status !== "idle" && !countInfo;
+    const realErrorMessage = stringValue(value?.errorMessage);
     const producedCount = nonnegativeInteger(value?.producedCount) ?? 0;
     return {
         status: missingCounts ? "failed" : (status as CanvasWorkflowProductionMetadata["status"]),
@@ -57,7 +58,7 @@ export function readProductionState(metadata?: CanvasNodeMetadata): CanvasWorkfl
         updatedAt: timestamp(value?.updatedAt),
         step: stringValue(value?.step),
         message: stringValue(value?.message),
-        errorMessage: missingCounts ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : stringValue(value?.errorMessage),
+        errorMessage: realErrorMessage ?? (missingCounts ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : undefined),
     };
 }
 
@@ -196,6 +197,17 @@ export function buildProductionCommand(
             message: undefined,
             step: undefined,
         },
+    };
+}
+
+export function applyProductionQuote(
+    state: CanvasWorkflowProductionMetadata,
+    quote: Pick<WorkflowProductionQuote, "totalCount" | "expectedConfigIds">,
+): CanvasWorkflowProductionMetadata {
+    return {
+        ...state,
+        totalCount: quote.totalCount,
+        expectedConfigIds: [...quote.expectedConfigIds],
     };
 }
 

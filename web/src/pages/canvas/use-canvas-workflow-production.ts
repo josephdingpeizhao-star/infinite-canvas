@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, isProductionStartBlocked, readProductionState, reserveProductionSubmission, resolveProductionSelection, WORKFLOW_COUNT_DATA_MISSING_MESSAGE, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
+import { applyProductionQuote, buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, isProductionStartBlocked, readProductionState, reserveProductionSubmission, resolveProductionSelection, WORKFLOW_COUNT_DATA_MISSING_MESSAGE, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
@@ -50,10 +50,6 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
                 return true;
             }
             const state = readProductionState(workflow.metadata);
-            if (state.errorMessage === WORKFLOW_COUNT_DATA_MISSING_MESSAGE) {
-                warn(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
-                return true;
-            }
             if (isProductionStartBlocked(state)) return true;
             try {
                 const quote = await fetchProductionQuote(selection.batchId, token);
@@ -104,11 +100,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
             items.map((node) => {
                 if (node.id !== current.nodeId || node.type !== CanvasNodeType.Workflow) return node;
                 const command = buildProductionCommand(
-                    {
-                        ...readProductionState(node.metadata),
-                        totalCount: current.quote.totalCount,
-                        expectedConfigIds: [...current.quote.expectedConfigIds],
-                    },
+                    applyProductionQuote(readProductionState(node.metadata), current.quote),
                     selection.batchId,
                     requestId,
                     now,

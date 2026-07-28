@@ -131,6 +131,10 @@
 | 127 | `web/src/pages/canvas/project.tsx` | 风格移除二次确认与页面接线 | 明示全部已登记文件进入 Windows 回收站、重新补登前不能制作且不删连线，确认后调用独立移除 hook | 移除动作只有一次清晰确认，取消零副作用 | 2026-07-28 |
 | 128 | `web/tests/canvas-style-reference-governance.test.ts` + `web/tests/canvas-style-reference-intake.test.ts` | SR-01 前端合同回归 | 新增单张、回执拦截、独立命令、同工人健康键、超时、草稿卡、忙碌互斥、移除完成和确认接线测试；既有测试只改 0 张提示 | 锁定用户可见流程，不放宽完整性和 fail-closed 断言 | 2026-07-28 |
 | 129 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | SR-01 版本归纳与真人待测清单 | Unreleased 记录用户可感知变更，待测试页登记一次性批次的单张、确认、门禁、回收站与重新补登走查；todo 经检查无对应条目，无需改动 | 功能先进入待测试，不提前写入正式 features | 2026-07-28 |
+| 130 | `web/src/lib/canvas/canvas-workflow-production.ts` | `readProductionState()` 与 `applyProductionQuote()` | 缺数和真实失败同时存在时保留真实 `errorMessage`；新增用后端报价完整替换张数与编号的纯函数 | 真实原因不再被错误的“重启刷新”提示遮住，残留缺数可由权威报价自愈 | 2026-07-28 |
+| 131 | `web/src/pages/canvas/use-canvas-workflow-production.ts` | `requestStart()` 与确认写回 | 删除缺数失败态在报价前的本地拦截；费用确认后统一用报价补齐计数再构建生产命令 | “开始/重新开始”先向后端取可信报价，自愈失败时才提示重启刷新 | 2026-07-28 |
+| 132 | `web/tests/canvas-workflow-production.test.ts` | 失败真因优先与报价自愈回归 | 新增真实原因优先、缺数状态可重新报价、报价补齐后可排队三组断言；报价仍缺字段的 fail-closed 断言保留 | 防止以后再次用本地残留状态永久卡死生产机器 | 2026-07-28 |
+| 133 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | HF-01 版本归纳与真人待测清单 | 记录失败原因优先、重新报价自愈及报价仍不完整时才提示重启刷新；todo 经检查无对应条目，无需改动 | 自动测试通过后仍如实保留真实工作台重启与重新开始验收 | 2026-07-28 |
 
 ## 退役锚点（编号不复用）
 
