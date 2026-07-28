@@ -63,6 +63,10 @@ export function styleSupplementButtonLabel(count: number, busy: boolean, blocked
     return `${busy ? "正在补登" : "补登"} ${count} 张风格参考图`;
 }
 
+export function styleRemovalButtonLabel(busy: boolean) {
+    return busy ? "正在移除风格参考图" : "移除风格参考图";
+}
+
 
 function intakeRoleAssignments(nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const nodesById = new Map(nodes.map((node) => [node.id, node]));

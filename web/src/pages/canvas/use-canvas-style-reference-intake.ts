@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { expireStyleReferenceState, prepareStyleReferenceCommand, readStyleReferenceState, resolveStyleReferenceSelection, StyleReferenceIntegrityError, uploadStyleReferences } from "@/lib/canvas/canvas-style-reference-intake";
+import { expireStyleReferenceState, prepareStyleReferenceCommand, readStyleReferenceRemovalState, readStyleReferenceState, resolveStyleReferenceSelection, StyleReferenceIntegrityError, uploadStyleReferences } from "@/lib/canvas/canvas-style-reference-intake";
 import { getImageBlob } from "@/services/image-storage";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasStyleReferenceMetadata } from "@/types/canvas";
@@ -28,6 +28,10 @@ export function useCanvasStyleReferenceIntake({ nodes, nodesRef, connectionsRef,
             }
             const card = nodesRef.current.find((node) => node.id === cardId)!;
             const current = readStyleReferenceState(card.metadata);
+            if (readStyleReferenceRemovalState(card.metadata).status === "queued") {
+                warn("风格参考图正在移除，请等待本次操作结束后再补登。");
+                return;
+            }
             if (current.status === "queued" || current.status === "upload_ready" || current.status === "uploading") return;
             if (current.status === "integrity_blocked") {
                 warn("这次风格补登已因完整性问题硬停止，请保留现场并等待裁决。");
@@ -46,7 +50,15 @@ export function useCanvasStyleReferenceIntake({ nodes, nodesRef, connectionsRef,
                 return;
             }
             const command = prepared.command;
-            setNodes((items) => items.map((node) => (node.id === cardId ? { ...node, metadata: { ...node.metadata, content: command.content, styleReferenceIntake: command.state } } : node)));
+            setNodes((items) => items.map((node) => (node.id === cardId ? {
+                ...node,
+                metadata: {
+                    ...node.metadata,
+                    content: command.content,
+                    styleReferenceIntake: command.state,
+                    styleReferenceRemoval: { status: "idle" as const, updatedAt: command.state.updatedAt },
+                },
+            } : node)));
         },
         [connectionsRef, nodesRef, setNodes, token, warn],
     );

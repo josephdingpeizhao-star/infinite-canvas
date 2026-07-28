@@ -202,6 +202,16 @@ export type CanvasStyleReferenceMetadata = {
     errorMessage?: string;
     receipt?: { batchId: string; fileCount: number; files: string[] };
 };
+export type CanvasStyleReferenceRemovalStatus = "idle" | "queued" | "completed" | "failed";
+export type CanvasStyleReferenceRemovalMetadata = {
+    status: CanvasStyleReferenceRemovalStatus;
+    requestId?: string;
+    requestedAt?: number;
+    updatedAt?: number;
+    batchId?: string;
+    errorMessage?: string;
+    receipt?: { batchId: string; fileCount: number; files: string[]; receiptPath?: string };
+};
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
 
@@ -251,6 +261,7 @@ export type CanvasNodeMetadata = {
     workflowReceivingBox?: CanvasWorkflowReceivingBoxMetadata;
     batchIntake?: CanvasBatchIntakeMetadata;
     styleReferenceIntake?: CanvasStyleReferenceMetadata;
+    styleReferenceRemoval?: CanvasStyleReferenceRemovalMetadata;
     sourceFile?: CanvasBatchSourceFile;
 };
 

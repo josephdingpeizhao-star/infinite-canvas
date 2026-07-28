@@ -61,6 +61,7 @@ import { connectedProductionSummary, resetInterruptedProductions, resolveProduct
 import { connectedStyleReferenceFileNames, connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
 import { useCanvasStyleReferenceIntake } from "./use-canvas-style-reference-intake";
+import { useCanvasStyleReferenceRemoval } from "./use-canvas-style-reference-removal";
 import { useCanvasWorkflowDemo } from "./use-canvas-workflow-demo";
 import { useCanvasWorkflowOutputImport } from "./use-canvas-workflow-output-import";
 import { useCanvasWorkflowQcBadges } from "./use-canvas-workflow-qc-badges";
@@ -395,6 +396,24 @@ function InfiniteCanvasPage() {
         setNodes,
         warn: (text) => void message.warning(text),
     });
+    const styleReferenceRemoval = useCanvasStyleReferenceRemoval({
+        nodesRef,
+        setNodes,
+        warn: (text) => void message.warning(text),
+    });
+    const confirmStyleReferenceRemoval = useCallback(
+        (nodeId: string) => {
+            modal.confirm({
+                title: "移除本批风格参考图？",
+                content: "将把本批已登记的风格参考文件全部移入 Windows 系统回收站。移除后，在重新补登前不能开始制作；画布连线不会被删除。",
+                okText: "确认移除",
+                cancelText: "取消",
+                okButtonProps: { danger: true },
+                onOk: () => styleReferenceRemoval.requestRemoval(nodeId),
+            });
+        },
+        [modal, styleReferenceRemoval.requestRemoval],
+    );
     const requestWorkflowStart = useCallback(
         (nodeId: string, requestedCommand?: ClosedWorkflowCommand) => {
             void workflowProduction.requestStart(nodeId, requestedCommand).then((handled) => {
@@ -2839,6 +2858,7 @@ function InfiniteCanvasPage() {
                                         onChange={batchIntake.updateFacts}
                                         onRegister={batchIntake.requestRegistration}
                                         onSupplementStyle={styleReferenceIntake.requestSupplement}
+                                        onRemoveStyle={confirmStyleReferenceRemoval}
                                     />
                                 ) : contentNode.type === CanvasNodeType.Workflow ? (
                                     <CanvasWorkflowNode

@@ -38,7 +38,7 @@ describe("style reference supplement", () => {
         const info = card();
         const style = image();
         expect(resolveStyleReferenceSelection(info.id, [info, style], [connection(style.id, info.id)])).toEqual({ ok: true, batchId: "cup", sourceNodeIds: ["style"] });
-        expect(resolveStyleReferenceSelection(info.id, [info, style], [])).toEqual({ ok: false, message: "请把至少 1 张风格参考图直接连到这张信息卡。" });
+        expect(resolveStyleReferenceSelection(info.id, [info, style], [])).toEqual({ ok: false, message: "请把 1 张风格参考图直接连到这张信息卡。" });
     });
 
     test("builds one supplement command with exact source proofs", () => {

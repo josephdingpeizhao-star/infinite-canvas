@@ -122,6 +122,16 @@
 | 119 | `docs/content/docs/progress/pending-test.mdx` | “CNT-01 每批自由设置主图/详情图张数”待测试小节 | 登记默认/边界/切换/手持、3+2 全链、混跑防呆及演示保留的真人验收点 | 自动检查不替代首个非默认真实批次的费用、QC 与关账验收 | 2026-07-27 |
 | 120 | `web/dist/` | CNT-01 最新生产运行副本 | 尺寸切换修正后按最终 CNT-01 源代码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 重启工作台并刷新画布后加载可编辑张数、尺寸保留与全链缺数防呆 | 2026-07-28 |
 
+| 121 | `web/src/types/canvas.ts` | 风格移除独立元数据类型 | 新增 idle/queued/completed/failed 状态、请求时间、批次号、错误和移除回执；不覆盖既有补登状态 | 让补登与移除在同一信息卡上独立确认、独立失败 | 2026-07-28 |
+| 122 | `web/src/lib/canvas/canvas-style-reference-intake.ts` | SR-01 单张规则与移除命令合同 | 0/1/2 张前置裁决、已有回执拦截、`# style-reference-remove` 命令、同一健康工人预检和 8 秒确认超时 | 每批只登记 1 张，移除不新增工人或旁路接口 | 2026-07-28 |
+| 123 | `web/src/pages/canvas/use-canvas-style-reference-intake.ts` | 补登与移除前端互斥 | 移除排队时拒绝补登；移除完成后新补登发号时重置旧移除状态 | 防止同卡两类命令并发，同时恢复重新补登 | 2026-07-28 |
+| 124 | `web/src/pages/canvas/use-canvas-style-reference-removal.ts` | 信息卡移除控制器 | 复用现有风格工人健康预检，只写独立移除命令和超时状态，不直接访问磁盘或删除节点 | 用户确认后才发命令，失败不自动重试 | 2026-07-28 |
+| 125 | `web/src/lib/canvas/canvas-intake-role-visibility.ts` | 移除按钮人话状态 | 在既有登记/补登按钮文案旁新增移除空闲与忙碌标签 | 卡面不复制状态判断文案 | 2026-07-28 |
+| 126 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 登记前只读区块与登记后移除状态 | 草稿态显示置灰风格区块；完成态显示移除按钮、忙碌互斥、失败信息和“已移除，可重新补登” | 连线可见但登记顺序不变，移除不绑定节点删除 | 2026-07-28 |
+| 127 | `web/src/pages/canvas/project.tsx` | 风格移除二次确认与页面接线 | 明示全部已登记文件进入 Windows 回收站、重新补登前不能制作且不删连线，确认后调用独立移除 hook | 移除动作只有一次清晰确认，取消零副作用 | 2026-07-28 |
+| 128 | `web/tests/canvas-style-reference-governance.test.ts` + `web/tests/canvas-style-reference-intake.test.ts` | SR-01 前端合同回归 | 新增单张、回执拦截、独立命令、同工人健康键、超时、草稿卡、忙碌互斥、移除完成和确认接线测试；既有测试只改 0 张提示 | 锁定用户可见流程，不放宽完整性和 fail-closed 断言 | 2026-07-28 |
+| 129 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | SR-01 版本归纳与真人待测清单 | Unreleased 记录用户可感知变更，待测试页登记一次性批次的单张、确认、门禁、回收站与重新补登走查；todo 经检查无对应条目，无需改动 | 功能先进入待测试，不提前写入正式 features | 2026-07-28 |
+
 ## 退役锚点（编号不复用）
 
 - `#76`：信息卡“移入回收站”挂点已按 DL-01 产品裁决移除；信息卡其余登记、补登和展示行为保持不变。
@@ -150,9 +160,11 @@
 - `web/src/pages/canvas/use-canvas-workflow-output-import.ts`：页面私有正式图片接收器；每张只尝试一次，失败停机，不自动重试。
 - `web/src/lib/canvas/canvas-style-reference-intake.ts`：信息卡直连风格图的磁盘凭证、整批浏览器预检、17373 原字节上传和硬停止合同。
 - `web/src/pages/canvas/use-canvas-style-reference-intake.ts`：页面私有风格补登控制器；服务接单后从 localforage 取原 Blob，刷新中断不自动恢复。
+- `web/src/pages/canvas/use-canvas-style-reference-removal.ts`：页面私有风格移除控制器；复用现有风格工人健康预检，只写独立移除命令与 8 秒确认超时状态。
 - `web/tests/canvas-workflow-production.test.ts`：覆盖演示/真实模式隔离、单卡单机素材门、费用估算鉴权、确认命令、同页单次提交和续跑/超时。
 - `web/tests/canvas-workflow-output-import.test.ts`：覆盖正式图片原字节转存、无 data URI、地址/哈希/字节拒绝与防重复导入。
 - `web/tests/canvas-style-reference-intake.test.ts`：覆盖信息卡直连、精确凭证、整批预检、单次上传、硬停止和刷新不续传。
+- `web/tests/canvas-style-reference-governance.test.ts`：覆盖每批 1 张、已有回执拦截、独立移除命令、同工人健康键、卡面状态与一次明确确认。
 - `web/src/lib/canvas/canvas-readonly-assistant.ts`：M3-a 固定 17373 问答端点、现有令牌鉴权、8 条/8 KiB 历史、300 秒轮询终止与相同进度引用稳定合同。
 - `web/src/components/canvas/canvas-readonly-assistant-panel.tsx`：M3-a 只读批次问答界面与原通用 Agent 切换外壳；M3-b 在同一页签增加意图辨认和命令草稿卡渲染，问题仍调用原只读函数，原通用 Agent 不改。
 - `web/tests/canvas-readonly-assistant.test.ts`：覆盖固定回环端点、令牌、终态轮询、300 秒硬上限、引用稳定、历史容量和重复提交人话拒绝。

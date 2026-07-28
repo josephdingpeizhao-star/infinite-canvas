@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck } from "lucide-react";
+import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
 
 import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
-import { batchRegistrationButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
-import { readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
+import { batchRegistrationButtonLabel, styleRemovalButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
+import { readStyleReferenceRemovalState, readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchIntakeMetadata, CanvasNodeData } from "@/types/canvas";
 
@@ -25,6 +25,7 @@ export function CanvasBatchInfoNode({
     onChange,
     onRegister,
     onSupplementStyle,
+    onRemoveStyle,
 }: {
     node: CanvasNodeData;
     connectedOriginalCount: number;
@@ -36,6 +37,7 @@ export function CanvasBatchInfoNode({
     onChange: (nodeId: string, patch: Partial<EditableFacts>) => void;
     onRegister: (nodeId: string) => void;
     onSupplementStyle: (nodeId: string) => void;
+    onRemoveStyle?: (nodeId: string) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const state = readBatchIntakeState(node.metadata);
@@ -49,6 +51,10 @@ export function CanvasBatchInfoNode({
     const imageCount = state.receipt?.imageCount ?? state.receivedCount ?? state.expectedCount ?? connectedOriginalCount;
     const styleState = readStyleReferenceState(node.metadata);
     const styleBusy = styleState.status === "queued" || styleState.status === "upload_ready" || styleState.status === "uploading";
+    const removalState = readStyleReferenceRemovalState(node.metadata);
+    const removalBusy = removalState.status === "queued";
+    const styleActionBusy = styleBusy || removalBusy;
+    const hasRegisteredStyle = (styleState.receipt?.fileCount || 0) > 0 && removalState.status !== "completed";
     const styleBlocked = styleState.status === "integrity_blocked";
     const countError = category ? imageCountError(state, category) : undefined;
     const totalCount =
@@ -89,13 +95,13 @@ export function CanvasBatchInfoNode({
                     )) : null}
                     <div className="mt-1 border-t pt-2" style={{ borderColor: theme.node.stroke }}>
                         <div className="flex items-center justify-between gap-3"><span style={{ color: theme.node.muted }}>风格参考</span><span className="font-medium">已连 {connectedStyleReferenceCount} 张</span></div>
-                        <div className="mt-1 text-[11px] leading-5" style={{ color: styleState.status === "failed" || styleBlocked ? "#f87171" : theme.node.muted }}>{styleReferenceText(styleState.status, styleState.receipt?.fileCount, styleState.errorMessage)}</div>
+                        <div className="mt-1 text-[11px] leading-5" style={{ color: styleState.status === "failed" || removalState.status === "failed" || styleBlocked ? "#f87171" : theme.node.muted }}>{styleReferenceText(styleState.status, styleState.receipt?.fileCount, styleState.errorMessage, removalState.status, removalState.errorMessage)}</div>
                         <IntakeFileList label="即将补登的风格参考图" names={connectedStyleReferenceFileNames} emptyText="尚未连接风格参考图" />
                         <button
                             type="button"
                             className="mt-2 inline-flex min-h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-55"
                             style={{ borderColor: styleBlocked ? "#ef4444" : theme.node.activeStroke, background: styleBlocked ? "transparent" : theme.node.activeStroke, color: styleBlocked ? "#f87171" : theme.node.panel }}
-                            disabled={styleBusy || styleBlocked}
+                            disabled={styleActionBusy || styleBlocked}
                             onMouseDown={stopEvent}
                             onPointerDown={stopEvent}
                             onClick={(event) => { event.stopPropagation(); onSupplementStyle(node.id); }}
@@ -103,6 +109,20 @@ export function CanvasBatchInfoNode({
                             {styleBusy ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
                             {styleSupplementButtonLabel(connectedStyleReferenceCount, styleBusy, styleBlocked)}
                         </button>
+                        {hasRegisteredStyle ? (
+                            <button
+                                type="button"
+                                className="mt-2 inline-flex min-h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-55"
+                                style={{ borderColor: "#ef4444", background: "transparent", color: "#f87171" }}
+                                disabled={styleActionBusy || !onRemoveStyle}
+                                onMouseDown={stopEvent}
+                                onPointerDown={stopEvent}
+                                onClick={(event) => { event.stopPropagation(); onRemoveStyle?.(node.id); }}
+                            >
+                                {removalBusy ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                                {styleRemovalButtonLabel(removalBusy)}
+                            </button>
+                        ) : null}
                     </div>
                 </div>
             ) : (
@@ -195,6 +215,23 @@ export function CanvasBatchInfoNode({
                         <span>
                             手持：主 {state.handheldMainCount ?? "—"} + 详情 {state.handheldDetailCount ?? "—"}
                         </span>
+                    </div>
+                    <div className="grid gap-2 rounded-xl border px-3 py-2 text-[11px] opacity-65" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
+                        <div className="flex items-center justify-between gap-3">
+                            <span>风格参考</span>
+                            <span className="font-medium">已连 {connectedStyleReferenceCount} 张</span>
+                        </div>
+                        <IntakeFileList label="已连接的风格参考图" names={connectedStyleReferenceFileNames} emptyText="尚未连接风格参考图" />
+                        <button
+                            type="button"
+                            className="inline-flex min-h-9 w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold opacity-55"
+                            style={{ borderColor: theme.node.stroke, background: "transparent", color: theme.node.muted }}
+                            disabled
+                        >
+                            <ShieldCheck className="size-4" />
+                            登记完成后可补登
+                        </button>
+                        <div>先登记产品原图；批次登记完成后这里才能补登风格参考图（每批 1 张）。</div>
                     </div>
                 </>
             )}
@@ -391,7 +428,16 @@ function statusText(state: CanvasBatchIntakeMetadata, connectedOriginalCount: nu
     return connectedOriginalCount ? `已连接 ${connectedOriginalCount} 张磁盘原图；填写完成后可登记。` : "请把信息卡和至少 1 张磁盘原图连接到同一台工作流机器。";
 }
 
-function styleReferenceText(status: ReturnType<typeof readStyleReferenceState>["status"], fileCount?: number, errorMessage?: string) {
+function styleReferenceText(
+    status: ReturnType<typeof readStyleReferenceState>["status"],
+    fileCount?: number,
+    errorMessage?: string,
+    removalStatus?: ReturnType<typeof readStyleReferenceRemovalState>["status"],
+    removalErrorMessage?: string,
+) {
+    if (removalStatus === "queued") return "移除命令已提交，等待本机服务确认。";
+    if (removalStatus === "completed") return "已移除，可重新补登";
+    if (removalStatus === "failed") return removalErrorMessage || "本次移除已停止，不会自动重试。";
     if (status === "queued") return "补登命令已提交，等待本机服务接单。";
     if (status === "upload_ready" || status === "uploading") return "正在逐字节核对并补登，不会重写原图和旧凭证。";
     if (status === "completed") return `已补登 ${fileCount || 0} 张，并生成独立回执。`;
