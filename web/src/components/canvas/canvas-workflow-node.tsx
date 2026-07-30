@@ -3,6 +3,7 @@ import { CheckCircle2, CircleAlert, Info, LoaderCircle, Play, Workflow } from "l
 import { canvasThemes } from "@/lib/canvas-theme";
 import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_COUNT, WORKFLOW_DEMO_TOTAL } from "@/lib/canvas/canvas-workflow-demo";
 import { COMPLETED_PRODUCTION_ACTION_LABEL, completedProductionStatusText, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
+import { ACCEPTANCE_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-receiving";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionStatus } from "@/types/canvas";
 
@@ -51,7 +52,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
             </div>
 
             {production && productionState.status === "completed" ? (
-                <div className="grid grid-cols-2 gap-2">
+                <div className={ACCEPTANCE_ENTRY_ENABLED ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
                     <button
                         type="button"
                         className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
@@ -65,19 +66,21 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
                     >
                         上桌返修图
                     </button>
-                    <button
-                        type="button"
-                        className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
-                        style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onEnsureReceiving(node.id);
-                        }}
-                    >
-                        已收货框
-                    </button>
+                    {ACCEPTANCE_ENTRY_ENABLED ? (
+                        <button
+                            type="button"
+                            className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
+                            style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onEnsureReceiving(node.id);
+                            }}
+                        >
+                            已收货框
+                        </button>
+                    ) : null}
                 </div>
             ) : null}
 

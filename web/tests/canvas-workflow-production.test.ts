@@ -182,7 +182,7 @@ describe("canvas workflow production", () => {
         expect(completedProductionStatusText("质检完成，QC 报告已生成。", 5)).toBe("质检完成，QC 报告已生成。");
         expect(completedProductionStatusText(undefined, 5)).toBe("5 张真实图片已上桌。点击继续后，机器会按当前批次状态处理下一步。");
         expect(completedProductionStatusText(undefined, 5)).not.toContain("停在质检前");
-        expect(COMPLETED_PRODUCTION_ACTION_LABEL).toBe("继续/质检");
+        expect(COMPLETED_PRODUCTION_ACTION_LABEL).toBe("继续");
     });
 
     test("completed continuation keeps one submission per machine and batch", () => {

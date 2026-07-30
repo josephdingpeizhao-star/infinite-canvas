@@ -7,7 +7,7 @@ import {
 export const WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS = 8_000;
 export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 12 * 60_000;
 export const WORKFLOW_PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
-export const COMPLETED_PRODUCTION_ACTION_LABEL = "继续/质检";
+export const COMPLETED_PRODUCTION_ACTION_LABEL = "继续";
 export const WORKFLOW_COUNT_DATA_MISSING_MESSAGE = "本批次张数或编号信息不完整，请重启工作台 + 刷新画布后再试。";
 
 const PRODUCTION_STATUSES = new Set(["idle", "queued", "running", "paused", "completed", "failed"]);

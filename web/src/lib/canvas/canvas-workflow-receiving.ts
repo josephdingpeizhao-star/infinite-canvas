@@ -1,6 +1,9 @@
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { readExpectedImageSet, WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "@/lib/canvas/canvas-workflow-production";
 
+// AC-01：收货关账入口休眠；接回时改为 true 并更新对应合同测试。
+export const ACCEPTANCE_ENTRY_ENABLED = false;
+
 const PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 

@@ -135,6 +135,12 @@
 | 131 | `web/src/pages/canvas/use-canvas-workflow-production.ts` | `requestStart()` 与确认写回 | 删除缺数失败态在报价前的本地拦截；费用确认后统一用报价补齐计数再构建生产命令 | “开始/重新开始”先向后端取可信报价，自愈失败时才提示重启刷新 | 2026-07-28 |
 | 132 | `web/tests/canvas-workflow-production.test.ts` | 失败真因优先与报价自愈回归 | 新增真实原因优先、缺数状态可重新报价、报价补齐后可排队三组断言；报价仍缺字段的 fail-closed 断言保留 | 防止以后再次用本地残留状态永久卡死生产机器 | 2026-07-28 |
 | 133 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | HF-01 版本归纳与真人待测清单 | 记录失败原因优先、重新报价自愈及报价仍不完整时才提示重启刷新；todo 经检查无对应条目，无需改动 | 自动测试通过后仍如实保留真实工作台重启与重新开始验收 | 2026-07-28 |
+| 134 | `web/src/lib/canvas/canvas-workflow-receiving.ts` | `ACCEPTANCE_ENTRY_ENABLED` | 新增默认 `false` 的 AC-01 单点休眠开关；接回时改为 `true` 并同步合同测试 | 只休眠新建收货框入口，保留既有收货框、关账提交与后端能力 | 2026-07-31 |
+| 135 | `web/src/components/canvas/canvas-workflow-node.tsx` | completed 辅助按钮区 | 以 AC-01 开关门控“已收货框”；关闭时“上桌返修图”独占单列，打开时恢复双列 | 默认批次不再新建收货框，同时保持返修图上桌入口和未来接回接线 | 2026-07-31 |
+| 136 | `web/src/lib/canvas/canvas-workflow-production.ts` | `COMPLETED_PRODUCTION_ACTION_LABEL` | completed 主按钮由“继续/质检”改为“继续” | QC 与收货关账均退出默认批次流程后，按钮只表达幂等继续语义 | 2026-07-31 |
+| 137 | `web/tests/canvas-workflow-production.test.ts` | completed 标签合同 | 既有唯一断言机械同步为“继续” | 防止默认完成按钮重新暴露已休眠流程名称 | 2026-07-31 |
+| 138 | `web/tests/canvas-workflow-acceptance-dormancy.test.ts` | AC-01 休眠合同 | 新增单点开关严格为 `false` 的合同测试；不新造组件模块模拟设施 | 锁定默认入口休眠，同时避免复制既有 receiving 能力测试 | 2026-07-31 |
+| 139 | `web/dist/` | AC-01 最新本机运行副本 | 提交前按最终源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 让下次画布启动加载入口休眠、单列布局与“继续”文案 | 2026-07-31 |
 
 ## 退役锚点（编号不复用）
 
@@ -158,6 +164,7 @@
 - `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；加载并复用品类目录，只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
 - `web/tests/canvas-batch-intake.test.ts`：覆盖九项事实、品类目录与摘要、三维/手持边界、下拉/折叠/失败态、单卡单机原图连线、中文编码、浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
 - `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令、中断状态和同页单次提交合同；不实现后台工序路由。
+- `web/tests/canvas-workflow-acceptance-dormancy.test.ts`：AC-01 单点休眠合同，锁定“已收货框”新建入口默认关闭；不重复既有收货框、关账或交付能力测试。
 - `web/src/components/canvas/canvas-workflow-production-cost-card.tsx`：真实费用唯一确认卡，显示剩余张数、约计美元金额和约计时长；取消不写画布状态。
 - `web/src/pages/canvas/use-canvas-workflow-production.ts`：页面私有真实费用控制器；只在确认后写生产命令，同一页面内同一机器/批次只允许一次提交；无信息卡时明确把开始动作交还 M1 演示。
 - `web/src/lib/canvas/canvas-workflow-output-import.ts`：正式 PNG 的 17373 地址、服务端 SHA、浏览器 Blob SHA 与字节数合同；通过后转存现有 localforage 图片库，拒绝 data URI。
