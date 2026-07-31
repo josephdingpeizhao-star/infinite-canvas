@@ -48,13 +48,13 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
         codexApp ||= await CodexAppClient.start(emit);
         let threadId = await ensureCodexThread(codexApp, options, emit);
         try {
-            await codexApp.startTurn(threadId, prompt, files);
+            await codexApp.startTurn(threadId, prompt, files, options.model, options.effort);
         } catch (error) {
             if (!isRecoverableThreadError(error)) throw error;
             emit("agent_log", { text: `Codex thread unavailable, starting a new thread: ${errorMessage(error)}` });
             codexThreadId = "";
             threadId = await ensureCodexThread(codexApp, codexRecoveryThreadOptions(options), emit);
-            await codexApp.startTurn(threadId, prompt, files);
+            await codexApp.startTurn(threadId, prompt, files, options.model, options.effort);
         }
     } catch (error) {
         emit("agent_error", codexFailureEvent(error));
@@ -203,8 +203,8 @@ class CodexAppClient {
         return this.request("thread/archive", { threadId });
     }
 
-    async startTurn(threadId: string, prompt: string, images: string[]) {
-        const result = await this.request("turn/start", { threadId, input: codexInput(prompt, images), approvalPolicy: "never" });
+    async startTurn(threadId: string, prompt: string, images: string[], model?: string, effort?: CodexReasoningEffort) {
+        const result = await this.request("turn/start", codexTurnStartParams(threadId, prompt, images, model, effort));
         const turnId = String(field(field(result, "turn"), "id") || "");
         if (!turnId) throw new Error("Codex app-server 没有返回 turn id");
         this.currentTurnId = turnId;
@@ -379,6 +379,10 @@ export function codexRecoveryThreadOptions(options: CodexRunOptions): CodexRunOp
 
 export function codexThreadStartParams(cwd?: string, model?: string, effort?: CodexReasoningEffort) {
     return { approvalPolicy: "never", sandbox: "workspace-write", config: codexConfig(), ...(cwd ? { cwd } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), threadSource: "user" };
+}
+
+export function codexTurnStartParams(threadId: string, prompt: string, images: string[], model?: string, effort?: CodexReasoningEffort) {
+    return { threadId, input: codexInput(prompt, images), approvalPolicy: "never", ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
 }
 
 function codexTurnError(code: string, message: string): CodexTurnError {

@@ -152,3 +152,37 @@ test("Codex stdout decoding preserves Chinese JSON split inside a multibyte char
     assert.equal(output.join(""), json);
     assert.equal(output.join("").includes("\uFFFD"), false);
 });
+
+type CodexTurnStartTestSurface = {
+    codexTurnStartParams?: (threadId: string, prompt: string, images: string[], model?: string, effort?: string) => Record<string, unknown>;
+};
+
+const turnSubject = agents as unknown as CodexTurnStartTestSurface;
+
+test("production turn start request explicitly selects gpt-5.5 with xhigh effort", () => {
+    assert.equal(typeof turnSubject.codexTurnStartParams, "function");
+
+    const production = turnSubject.codexTurnStartParams?.("thread-1", "prompt", [], "gpt-5.5", "xhigh");
+
+    assert.deepEqual(production, {
+        threadId: "thread-1",
+        input: [{ type: "text", text: "prompt", text_elements: [] }],
+        approvalPolicy: "never",
+        model: "gpt-5.5",
+        effort: "xhigh",
+    });
+});
+
+test("ordinary turn start request omits model and effort unless explicitly selected", () => {
+    assert.equal(typeof turnSubject.codexTurnStartParams, "function");
+
+    const inherited = turnSubject.codexTurnStartParams?.("thread-1", "prompt", []);
+
+    assert.deepEqual(inherited, {
+        threadId: "thread-1",
+        input: [{ type: "text", text: "prompt", text_elements: [] }],
+        approvalPolicy: "never",
+    });
+    assert.equal(Object.hasOwn(inherited || {}, "model"), false);
+    assert.equal(Object.hasOwn(inherited || {}, "effort"), false);
+});

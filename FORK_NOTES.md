@@ -159,6 +159,9 @@
 | 155 | `web/tests/canvas-workflow-production.test.ts` | QC-02c 五项指令矩阵 | 追加失败零剩余、失败仍有剩余、暂停零剩余、缺省报价和显式指令优先回归；既有测试正文不改 | 锁定严格零值判据、旧调用兼容与批次助手优先级 | — |
 | 156 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | QC-02c 版本归纳与真人待测清单 | Unreleased 记录全部出图但显示失败时可继续走完；待测试页登记五项行为边界；todo 经检查无对应条目，无需改动 | 自动合同不替代真实失败卡、费用确认和后端路由验收，文档不写具体日期 | — |
 | 157 | `web/dist/` | QC-02c 最新本机运行副本 | 按最终源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 下次重启工作台后加载零剩余时的中性继续命令 | — |
+| 158 | `canvas-agent/src/agents.ts` | CX-01 `runCodexTurnNow()`、`startTurn()` 与 `codexTurnStartParams()` | 正常与恢复路径把已选 `model + effort` 传到 `turn/start`；请求体仅在显式提供时追加两字段 | 让真实制作的模型与档位在 Codex 权威 turn 层生效，同时保持普通画布会话缺省语义不变 | — |
+| 159 | `canvas-agent/src/agents.test.ts` | CX-01 turn 载荷双锚 | 仅追加生产 `gpt-5.5 + xhigh` 完整载荷与缺省省略两项纯内存测试，既有测试正文不改 | 锁定生产档位穿透和普通会话隔离；移除 effort 展开时回归必须失败 | — |
+| 160 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CX-01 版本归纳与真人待测清单 | Unreleased 记录真实制作不再受个人 Codex 配置影响；待测试页登记生产钉死、缺省边界、恢复路径与真机 rollout 验收；todo 经检查无对应条目，无需改动 | 离线载荷合同不替代真实批次重启与 rollout 档位验收，文档不写具体日期 | — |
 
 ## 退役锚点（编号不复用）
 
