@@ -155,6 +155,10 @@
 | 151 | `web/tests/canvas-batch-intake.test.ts` + `web/tests/cfg01-clear-water-retirement.test.ts` | CFG-01 既有回归机械同步与三项合同门 | 现行夹具同步为两项高级选项和 10 项载荷；新增摘要互锚、两项键集与退役键拒绝、载荷无退役字段测试 | 锁定新契约，同时不削弱原连线、原图完整性、失败关闭或历史 completed 覆盖 | — |
 | 152 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CFG-01 版本归纳与真人待测清单 | Unreleased 记录清水开关退出新建批次；待测试页登记信息卡、10 项载荷、历史画布兼容与混跑防呆走查；todo 经检查无对应条目，无需改动 | 自动合同不替代真人确认，文档不写具体日期 | — |
 | 153 | `web/dist/` | CFG-01 最新本机运行副本 | 已按最终源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 下次重启工作台后加载 10 项载荷与两项高级选项 | — |
+| 154 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` | QC-02c 报价剩余数与生产命令选择 | `buildProductionCommand()` 接收不持久化的可选报价上下文；显式指令与 completed 优先，随后仅在 `remainingCount === 0` 时发送 `run: next`，确认调用传入本次已验证报价 | 已全部出图但状态失败时不再误发必被真实路由拒绝的渲染重试；正数或缺省报价仍保持原续跑语义 | — |
+| 155 | `web/tests/canvas-workflow-production.test.ts` | QC-02c 五项指令矩阵 | 追加失败零剩余、失败仍有剩余、暂停零剩余、缺省报价和显式指令优先回归；既有测试正文不改 | 锁定严格零值判据、旧调用兼容与批次助手优先级 | — |
+| 156 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | QC-02c 版本归纳与真人待测清单 | Unreleased 记录全部出图但显示失败时可继续走完；待测试页登记五项行为边界；todo 经检查无对应条目，无需改动 | 自动合同不替代真实失败卡、费用确认和后端路由验收，文档不写具体日期 | — |
+| 157 | `web/dist/` | QC-02c 最新本机运行副本 | 按最终源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 下次重启工作台后加载零剩余时的中性继续命令 | — |
 
 ## 退役锚点（编号不复用）
 

@@ -263,4 +263,20 @@ describe("canvas workflow production", () => {
         expect(readExpectedImageSet(5, ["main_01", "main_02", "main_03", "detail_01", "detail_01"])).toBeUndefined();
         expect(readExpectedImageSet(1, ["main_01"])).toBeUndefined();
     });
+
+    test("uses verified remaining renders without overriding existing command priorities", () => {
+        const failed = readProductionState({ workflowProduction: productionMetadata("failed", 5, 3, 2) });
+        const zeroRemaining = buildProductionCommand(failed, "cup", "request-zero-remaining", 7_000, undefined, { remainingCount: 0 });
+        expect(zeroRemaining.content.split("\n").at(-1)).toBe("run: next");
+        expect(zeroRemaining.content).not.toContain("retry: renders");
+
+        const partialFailure = readProductionState({ workflowProduction: productionMetadata("failed", 4, 3, 2) });
+        expect(buildProductionCommand(partialFailure, "cup", "request-renders-remain", 8_000, undefined, { remainingCount: 1 }).content.split("\n").at(-1)).toBe("retry: renders");
+
+        const paused = readProductionState({ workflowProduction: productionMetadata("paused", 5, 3, 2) });
+        expect(buildProductionCommand(paused, "cup", "request-paused-zero", 9_000, undefined, { remainingCount: 0 }).content.split("\n").at(-1)).toBe("run: next");
+
+        expect(buildProductionCommand(failed, "cup", "request-without-quote", 10_000).content.split("\n").at(-1)).toBe("retry: renders");
+        expect(buildProductionCommand(failed, "cup", "request-explicit", 11_000, "retry: qc", { remainingCount: 0 }).content.split("\n").at(-1)).toBe("retry: qc");
+    });
 });

@@ -105,6 +105,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
                     requestId,
                     now,
                     current.requestedCommand,
+                    current.quote,
                 );
                 return { ...node, metadata: { ...node.metadata, content: command.content, workflowProduction: command.state } };
             }),

@@ -175,14 +175,17 @@ export function buildProductionCommand(
     requestId: string,
     now: number,
     requestedCommand?: ClosedWorkflowCommand,
+    quote?: Pick<WorkflowProductionQuote, "remainingCount">,
 ) {
     const action = requestedCommand
         ? requireClosedWorkflowCommand(requestedCommand)
         : state.status === "completed"
           ? "run: next"
-          : state.producedCount > 0 || state.status === "paused"
-            ? "retry: renders"
-            : "run: next";
+          : quote?.remainingCount === 0
+            ? "run: next"
+            : state.producedCount > 0 || state.status === "paused"
+              ? "retry: renders"
+              : "run: next";
     if (!readExpectedImageSet(state.totalCount, state.expectedConfigIds)) throw new Error(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);
     return {
         content: `# workflow-production\n# request-id: ${requestId}\n# requested-at: ${now}\n${action}`,
