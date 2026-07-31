@@ -141,6 +141,15 @@
 | 137 | `web/tests/canvas-workflow-production.test.ts` | completed 标签合同 | 既有唯一断言机械同步为“继续” | 防止默认完成按钮重新暴露已休眠流程名称 | 2026-07-31 |
 | 138 | `web/tests/canvas-workflow-acceptance-dormancy.test.ts` | AC-01 休眠合同 | 新增单点开关严格为 `false` 的合同测试；不新造组件模块模拟设施 | 锁定默认入口休眠，同时避免复制既有 receiving 能力测试 | 2026-07-31 |
 | 139 | `web/dist/` | AC-01 最新本机运行副本 | 提交前按最终源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 让下次画布启动加载入口休眠、单列布局与“继续”文案 | 2026-07-31 |
+| 140 | `web/src/lib/canvas/canvas-workflow-image-export.ts` | EX-01 下载判据、计划与执行薄壳 | 只收当前机器批次、实际图位白名单和浏览器持久化证据完整的正式/返修图；支持选中/全部、规定排序命名、同名副本防撞、缺失 Blob 清单、ZIP 与逐张下载 | 无关图片和跨批图片 fail-closed，下载副作用与可测纯逻辑分层且不新增依赖 | 2026-07-31 |
+| 141 | `web/src/components/canvas/canvas-workflow-download-card.tsx` | “选择下载方式”弹窗 | 显示批次号、本次张数、ZIP/逐张两个动作与浏览器多文件授权说明 | 用户每次下载前明确选择落盘方式，取消零副作用 | 2026-07-31 |
+| 142 | `web/src/lib/canvas/canvas-workflow-delivery.ts` | `REPAIR_PROJECTION_ENTRY_ENABLED` | 新增默认 `false` 的 EX-01 单点休眠开关；接回时改为 `true` 并同步合同测试 | 只休眠“上桌返修图”入口，保留既有返修投影函数、页面接线和后端能力 | 2026-07-31 |
+| 143 | `web/src/components/canvas/canvas-workflow-node.tsx` | completed 下载与休眠动作区 | 默认以两列显示“下载选中的图片/下载所有图片”，按可下载数量置灰；返修与收货开关恢复时以紧凑网格自然回排 | 完成机器直接下载本批成图，demo、继续按钮及未来接回能力不变 | 2026-07-31 |
+| 144 | `web/src/pages/canvas/project.tsx` | 下载计划、弹窗与结果提示接线 | 页面按机器与当前选区计算数量，保存本次计划并执行用户选定方式；缺失时提示已下载数和图位，零缺失不提示 | 哑组件不复制归属判据，storageKey 失效不静默 | 2026-07-31 |
+| 145 | `web/tests/canvas-workflow-image-export.test.ts` | EX-01 下载纯函数合同 | 覆盖六类拒绝、选中/全部、节点与同名副本去重、图位与来源排序、防撞命名、缺失 Blob 和 disabled 判定 | 零网络、零真实存储与零浏览器下载锁定下载边界 | 2026-07-31 |
+| 146 | `web/tests/canvas-workflow-repair-projection-dormancy.test.ts` | EX-01 返修入口休眠合同 | 新增单点开关严格为 `false` 的 9 行级合同测试 | 锁定默认入口休眠，不复制返修投影组件或后端测试 | 2026-07-31 |
+| 147 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | EX-01/AC-01 版本归纳与真人待测清单 | Unreleased 归纳下载双模式、返修入口休眠并补记 AC-01；待测试页登记下载、缺失提示、开关布局与继续文案；todo 经检查无对应条目，无需改动 | 自动检查不替代真人下载与完成态入口验收，两份正文不写具体日期 | 2026-07-31 |
+| 148 | `web/dist/` | EX-01 最新本机运行副本 | 按最终源码重建并记录输出与产物时间戳；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 下次重启工作台后加载下载双模式与两个默认休眠入口 | 2026-07-31 |
 
 ## 退役锚点（编号不复用）
 
@@ -165,6 +174,10 @@
 - `web/tests/canvas-batch-intake.test.ts`：覆盖九项事实、品类目录与摘要、三维/手持边界、下拉/折叠/失败态、单卡单机原图连线、中文编码、浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
 - `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令、中断状态和同页单次提交合同；不实现后台工序路由。
 - `web/tests/canvas-workflow-acceptance-dormancy.test.ts`：AC-01 单点休眠合同，锁定“已收货框”新建入口默认关闭；不重复既有收货框、关账或交付能力测试。
+- `web/src/lib/canvas/canvas-workflow-image-export.ts`：EX-01 当前批次正式/返修成图的选中/全部收集、排序命名、缺失分类及 ZIP/逐张下载薄壳。
+- `web/src/components/canvas/canvas-workflow-download-card.tsx`：EX-01 下载方式选择弹窗，显示批次、张数和浏览器多文件授权说明。
+- `web/tests/canvas-workflow-image-export.test.ts`：EX-01 下载归属、收集、命名、缺失与置灰纯函数合同。
+- `web/tests/canvas-workflow-repair-projection-dormancy.test.ts`：EX-01 单点休眠合同，锁定“上桌返修图”入口默认关闭。
 - `web/src/components/canvas/canvas-workflow-production-cost-card.tsx`：真实费用唯一确认卡，显示剩余张数、约计美元金额和约计时长；取消不写画布状态。
 - `web/src/pages/canvas/use-canvas-workflow-production.ts`：页面私有真实费用控制器；只在确认后写生产命令，同一页面内同一机器/批次只允许一次提交；无信息卡时明确把开始动作交还 M1 演示。
 - `web/src/lib/canvas/canvas-workflow-output-import.ts`：正式 PNG 的 17373 地址、服务端 SHA、浏览器 Blob SHA 与字节数合同；通过后转存现有 localforage 图片库，拒绝 data URI。

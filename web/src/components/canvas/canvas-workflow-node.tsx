@@ -2,12 +2,28 @@ import { CheckCircle2, CircleAlert, Info, LoaderCircle, Play, Workflow } from "l
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_COUNT, WORKFLOW_DEMO_TOTAL } from "@/lib/canvas/canvas-workflow-demo";
+import { REPAIR_PROJECTION_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-delivery";
+import { isWorkflowImageDownloadDisabled } from "@/lib/canvas/canvas-workflow-image-export";
 import { COMPLETED_PRODUCTION_ACTION_LABEL, completedProductionStatusText, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
 import { ACCEPTANCE_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-receiving";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionStatus } from "@/types/canvas";
 
-export function CanvasWorkflowNode({ node, connectedImageCount, production, onStart, onProjectRepaired, onEnsureReceiving, onToggleDetails }: { node: CanvasNodeData; connectedImageCount: number; production?: ConnectedProductionSummary; onStart: (nodeId: string) => void; onProjectRepaired: (nodeId: string) => void; onEnsureReceiving: (nodeId: string) => void; onToggleDetails: (nodeId: string) => void }) {
+type CanvasWorkflowNodeProps = {
+    node: CanvasNodeData;
+    connectedImageCount: number;
+    production?: ConnectedProductionSummary;
+    downloadableSelectedImageCount: number;
+    downloadableAllImageCount: number;
+    onStart: (nodeId: string) => void;
+    onDownloadSelected: (nodeId: string) => void;
+    onDownloadAll: (nodeId: string) => void;
+    onProjectRepaired: (nodeId: string) => void;
+    onEnsureReceiving: (nodeId: string) => void;
+    onToggleDetails: (nodeId: string) => void;
+};
+
+export function CanvasWorkflowNode({ node, connectedImageCount, production, downloadableSelectedImageCount, downloadableAllImageCount, onStart, onDownloadSelected, onDownloadAll, onProjectRepaired, onEnsureReceiving, onToggleDetails }: CanvasWorkflowNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const demoState = readWorkflowDemoState(node.metadata);
     const productionState = readProductionState(node.metadata);
@@ -17,9 +33,16 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
     const awaitingConfirmation = !production && demoState.status === "awaiting_confirmation";
     const statusLabel = production ? productionStatusLabel(productionState.status) : workflowStatusLabel(demoState.status);
     const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.totalCount, productionState.message, productionState.errorMessage) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage);
+    const compactCompletedLayout = Boolean(production && productionState.status === "completed" && (REPAIR_PROJECTION_ENTRY_ENABLED || ACCEPTANCE_ENTRY_ENABLED));
+    const completedActions: Array<{ key: string; label: string; disabled?: boolean; wide?: boolean; onClick: (nodeId: string) => void }> = [
+        { key: "download-selected", label: "下载选中的图片", disabled: isWorkflowImageDownloadDisabled(downloadableSelectedImageCount), onClick: onDownloadSelected },
+        { key: "download-all", label: "下载所有图片", disabled: isWorkflowImageDownloadDisabled(downloadableAllImageCount), onClick: onDownloadAll },
+    ];
+    if (REPAIR_PROJECTION_ENTRY_ENABLED) completedActions.push({ key: "project-repaired", label: "上桌返修图", wide: !ACCEPTANCE_ENTRY_ENABLED, onClick: onProjectRepaired });
+    if (ACCEPTANCE_ENTRY_ENABLED) completedActions.push({ key: "ensure-receiving", label: "已收货框", wide: !REPAIR_PROJECTION_ENTRY_ENABLED, onClick: onEnsureReceiving });
 
     return (
-        <div className="flex h-full w-full cursor-move flex-col gap-3 p-4" style={{ color: theme.node.text }}>
+        <div className={`flex h-full w-full cursor-move flex-col ${compactCompletedLayout ? "gap-2" : "gap-3"} p-4`} style={{ color: theme.node.text }}>
             <div className="flex items-center gap-3">
                 <span className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: theme.toolbar.activeBg, color: theme.node.text }}>
                     <Workflow className="size-5" />
@@ -47,40 +70,29 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, onSt
                 <SummaryCell label="详情" value={`${production ? production.detailImageCount ?? "—" : WORKFLOW_DEMO_DETAIL_COUNT} 张`} />
             </div>
 
-            <div className="min-h-12 rounded-xl border px-3 py-2 text-xs leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: state.status === "failed" ? "#f87171" : theme.node.muted }}>
+            <div className={`${compactCompletedLayout ? "min-h-10" : "min-h-12"} rounded-xl border px-3 py-2 text-xs leading-5`} style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: state.status === "failed" ? "#f87171" : theme.node.muted }}>
                 {statusText}
             </div>
 
             {production && productionState.status === "completed" ? (
-                <div className={ACCEPTANCE_ENTRY_ENABLED ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
-                    <button
-                        type="button"
-                        className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
-                        style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onProjectRepaired(node.id);
-                        }}
-                    >
-                        上桌返修图
-                    </button>
-                    {ACCEPTANCE_ENTRY_ENABLED ? (
+                <div className="grid grid-cols-2 gap-2">
+                    {completedActions.map((action) => (
                         <button
+                            key={action.key}
                             type="button"
-                            className="h-8 cursor-pointer rounded-lg border text-xs font-semibold"
+                            className={`h-8 cursor-pointer rounded-lg border text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-55 ${action.wide ? "col-span-2" : ""}`}
                             style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}
+                            disabled={action.disabled}
                             onMouseDown={(event) => event.stopPropagation()}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                                 event.stopPropagation();
-                                onEnsureReceiving(node.id);
+                                action.onClick(node.id);
                             }}
                         >
-                            已收货框
+                            {action.label}
                         </button>
-                    ) : null}
+                    ))}
                 </div>
             ) : null}
 

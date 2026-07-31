@@ -35,6 +35,7 @@ import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/canvas
 import { CanvasBatchInfoNode } from "@/components/canvas/canvas-batch-info-node";
 import { CanvasDeleteProjectsDialog } from "@/components/canvas/canvas-delete-projects-dialog";
 import { CanvasWorkflowCostCard } from "@/components/canvas/canvas-workflow-cost-card";
+import { CanvasWorkflowDownloadCard } from "@/components/canvas/canvas-workflow-download-card";
 import { CanvasWorkflowProductionCostCard } from "@/components/canvas/canvas-workflow-production-cost-card";
 import { CanvasWorkflowNode, CanvasWorkflowNodePanel } from "@/components/canvas/canvas-workflow-node";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
@@ -57,6 +58,7 @@ import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
 import { batchSourceFilePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
 import { MATERIAL_UPLOAD_ACCEPT, materialFileKind, materialUploadFocus, runMaterialUploadBatch, type MaterialFileKind, type MaterialUploadMode } from "@/lib/canvas/canvas-material-upload";
+import { buildWorkflowImageDownloadPlan, executeWorkflowImageDownloadPlan, type WorkflowImageDownloadMethod, type WorkflowImageDownloadPlan, type WorkflowImageDownloadScope } from "@/lib/canvas/canvas-workflow-image-export";
 import { connectedProductionSummary, resetInterruptedProductions, resolveProductionSelection } from "@/lib/canvas/canvas-workflow-production";
 import { connectedStyleReferenceFileNames, connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
@@ -319,6 +321,7 @@ function InfiniteCanvasPage() {
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
     const [nodeImageSettingsOpen, setNodeImageSettingsOpen] = useState(false);
     const [dialogNodeId, setDialogNodeId] = useState<string | null>(null);
+    const [pendingWorkflowImageDownload, setPendingWorkflowImageDownload] = useState<WorkflowImageDownloadPlan | null>(null);
     const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
     const [editRequestNonce, setEditRequestNonce] = useState(0);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
@@ -1767,6 +1770,31 @@ function InfiniteCanvasPage() {
         saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
     }, []);
 
+    const requestWorkflowImageDownload = useCallback((nodeId: string, scope: WorkflowImageDownloadScope) => {
+        const machine = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Workflow);
+        if (!machine) return;
+        const plan = buildWorkflowImageDownloadPlan(machine, nodesRef.current, scope, selectedNodeIdsRef.current);
+        if (!plan?.items.length) return;
+        setPendingWorkflowImageDownload(plan);
+    }, []);
+
+    const runWorkflowImageDownload = useCallback(
+        async (method: WorkflowImageDownloadMethod) => {
+            const plan = pendingWorkflowImageDownload;
+            if (!plan) return;
+            setPendingWorkflowImageDownload(null);
+            try {
+                const result = await executeWorkflowImageDownloadPlan(plan, method);
+                if (!result.missingItems.length) return;
+                const missingSlots = result.missingItems.map((item) => (item.source === "repaired" ? `${item.configId}（返修）` : item.configId)).join("、");
+                warnWorkflow(`已下载 ${result.downloadedCount}/${result.totalCount} 张，缺失：图位号 ${missingSlots}`);
+            } catch {
+                warnWorkflow("图片下载没有完成，请重试。");
+            }
+        },
+        [pendingWorkflowImageDownload, warnWorkflow],
+    );
+
     const saveNodeAsset = useCallback(
         async (node: CanvasNodeData) => {
             if (node.type === CanvasNodeType.Text) {
@@ -2865,7 +2893,11 @@ function InfiniteCanvasPage() {
                                         node={contentNode}
                                         connectedImageCount={connectedWorkflowImageIds(contentNode.id, nodes, connections).length}
                                         production={connectedProductionSummary(contentNode.id, nodes, connections)}
+                                        downloadableSelectedImageCount={buildWorkflowImageDownloadPlan(contentNode, nodes, "selected", selectedNodeIds)?.items.length ?? 0}
+                                        downloadableAllImageCount={buildWorkflowImageDownloadPlan(contentNode, nodes, "all", selectedNodeIds)?.items.length ?? 0}
                                         onStart={requestWorkflowStart}
+                                        onDownloadSelected={(nodeId) => requestWorkflowImageDownload(nodeId, "selected")}
+                                        onDownloadAll={(nodeId) => requestWorkflowImageDownload(nodeId, "all")}
                                         onProjectRepaired={workflowRepairedProjection.requestProjection}
                                         onEnsureReceiving={workflowReceiving.ensureBox}
                                         onToggleDetails={(nodeId) => setDialogNodeId((current) => (current === nodeId ? null : nodeId))}
@@ -2995,6 +3027,15 @@ function InfiniteCanvasPage() {
                     quote={workflowProduction.pending?.quote}
                     onConfirm={workflowProduction.confirmStart}
                     onCancel={workflowProduction.cancelConfirmation}
+                />
+
+                <CanvasWorkflowDownloadCard
+                    open={Boolean(pendingWorkflowImageDownload)}
+                    batchId={pendingWorkflowImageDownload?.batchId}
+                    imageCount={pendingWorkflowImageDownload?.items.length || 0}
+                    onDownloadZip={() => void runWorkflowImageDownload("zip")}
+                    onDownloadIndividually={() => void runWorkflowImageDownload("individual")}
+                    onCancel={() => setPendingWorkflowImageDownload(null)}
                 />
 
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}

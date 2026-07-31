@@ -1,6 +1,9 @@
 import { CanvasNodeType, type CanvasNodeData, type CanvasWorkflowQcBadgeMetadata, type CanvasWorkflowRepairedProjectionMetadata } from "@/types/canvas";
 import { readExpectedImageSet, readProductionState, WORKFLOW_COUNT_DATA_MISSING_MESSAGE } from "@/lib/canvas/canvas-workflow-production";
 
+// EX-01：返修投影入口休眠；接回时改为 true 并更新对应合同测试。
+export const REPAIR_PROJECTION_ENTRY_ENABLED = false;
+
 const PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
