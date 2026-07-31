@@ -109,12 +109,11 @@ export type CanvasBatchIntakeFacts = {
     detail_image_count: number;
     handheld_main: number;
     handheld_detail: number;
-    allow_clear_water: boolean;
     forbid_pouring_and_heating: boolean;
     missing_d_no_retake: boolean;
 };
 export type CanvasBatchDimensionKey = "length_cm" | "width_cm" | "height_cm";
-export type CanvasBatchAdvancedOptionKey = "allow_clear_water" | "forbid_pouring_and_heating" | "missing_d_no_retake";
+export type CanvasBatchAdvancedOptionKey = "forbid_pouring_and_heating" | "missing_d_no_retake";
 export type CanvasBatchCategoryMetadata = {
     key: string;
     display_name: string;

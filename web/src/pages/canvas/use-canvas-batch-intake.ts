@@ -8,7 +8,7 @@ import { CanvasNodeType, type CanvasBatchCategoryCatalog, type CanvasBatchIntake
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
-    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "prohibitPouringAndHeating" | "skipMissingDAngle"
 >;
 
 type BatchIntakeControllerOptions = {
@@ -258,7 +258,6 @@ function hasCurrentCategoryForm(state: CanvasBatchIntakeMetadata, category: stri
         Number.isInteger(state.detailImageCount) &&
         Number.isInteger(state.handheldMainCount) &&
         Number.isInteger(state.handheldDetailCount) &&
-        typeof state.allowClearWater === "boolean" &&
         typeof state.prohibitPouringAndHeating === "boolean" &&
         typeof state.skipMissingDAngle === "boolean"
     );

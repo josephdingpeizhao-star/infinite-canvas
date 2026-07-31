@@ -150,6 +150,11 @@
 | 146 | `web/tests/canvas-workflow-repair-projection-dormancy.test.ts` | EX-01 返修入口休眠合同 | 新增单点开关严格为 `false` 的 9 行级合同测试 | 锁定默认入口休眠，不复制返修投影组件或后端测试 | 2026-07-31 |
 | 147 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | EX-01/AC-01 版本归纳与真人待测清单 | Unreleased 归纳下载双模式、返修入口休眠并补记 AC-01；待测试页登记下载、缺失提示、开关布局与继续文案；todo 经检查无对应条目，无需改动 | 自动检查不替代真人下载与完成态入口验收，两份正文不写具体日期 | 2026-07-31 |
 | 148 | `web/dist/` | EX-01 最新本机运行副本 | 按最终源码重建并记录输出与产物时间戳；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 下次重启工作台后加载下载双模式与两个默认休眠入口 | 2026-07-31 |
+| 149 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-batch-intake.ts` | CFG-01 新建批次载荷合同、品类校验与摘要常量 | 确认事实由 11 项收紧为 10 项，高级选项固定为剩余两项并同步新摘要；旧信息卡元数据中的可选清水值继续只读解析 | 作废新批次的清水配置权，同时保留历史画布读取通道与摘要混跑硬停止 | — |
+| 150 | `web/src/components/canvas/canvas-batch-advanced-options.tsx` + `web/src/components/canvas/canvas-batch-info-node.tsx` + `web/src/pages/canvas/use-canvas-batch-intake.ts` | CFG-01 信息卡高级选项、可编辑事实与完整性判断 | 从新建信息卡默认值、编辑入口和完整性判断中移除清水开关，只保留其余两项及原严格校验 | 用户不再看到或提交已作废开关，其他尺寸、张数、手持及高级选项行为不变 | — |
+| 151 | `web/tests/canvas-batch-intake.test.ts` + `web/tests/cfg01-clear-water-retirement.test.ts` | CFG-01 既有回归机械同步与三项合同门 | 现行夹具同步为两项高级选项和 10 项载荷；新增摘要互锚、两项键集与退役键拒绝、载荷无退役字段测试 | 锁定新契约，同时不削弱原连线、原图完整性、失败关闭或历史 completed 覆盖 | — |
+| 152 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CFG-01 版本归纳与真人待测清单 | Unreleased 记录清水开关退出新建批次；待测试页登记信息卡、10 项载荷、历史画布兼容与混跑防呆走查；todo 经检查无对应条目，无需改动 | 自动合同不替代真人确认，文档不写具体日期 | — |
+| 153 | `web/dist/` | CFG-01 最新本机运行副本 | 已按最终源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 下次重启工作台后加载 10 项载荷与两项高级选项 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -167,11 +172,12 @@
 - `web/src/components/canvas/canvas-workflow-cost-card.tsx`：每次演示开始前不可跳过的 0 元费用确认卡。
 - `web/src/pages/canvas/use-canvas-workflow-demo.ts`：页面私有的 0 元确认门；确认后只把 `run/retry: renders` 命令写入画布状态，并负责未接单/进度停顿的人话降级，不再生成图片。
 - `web/tests/canvas-workflow-demo.test.ts`：保留原 7 项断言，并新增后台命令、重跑、未接单和中断状态合同。
-- `web/src/lib/canvas/canvas-batch-intake.ts`：M2-a/CAT-01 九项事实、17373 品类目录、载荷摘要、配方驱动尺寸/手持校验、连线门禁、磁盘原图 SHA-256 证据和 17372 raw POST 合同；品类或哈希异常都在发号前硬停止且不重试。
+- `web/src/lib/canvas/canvas-batch-intake.ts`：M2-a/CAT-01 十项事实、17373 品类目录、载荷摘要、配方驱动尺寸/手持校验、连线门禁、磁盘原图 SHA-256 证据和 17372 raw POST 合同；品类或哈希异常都在发号前硬停止且不重试。
 - `web/src/components/canvas/canvas-batch-info-node.tsx`：画布原生信息卡，通过已安装品类下拉填写长宽高和两项手持数量，高级选项默认收起；元数据不可用时禁用下拉与登记。
 - `web/src/components/canvas/canvas-batch-advanced-options.tsx`：只渲染品类端点下发的人话标题、说明与默认方向，不持有任何业务文案或默认值。
 - `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；加载并复用品类目录，只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
-- `web/tests/canvas-batch-intake.test.ts`：覆盖九项事实、品类目录与摘要、三维/手持边界、下拉/折叠/失败态、单卡单机原图连线、中文编码、浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
+- `web/tests/canvas-batch-intake.test.ts`：覆盖十项事实、品类目录与摘要、三维/手持边界、下拉/折叠/失败态、单卡单机原图连线、中文编码、浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
+- `web/tests/cfg01-clear-water-retirement.test.ts`：覆盖新契约摘要互锚、两项高级选项严格键集与退役键拒绝，以及 10 项载荷不含清水字段。
 - `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令、中断状态和同页单次提交合同；不实现后台工序路由。
 - `web/tests/canvas-workflow-acceptance-dormancy.test.ts`：AC-01 单点休眠合同，锁定“已收货框”新建入口默认关闭；不重复既有收货框、关账或交付能力测试。
 - `web/src/lib/canvas/canvas-workflow-image-export.ts`：EX-01 当前批次正式/返修成图的选中/全部收集、排序命名、缺失分类及 ZIP/逐张下载薄壳。

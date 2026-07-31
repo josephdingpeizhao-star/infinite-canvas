@@ -5,10 +5,9 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasBatchAdvancedOptionKey, CanvasBatchCategoryMetadata, CanvasBatchIntakeMetadata } from "@/types/canvas";
 
-type AdvancedPatch = Pick<CanvasBatchIntakeMetadata, "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle">;
+type AdvancedPatch = Pick<CanvasBatchIntakeMetadata, "prohibitPouringAndHeating" | "skipMissingDAngle">;
 
 const STATE_FIELDS: Record<CanvasBatchAdvancedOptionKey, keyof AdvancedPatch> = {
-    allow_clear_water: "allowClearWater",
     forbid_pouring_and_heating: "prohibitPouringAndHeating",
     missing_d_no_retake: "skipMissingDAngle",
 };

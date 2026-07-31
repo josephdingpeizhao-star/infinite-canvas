@@ -30,7 +30,6 @@ import { CanvasNodeType, type CanvasBatchCategoryCatalog, type CanvasBatchCatego
 
 const ORIGINAL_SHA = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 const ADVANCED_OPTIONS: CanvasBatchCategoryMetadata["form"]["advanced_options"] = [
-    { field: "allow_clear_water", default: false, label: "成品图里可以出现清水", description: "开=允许出现盛水、水珠等静态清水画面；关=画面完全不出现水。" },
     { field: "forbid_pouring_and_heating", default: true, label: "不出现倒水、加热等动作画面", description: "开=禁止一切倾倒、加热动作；关=允许出现。" },
     { field: "missing_d_no_retake", default: true, label: "拍摄角度不全时直接继续", description: "开=某个角度（A/B/C/D）的原图缺失就按现有原图继续，不要求补拍；关=缺角度时要求补拍。" },
 ];
@@ -126,7 +125,6 @@ describe("canvas batch intake", () => {
             productLengthCm: 12,
             productWidthCm: 10,
             productHeightCm: 25,
-            allowClearWater: false,
             prohibitPouringAndHeating: true,
             skipMissingDAngle: true,
             mainImageCount: 6,
@@ -165,7 +163,7 @@ describe("canvas batch intake", () => {
                 ...PLATE.form,
                 image_counts: { main: { default: 3, minimum: 1, maximum: 30 }, detail: { default: 2, minimum: 1, maximum: 30 } },
                 handheld: { main: { default: 3, minimum: 0 }, detail: { default: 2, minimum: 0 } },
-                advanced_options: PLATE.form.advanced_options.map((option) => option.field === "allow_clear_water" ? { ...option, default: true } : option),
+                advanced_options: PLATE.form.advanced_options.map((option) => option.field === "forbid_pouring_and_heating" ? { ...option, default: false } : option),
             },
         };
         const cupState = readBatchIntakeState(batchInfo("cup", {
@@ -185,7 +183,7 @@ describe("canvas batch intake", () => {
             detailImageCount: 2,
             handheldMainCount: 3,
             handheldDetailCount: 2,
-            allowClearWater: true,
+            prohibitPouringAndHeating: false,
         });
         expect(validateBatchIntakeFacts(switchedToPlate, changedPlate, CATALOG.contractHash)).toEqual({
             ok: false,
@@ -235,7 +233,7 @@ describe("canvas batch intake", () => {
                 ...PLATE.form,
                 image_counts: { main: { default: 3, minimum: 1, maximum: 30 }, detail: { default: 2, minimum: 1, maximum: 30 } },
                 handheld: { main: { default: 3, minimum: 0 }, detail: { default: 2, minimum: 0 } },
-                advanced_options: PLATE.form.advanced_options.map((option) => option.field === "allow_clear_water" ? { ...option, default: true, label: "端点更新后的文案" } : option),
+                advanced_options: PLATE.form.advanced_options.map((option) => option.field === "forbid_pouring_and_heating" ? { ...option, default: false, label: "端点更新后的文案" } : option),
             },
         };
         const defaults = categoryDefaultPatch(changedPlate, CATALOG.contractHash);
@@ -248,7 +246,7 @@ describe("canvas batch intake", () => {
             handheldDetailCount: 2,
             mainImageCount: 3,
             detailImageCount: 2,
-            allowClearWater: true,
+            prohibitPouringAndHeating: false,
             facts: {
                 product_type: "盘子",
                 length_cm: 30,
@@ -258,7 +256,7 @@ describe("canvas batch intake", () => {
                 detail_image_count: 2,
                 handheld_main: 3,
                 handheld_detail: 2,
-                allow_clear_water: true,
+                forbid_pouring_and_heating: false,
             },
         });
     });
@@ -348,8 +346,8 @@ describe("canvas batch intake", () => {
         for (const option of ADVANCED_OPTIONS) {
             expect(expanded).toContain(option.label);
             expect(expanded).toContain(option.description);
-            expect(advancedOptionPatch(option.field, true)).toEqual({ [option.field === "allow_clear_water" ? "allowClearWater" : option.field === "forbid_pouring_and_heating" ? "prohibitPouringAndHeating" : "skipMissingDAngle"]: true });
-            expect(advancedOptionPatch(option.field, false)).toEqual({ [option.field === "allow_clear_water" ? "allowClearWater" : option.field === "forbid_pouring_and_heating" ? "prohibitPouringAndHeating" : "skipMissingDAngle"]: false });
+            expect(advancedOptionPatch(option.field, true)).toEqual({ [option.field === "forbid_pouring_and_heating" ? "prohibitPouringAndHeating" : "skipMissingDAngle"]: true });
+            expect(advancedOptionPatch(option.field, false)).toEqual({ [option.field === "forbid_pouring_and_heating" ? "prohibitPouringAndHeating" : "skipMissingDAngle"]: false });
         }
     });
 
@@ -416,12 +414,11 @@ describe("canvas batch intake", () => {
                 detail_image_count: 8,
                 handheld_main: 2,
                 handheld_detail: 1,
-                allow_clear_water: false,
                 forbid_pouring_and_heating: true,
                 missing_d_no_retake: true,
             },
         });
-        expect(Object.keys(command.state.facts)).toEqual(["product_type", "length_cm", "width_cm", "height_cm", "main_image_count", "detail_image_count", "handheld_main", "handheld_detail", "allow_clear_water", "forbid_pouring_and_heating", "missing_d_no_retake"]);
+        expect(Object.keys(command.state.facts)).toEqual(["product_type", "length_cm", "width_cm", "height_cm", "main_image_count", "detail_image_count", "handheld_main", "handheld_detail", "forbid_pouring_and_heating", "missing_d_no_retake"]);
         expect(command.content).not.toContain("run: renders");
         expect(command.content).not.toContain("retry: renders");
     });

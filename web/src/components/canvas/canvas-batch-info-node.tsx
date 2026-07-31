@@ -11,7 +11,7 @@ import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBat
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
-    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "allowClearWater" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "prohibitPouringAndHeating" | "skipMissingDAngle"
 >;
 
 export function CanvasBatchInfoNode({
@@ -373,7 +373,6 @@ function validImageCount(value: number | undefined, bounds: { minimum: number; m
 }
 
 function advancedValue(state: CanvasBatchIntakeMetadata, field: CanvasBatchCategoryMetadata["form"]["advanced_options"][number]["field"]) {
-    if (field === "allow_clear_water") return Boolean(state.allowClearWater);
     if (field === "forbid_pouring_and_heating") return Boolean(state.prohibitPouringAndHeating);
     return Boolean(state.skipMissingDAngle);
 }

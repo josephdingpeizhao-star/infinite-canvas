@@ -4,7 +4,7 @@ export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
 export const BATCH_CATEGORY_ORIGIN = "http://127.0.0.1:17373";
 export const BATCH_CATEGORY_URL = `${BATCH_CATEGORY_ORIGIN}/batch-categories`;
-export const BATCH_INTAKE_CONTRACT_SHA256 = "463e993e54610602f6e6118153d91d727329e3c9c7ccf175db5f894f9997bc82";
+export const BATCH_INTAKE_CONTRACT_SHA256 = "ac9e633c814b2032eb5d72c436a773c03a7dc3f4500d3383580ee7b3f3c18de0";
 export const BATCH_CATEGORY_UNAVAILABLE_MESSAGE = "产品品类暂时无法读取，请重启工作台并刷新画布后再登记。";
 export const DUPLICATE_PRODUCT_IMAGE_MESSAGE =
     "同一张图被重复加入本次产品原图登记，不能建批。" +
@@ -103,7 +103,7 @@ export function validateBatchIntakeFacts(
             return { ok: false, message: `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。` };
         }
     }
-    if ([state.allowClearWater, state.prohibitPouringAndHeating, state.skipMissingDAngle].some((value) => typeof value !== "boolean")) {
+    if ([state.prohibitPouringAndHeating, state.skipMissingDAngle].some((value) => typeof value !== "boolean")) {
         return { ok: false, message: "高级选项没有准备完整，请重新选择产品品类。" };
     }
     return {
@@ -117,7 +117,6 @@ export function validateBatchIntakeFacts(
             detail_image_count: state.detailImageCount!,
             handheld_main: state.handheldMainCount!,
             handheld_detail: state.handheldDetailCount!,
-            allow_clear_water: state.allowClearWater!,
             forbid_pouring_and_heating: state.prohibitPouringAndHeating!,
             missing_d_no_retake: state.skipMissingDAngle!,
         },
@@ -137,7 +136,6 @@ export function categoryDefaultPatch(category: CanvasBatchCategoryMetadata, cont
         detailImageCount: category.form.image_counts.detail.default,
         handheldMainCount: category.form.handheld.main.default,
         handheldDetailCount: category.form.handheld.detail.default,
-        allowClearWater: option("allow_clear_water").default,
         prohibitPouringAndHeating: option("forbid_pouring_and_heating").default,
         skipMissingDAngle: option("missing_d_no_retake").default,
     };
@@ -423,12 +421,12 @@ function validCategory(value: unknown): value is CanvasBatchCategoryMetadata {
     if (!validIntegerBounds(category.form.image_counts?.detail?.minimum, category.form.image_counts?.detail?.maximum, category.form.image_counts?.detail?.default, 1)) return false;
     if (!validMinimumDefault(category.form.handheld?.main?.minimum, category.form.handheld?.main?.default)) return false;
     if (!validMinimumDefault(category.form.handheld?.detail?.minimum, category.form.handheld?.detail?.default)) return false;
-    const advancedKeys = new Set<CanvasBatchAdvancedOptionKey>(["allow_clear_water", "forbid_pouring_and_heating", "missing_d_no_retake"]);
+    const advancedKeys = new Set<CanvasBatchAdvancedOptionKey>(["forbid_pouring_and_heating", "missing_d_no_retake"]);
     const advanced = category.form.advanced_options;
     return (
         Array.isArray(advanced) &&
-        advanced.length === 3 &&
-        new Set(advanced.map((item) => item.field)).size === 3 &&
+        advanced.length === 2 &&
+        new Set(advanced.map((item) => item.field)).size === 2 &&
         advanced.every((item) => advancedKeys.has(item.field) && typeof item.default === "boolean" && Boolean(item.label) && Boolean(item.description))
     );
 }
