@@ -13,6 +13,14 @@ export const CROSS_ROLE_IMAGE_MESSAGE =
     "这张图已经是本批的产品原图，不能再登记为风格参考。" +
     "若是接反了：产品原图连工作流机器，风格参考图连信息卡。";
 
+export function handheldCountMaximum(mode: "main" | "detail", imageCount: number): number {
+    return mode === "main" ? imageCount : Math.max(0, imageCount - 1);
+}
+
+export function detailHandheldLimitMessage(imageCount: number): string {
+    return `含尺寸标注的详情图位不可手持，详情图手持最多 ${handheldCountMaximum("detail", imageCount)} 张。`;
+}
+
 const BATCH_INTAKE_STATUSES = new Set<CanvasBatchIntakeStatus>(["draft", "queued", "upload_ready", "uploading", "completed", "failed", "integrity_blocked"]);
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 
@@ -95,11 +103,14 @@ export function validateBatchIntakeFacts(
             return { ok: false, message: `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。` };
         }
     }
-    for (const [label, value, bounds] of [
-        ["主图手持", state.handheldMainCount, { minimum: category.form.handheld.main.minimum, maximum: state.mainImageCount! }],
-        ["详情图手持", state.handheldDetailCount, { minimum: category.form.handheld.detail.minimum, maximum: state.detailImageCount! }],
+    for (const [mode, label, value, bounds] of [
+        ["main", "主图手持", state.handheldMainCount, { minimum: category.form.handheld.main.minimum, maximum: handheldCountMaximum("main", state.mainImageCount!) }],
+        ["detail", "详情图手持", state.handheldDetailCount, { minimum: category.form.handheld.detail.minimum, maximum: handheldCountMaximum("detail", state.detailImageCount!) }],
     ] as const) {
         if (!Number.isInteger(value) || value! < bounds.minimum || value! > bounds.maximum) {
+            if (mode === "detail" && Number.isInteger(value) && value! > bounds.maximum) {
+                return { ok: false, message: detailHandheldLimitMessage(state.detailImageCount!) };
+            }
             return { ok: false, message: `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。` };
         }
     }

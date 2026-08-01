@@ -142,8 +142,10 @@ describe("canvas batch intake", () => {
             ok: true,
             facts: { handheld_main: 0, handheld_detail: 0 },
         });
-        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { mainImageCount: 1, detailImageCount: 1, handheldMainCount: 1, handheldDetailCount: 1 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
-        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { mainImageCount: 30, detailImageCount: 30, handheldMainCount: 30, handheldDetailCount: 30 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
+        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { mainImageCount: 1, detailImageCount: 1, handheldMainCount: 1, handheldDetailCount: 0 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
+        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { mainImageCount: 30, detailImageCount: 30, handheldMainCount: 30, handheldDetailCount: 29 }).metadata), CUP, CATALOG.contractHash)).toMatchObject({ ok: true });
+        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { detailImageCount: 1, handheldDetailCount: 1 }).metadata), CUP, CATALOG.contractHash)).toEqual({ ok: false, message: "含尺寸标注的详情图位不可手持，详情图手持最多 0 张。" });
+        expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", { detailImageCount: 8, handheldDetailCount: 8 }).metadata), CUP, CATALOG.contractHash)).toEqual({ ok: false, message: "含尺寸标注的详情图位不可手持，详情图手持最多 7 张。" });
         for (const patch of [{ mainImageCount: 0 }, { mainImageCount: 31 }, { mainImageCount: -1 }, { mainImageCount: 1.5 }, { mainImageCount: "6" }, { detailImageCount: 0 }, { detailImageCount: 31 }]) {
             expect(validateBatchIntakeFacts(readBatchIntakeState(batchInfo("card", patch).metadata), CUP, CATALOG.contractHash).ok).toBe(false);
         }
@@ -162,7 +164,7 @@ describe("canvas batch intake", () => {
             form: {
                 ...PLATE.form,
                 image_counts: { main: { default: 3, minimum: 1, maximum: 30 }, detail: { default: 2, minimum: 1, maximum: 30 } },
-                handheld: { main: { default: 3, minimum: 0 }, detail: { default: 2, minimum: 0 } },
+                handheld: { main: { default: 3, minimum: 0 }, detail: { default: 1, minimum: 0 } },
                 advanced_options: PLATE.form.advanced_options.map((option) => option.field === "forbid_pouring_and_heating" ? { ...option, default: false } : option),
             },
         };
@@ -182,7 +184,7 @@ describe("canvas batch intake", () => {
             mainImageCount: 3,
             detailImageCount: 2,
             handheldMainCount: 3,
-            handheldDetailCount: 2,
+            handheldDetailCount: 1,
             prohibitPouringAndHeating: false,
         });
         expect(validateBatchIntakeFacts(switchedToPlate, changedPlate, CATALOG.contractHash)).toEqual({
@@ -232,7 +234,7 @@ describe("canvas batch intake", () => {
             form: {
                 ...PLATE.form,
                 image_counts: { main: { default: 3, minimum: 1, maximum: 30 }, detail: { default: 2, minimum: 1, maximum: 30 } },
-                handheld: { main: { default: 3, minimum: 0 }, detail: { default: 2, minimum: 0 } },
+                handheld: { main: { default: 3, minimum: 0 }, detail: { default: 1, minimum: 0 } },
                 advanced_options: PLATE.form.advanced_options.map((option) => option.field === "forbid_pouring_and_heating" ? { ...option, default: false, label: "端点更新后的文案" } : option),
             },
         };
@@ -243,7 +245,7 @@ describe("canvas batch intake", () => {
             category: "盘子",
             contractHash: BATCH_INTAKE_CONTRACT_SHA256,
             handheldMainCount: 3,
-            handheldDetailCount: 2,
+            handheldDetailCount: 1,
             mainImageCount: 3,
             detailImageCount: 2,
             prohibitPouringAndHeating: false,
@@ -255,7 +257,7 @@ describe("canvas batch intake", () => {
                 main_image_count: 3,
                 detail_image_count: 2,
                 handheld_main: 3,
-                handheld_detail: 2,
+                handheld_detail: 1,
                 forbid_pouring_and_heating: false,
             },
         });
@@ -264,7 +266,7 @@ describe("canvas batch intake", () => {
     test("renders a category dropdown, dynamic hand summary, collapsed advanced options, and fail-closed metadata state", () => {
         const readyHtml = renderToStaticMarkup(
             createElement(CanvasBatchInfoNode, {
-                node: batchInfo("card", { mainImageCount: 3, detailImageCount: 2, handheldMainCount: 3, handheldDetailCount: 2 }),
+                node: batchInfo("card", { mainImageCount: 3, detailImageCount: 2, handheldMainCount: 3, handheldDetailCount: 1 }),
                 connectedOriginalCount: 1,
                 connectedStyleReferenceCount: 0,
                 connectedOriginalFileNames: ["cup.png"],
@@ -282,7 +284,7 @@ describe("canvas batch intake", () => {
         expect(readyHtml).toContain('aria-label="主图张数"');
         expect(readyHtml).toContain('aria-label="详情张数"');
         expect(readyHtml).toContain("共 5 张");
-        expect(readyHtml).toContain("手持：主 3 + 详情 2");
+        expect(readyHtml).toContain("手持：主 3 + 详情 1");
         expect(readyHtml).toContain("高级选项");
         expect(readyHtml).toContain("已按【杯类】默认设置");
         expect(readyHtml).not.toContain(ADVANCED_OPTIONS[0]!.description);
@@ -302,6 +304,23 @@ describe("canvas batch intake", () => {
         );
         expect(loweredCountHtml).toContain('max="3"');
         expect(loweredCountHtml).toContain("主图手持不能超过本批 3 张；请先把主图手持改小。");
+        const oneDetailHtml = renderToStaticMarkup(
+            createElement(CanvasBatchInfoNode, {
+                node: batchInfo("card", { detailImageCount: 1, handheldDetailCount: 1 }),
+                connectedOriginalCount: 1,
+                connectedStyleReferenceCount: 0,
+                connectedOriginalFileNames: ["cup.png"],
+                connectedStyleReferenceFileNames: [],
+                categoryCatalog: CATALOG,
+                categoryCatalogStatus: "ready",
+                onChange: () => undefined,
+                onRegister: () => undefined,
+                onSupplementStyle: () => undefined,
+            }),
+        );
+        expect(oneDetailHtml).toContain('title="详情图手持"');
+        expect(oneDetailHtml).toContain('max="0"');
+        expect(oneDetailHtml).toContain("含尺寸标注的详情图位不可手持，详情图手持最多 0 张。");
 
         const failedHtml = renderToStaticMarkup(
             createElement(CanvasBatchInfoNode, {

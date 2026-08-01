@@ -163,6 +163,7 @@
 | 159 | `canvas-agent/src/agents.test.ts` | CX-01 turn 载荷双锚 | 仅追加生产 `gpt-5.5 + xhigh` 完整载荷与缺省省略两项纯内存测试，既有测试正文不改 | 锁定生产档位穿透和普通会话隔离；移除 effort 展开时回归必须失败 | — |
 | 160 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CX-01 版本归纳与真人待测清单 | Unreleased 记录真实制作不再受个人 Codex 配置影响；待测试页登记生产钉死、缺省边界、恢复路径与真机 rollout 验收；todo 经检查无对应条目，无需改动 | 离线载荷合同不替代真实批次重启与 rollout 档位验收，文档不写具体日期 | — |
 | 161 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | RS-01 终态后免刷新重新提交 | 删除 #37 的页面会话锁；终态重新报价并亲手确认后可再次写入，最终写入时仍按最新状态拦截飞行中命令；同步版本说明与真人待验项 | GT-01 已使阶段 E 逐闸门批准协议作废，故 #37 的单页仪式退役；提交资格自此唯一判定为飞行中互斥（`queued` / `running`） | — |
+| 162 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` + `web/tests/canvas-batch-intake.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CAT-08 详情图模块05手持防呆 | 详情手持上限统一为本批详情张数减一，1 张详情时上限为 0；载荷校验、输入框范围、人话提示和边界测试共用同一规则 | 为恒定承载模块05的尺寸标注图位预留非手持名额；主图上限、载荷结构、契约摘要和 `web/dist` 保持不变 | — |
 
 ## 退役锚点（编号不复用）
 

@@ -3,7 +3,7 @@ import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Tr
 
 import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, detailHandheldLimitMessage, handheldCountMaximum, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
 import { batchRegistrationButtonLabel, styleRemovalButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceRemovalState, readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -194,7 +194,7 @@ export function CanvasBatchInfoNode({
                                     label="详情图手持"
                                     value={state.handheldDetailCount}
                                     minimum={category.form.handheld.detail.minimum}
-                                    maximum={validImageCount(state.detailImageCount, category.form.image_counts.detail) ? state.detailImageCount : category.form.image_counts.detail.maximum}
+                                    maximum={handheldCountMaximum("detail", validImageCount(state.detailImageCount, category.form.image_counts.detail) ? state.detailImageCount : category.form.image_counts.detail.maximum)}
                                     disabled={!editable}
                                     onChange={(handheldDetailCount) => onChange(node.id, { handheldDetailCount })}
                                 />
@@ -364,7 +364,7 @@ function imageCountError(state: CanvasBatchIntakeMetadata, category: CanvasBatch
         if (!Number.isInteger(value) || value! < bounds.minimum || value! > bounds.maximum) return `${label}必须填写 ${bounds.minimum}–${bounds.maximum} 的整数。`;
     }
     if (Number.isInteger(state.handheldMainCount) && state.handheldMainCount! > state.mainImageCount!) return `主图手持不能超过本批 ${state.mainImageCount} 张；请先把主图手持改小。`;
-    if (Number.isInteger(state.handheldDetailCount) && state.handheldDetailCount! > state.detailImageCount!) return `详情图手持不能超过本批 ${state.detailImageCount} 张；请先把详情图手持改小。`;
+    if (Number.isInteger(state.handheldDetailCount) && state.handheldDetailCount! > handheldCountMaximum("detail", state.detailImageCount!)) return detailHandheldLimitMessage(state.detailImageCount!);
     return undefined;
 }
 
