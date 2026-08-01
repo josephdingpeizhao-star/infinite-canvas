@@ -162,6 +162,7 @@
 | 158 | `canvas-agent/src/agents.ts` | CX-01 `runCodexTurnNow()`、`startTurn()` 与 `codexTurnStartParams()` | 正常与恢复路径把已选 `model + effort` 传到 `turn/start`；请求体仅在显式提供时追加两字段 | 让真实制作的模型与档位在 Codex 权威 turn 层生效，同时保持普通画布会话缺省语义不变 | — |
 | 159 | `canvas-agent/src/agents.test.ts` | CX-01 turn 载荷双锚 | 仅追加生产 `gpt-5.5 + xhigh` 完整载荷与缺省省略两项纯内存测试，既有测试正文不改 | 锁定生产档位穿透和普通会话隔离；移除 effort 展开时回归必须失败 | — |
 | 160 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CX-01 版本归纳与真人待测清单 | Unreleased 记录真实制作不再受个人 Codex 配置影响；待测试页登记生产钉死、缺省边界、恢复路径与真机 rollout 验收；todo 经检查无对应条目，无需改动 | 离线载荷合同不替代真实批次重启与 rollout 档位验收，文档不写具体日期 | — |
+| 161 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | RS-01 终态后免刷新重新提交 | 删除 #37 的页面会话锁；终态重新报价并亲手确认后可再次写入，最终写入时仍按最新状态拦截飞行中命令；同步版本说明与真人待验项 | GT-01 已使阶段 E 逐闸门批准协议作废，故 #37 的单页仪式退役；提交资格自此唯一判定为飞行中互斥（`queued` / `running`） | — |
 
 ## 退役锚点（编号不复用）
 
@@ -185,20 +186,20 @@
 - `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；加载并复用品类目录，只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
 - `web/tests/canvas-batch-intake.test.ts`：覆盖十项事实、品类目录与摘要、三维/手持边界、下拉/折叠/失败态、单卡单机原图连线、中文编码、浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
 - `web/tests/cfg01-clear-water-retirement.test.ts`：覆盖新契约摘要互锚、两项高级选项严格键集与退役键拒绝，以及 10 项载荷不含清水字段。
-- `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令、中断状态和同页单次提交合同；不实现后台工序路由。
+- `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令、中断状态和 `queued` / `running` 飞行中互斥合同；不实现后台工序路由。
 - `web/tests/canvas-workflow-acceptance-dormancy.test.ts`：AC-01 单点休眠合同，锁定“已收货框”新建入口默认关闭；不重复既有收货框、关账或交付能力测试。
 - `web/src/lib/canvas/canvas-workflow-image-export.ts`：EX-01 当前批次正式/返修成图的选中/全部收集、排序命名、缺失分类及 ZIP/逐张下载薄壳。
 - `web/src/components/canvas/canvas-workflow-download-card.tsx`：EX-01 下载方式选择弹窗，显示批次、张数和浏览器多文件授权说明。
 - `web/tests/canvas-workflow-image-export.test.ts`：EX-01 下载归属、收集、命名、缺失与置灰纯函数合同。
 - `web/tests/canvas-workflow-repair-projection-dormancy.test.ts`：EX-01 单点休眠合同，锁定“上桌返修图”入口默认关闭。
 - `web/src/components/canvas/canvas-workflow-production-cost-card.tsx`：真实费用唯一确认卡，显示剩余张数、约计美元金额和约计时长；取消不写画布状态。
-- `web/src/pages/canvas/use-canvas-workflow-production.ts`：页面私有真实费用控制器；只在确认后写生产命令，同一页面内同一机器/批次只允许一次提交；无信息卡时明确把开始动作交还 M1 演示。
+- `web/src/pages/canvas/use-canvas-workflow-production.ts`：页面私有真实费用控制器；只在确认后写生产命令，终态可重新报价确认，最终写入按最新 `queued` / `running` 状态互斥；无信息卡时明确把开始动作交还 M1 演示。
 - `web/src/lib/canvas/canvas-workflow-output-import.ts`：正式 PNG 的 17373 地址、服务端 SHA、浏览器 Blob SHA 与字节数合同；通过后转存现有 localforage 图片库，拒绝 data URI。
 - `web/src/pages/canvas/use-canvas-workflow-output-import.ts`：页面私有正式图片接收器；每张只尝试一次，失败停机，不自动重试。
 - `web/src/lib/canvas/canvas-style-reference-intake.ts`：信息卡直连风格图的磁盘凭证、整批浏览器预检、17373 原字节上传和硬停止合同。
 - `web/src/pages/canvas/use-canvas-style-reference-intake.ts`：页面私有风格补登控制器；服务接单后从 localforage 取原 Blob，刷新中断不自动恢复。
 - `web/src/pages/canvas/use-canvas-style-reference-removal.ts`：页面私有风格移除控制器；复用现有风格工人健康预检，只写独立移除命令与 8 秒确认超时状态。
-- `web/tests/canvas-workflow-production.test.ts`：覆盖演示/真实模式隔离、单卡单机素材门、费用估算鉴权、确认命令、同页单次提交和续跑/超时。
+- `web/tests/canvas-workflow-production.test.ts`：覆盖演示/真实模式隔离、单卡单机素材门、费用估算鉴权、确认命令、终态重提、飞行中互斥和续跑/超时。
 - `web/tests/canvas-workflow-output-import.test.ts`：覆盖正式图片原字节转存、无 data URI、地址/哈希/字节拒绝与防重复导入。
 - `web/tests/canvas-style-reference-intake.test.ts`：覆盖信息卡直连、精确凭证、整批预检、单次上传、硬停止和刷新不续传。
 - `web/tests/canvas-style-reference-governance.test.ts`：覆盖每批 1 张、已有回执拦截、独立移除命令、同工人健康键、卡面状态与一次明确确认。

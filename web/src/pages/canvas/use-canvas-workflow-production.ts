@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { applyProductionQuote, buildProductionCommand, expireProductionState, fetchProductionQuote, hasProductionSubmission, isProductionStartBlocked, readProductionState, reserveProductionSubmission, resolveProductionSelection, WORKFLOW_COUNT_DATA_MISSING_MESSAGE, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
+import { applyProductionQuote, buildProductionCommand, expireProductionState, fetchProductionQuote, isProductionStartBlocked, readProductionState, resolveProductionSelection, WORKFLOW_COUNT_DATA_MISSING_MESSAGE, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
@@ -29,7 +29,6 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
     const token = useAgentStore((state) => state.token);
     const [pending, setPending] = useState<Pending | null>(null);
     const pendingRef = useRef(pending);
-    const submittedRef = useRef(new Set<string>());
 
     useEffect(() => {
         pendingRef.current = pending;
@@ -45,10 +44,6 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
             }
             const workflow = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Workflow);
             if (!workflow) return true;
-            if (hasProductionSubmission(submittedRef.current, nodeId, selection.batchId)) {
-                warn("这次真实制作已经提交过一次。若已获得新的执行批准，请重新打开画布后再点“开始”。");
-                return true;
-            }
             const state = readProductionState(workflow.metadata);
             if (isProductionStartBlocked(state)) return true;
             try {
@@ -90,17 +85,15 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
             warn("信息卡或素材连线已经变化，本次没有开始。");
             return;
         }
-        if (!reserveProductionSubmission(submittedRef.current, current.nodeId, selection.batchId)) {
-            warn("这次真实制作已经提交过一次。若已获得新的执行批准，请重新打开画布后再点“开始”。");
-            return;
-        }
         const requestId = nanoid(10);
         const now = Date.now();
         setNodes((items) =>
             items.map((node) => {
                 if (node.id !== current.nodeId || node.type !== CanvasNodeType.Workflow) return node;
+                const state = readProductionState(node.metadata);
+                if (isProductionStartBlocked(state)) return node;
                 const command = buildProductionCommand(
-                    applyProductionQuote(readProductionState(node.metadata), current.quote),
+                    applyProductionQuote(state, current.quote),
                     selection.batchId,
                     requestId,
                     now,

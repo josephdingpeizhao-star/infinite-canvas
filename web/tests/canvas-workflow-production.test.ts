@@ -11,7 +11,6 @@ import {
     isProductionStartBlocked,
     readExpectedImageSet,
     readProductionState,
-    reserveProductionSubmission,
     resolveProductionSelection,
     WORKFLOW_COUNT_DATA_MISSING_MESSAGE,
 } from "../src/lib/canvas/canvas-workflow-production";
@@ -151,18 +150,21 @@ describe("canvas workflow production", () => {
         expect(first.content).toContain("run: next");
         expect(first.content).not.toContain("run: renders");
         expect(first.state).toMatchObject({ status: "queued", batchId: "cup", requestId: "request-001", producedCount: 0 });
+        expect(isProductionStartBlocked(first.state)).toBe(true);
         const partial = readProductionState({ workflowProduction: productionMetadata("paused", 1, 3, 2) });
         expect(buildProductionCommand(partial, "cup", "request-002", 2_000).content).toContain("retry: renders");
     });
 
-    test("allows exactly one submission per machine and batch until the page is reopened", () => {
-        const submissions = new Set<string>();
-        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(true);
-        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(false);
-        expect(submissions.size).toBe(1);
+    test("allows independent repeated commands from the same terminal machine state and batch", () => {
+        const failed = readProductionState({ workflowProduction: productionMetadata("failed", 0, 3, 2) });
+        const first = buildProductionCommand(failed, "cup", "request-first", 1_000);
+        const second = buildProductionCommand(failed, "cup", "request-second", 2_000);
 
-        const reopenedPage = new Set<string>();
-        expect(reserveProductionSubmission(reopenedPage, "machine", "cup")).toBe(true);
+        expect(first.state).toMatchObject({ status: "queued", batchId: "cup", requestId: "request-first" });
+        expect(second.state).toMatchObject({ status: "queued", batchId: "cup", requestId: "request-second" });
+        expect(first.content).not.toBe(second.content);
+        expect(failed).toMatchObject({ status: "failed", batchId: "cup" });
+        expect(isProductionStartBlocked(failed)).toBe(false);
     });
 
     test("completed continuation is eligible and emits exactly run next while retries stay unchanged", () => {
@@ -185,13 +187,14 @@ describe("canvas workflow production", () => {
         expect(COMPLETED_PRODUCTION_ACTION_LABEL).toBe("继续");
     });
 
-    test("completed continuation keeps one submission per machine and batch", () => {
-        const completed = readProductionState({ workflowProduction: productionMetadata("completed", 14) });
-        if (isProductionStartBlocked(completed)) throw new Error("completed must remain eligible for the guarded submission path");
-        const submissions = new Set<string>();
-        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(true);
-        expect(reserveProductionSubmission(submissions, "machine", "cup")).toBe(false);
-        expect(submissions.size).toBe(1);
+    test("blocks starts only while production is queued or running", () => {
+        expect(isProductionStartBlocked(readProductionState())).toBe(false);
+        for (const status of ["failed", "completed", "paused"] as const) {
+            expect(isProductionStartBlocked(readProductionState({ workflowProduction: productionMetadata(status, 0) }))).toBe(false);
+        }
+        for (const status of ["queued", "running"] as const) {
+            expect(isProductionStartBlocked(readProductionState({ workflowProduction: productionMetadata(status, 0) }))).toBe(true);
+        }
     });
 
     test("expires only an unacknowledged command and preserves finished images", () => {
@@ -201,6 +204,17 @@ describe("canvas workflow production", () => {
         const running = readProductionState({ workflowProduction: { ...productionMetadata("running", 5, 3, 2), updatedAt: 1_000 } });
         expect(expireProductionState(running, 720_999)).toEqual(running);
         expect(expireProductionState(running, 721_000)).toMatchObject({ status: "failed", producedCount: 5 });
+    });
+
+    test("allows resubmission after an unacknowledged queued command times out", () => {
+        const queued = buildProductionCommand(readProductionState({ workflowProduction: productionMetadata("failed", 0, 3, 2) }), "cup", "request-timeout", 1_000).state;
+        const failed = expireProductionState(queued, 9_000);
+        expect(failed).toMatchObject({ status: "failed", requestId: "request-timeout" });
+        expect(isProductionStartBlocked(failed)).toBe(false);
+
+        const resubmitted = buildProductionCommand(failed, "cup", "request-resubmitted", 9_001);
+        expect(resubmitted.state).toMatchObject({ status: "queued", requestId: "request-resubmitted" });
+        expect(isProductionStartBlocked(resubmitted.state)).toBe(true);
     });
 
     test("fails closed when a real production response omits the batch count facts", async () => {
