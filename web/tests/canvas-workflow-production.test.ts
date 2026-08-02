@@ -294,3 +294,227 @@ describe("canvas workflow production", () => {
         expect(buildProductionCommand(failed, "cup", "request-explicit", 11_000, "retry: qc", { remainingCount: 0 }).content.split("\n").at(-1)).toBe("retry: qc");
     });
 });
+
+import {
+    REBIND_RECOMPUTE_ACTION_LABEL,
+    buildProductionRebindUrl,
+    fetchProductionRebind,
+    isRebindRecomputeVisible,
+    productionActionLabel,
+    rebindBeforeQuoteIfEligible,
+} from "../src/lib/canvas/canvas-workflow-production";
+
+describe("RB-01 white-background recovery", () => {
+    const eligibleRecovery = {
+        kind: "missing_reference" as const,
+        files: ["正面图_01.jpg"],
+        recomputeEligible: true,
+    };
+
+    test("reads recovery metadata only when the complete nested shape is trustworthy", () => {
+        const valid = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), recovery: eligibleRecovery } });
+        expect(valid.recovery).toEqual(eligibleRecovery);
+
+        for (const recovery of [
+            { ...eligibleRecovery, kind: "other" },
+            { ...eligibleRecovery, recomputeEligible: "yes" },
+            { ...eligibleRecovery, files: ["../正面图.jpg"] },
+            { ...eligibleRecovery, files: ["token-secret.jpg"] },
+            { ...eligibleRecovery, files: ["a".repeat(81)] },
+            { ...eligibleRecovery, files: ["正面图.jpg", "正面图.jpg"] },
+            { ...eligibleRecovery, extra: true },
+            { kind: "inputs_unavailable", files: [], recomputeEligible: true },
+            { kind: "inputs_unavailable", files: ["正面图.jpg"], recomputeEligible: false },
+        ]) {
+            const state = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), recovery } });
+            expect(state.recovery).toBeUndefined();
+        }
+        expect(readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), recovery: { kind: "inputs_unavailable", files: [], recomputeEligible: false } } }).recovery).toEqual({
+            kind: "inputs_unavailable",
+            files: [],
+            recomputeEligible: false,
+        });
+    });
+
+    test("shows the rebind action only for an eligible failed machine", () => {
+        const eligible = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), recovery: eligibleRecovery } });
+        expect(isRebindRecomputeVisible(eligible)).toBe(true);
+        expect(productionActionLabel(eligible)).toBe(REBIND_RECOMPUTE_ACTION_LABEL);
+        expect(REBIND_RECOMPUTE_ACTION_LABEL).toBe("剔除缺失图并重新分配");
+
+        for (const state of [
+            readProductionState({ workflowProduction: { ...productionMetadata("running", 0), recovery: eligibleRecovery } }),
+            readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), recovery: { ...eligibleRecovery, recomputeEligible: false } } }),
+            readProductionState({ workflowProduction: productionMetadata("failed", 0) }),
+        ]) {
+            expect(isRebindRecomputeVisible(state)).toBe(false);
+            expect(productionActionLabel(state)).not.toBe(REBIND_RECOMPUTE_ACTION_LABEL);
+        }
+    });
+
+    test("keeps an ordinary failed primary click byte-for-byte on the old quote path and sends no POST", async () => {
+        const state = readProductionState({ workflowProduction: { ...productionMetadata("failed", 2), recovery: { ...eligibleRecovery, recomputeEligible: false } } });
+        const methods: string[] = [];
+        const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
+            methods.push(init?.method || "GET");
+            return new Response(
+                JSON.stringify({
+                    ok: true,
+                    batchId: "cup",
+                    totalCount: 5,
+                    expectedConfigIds: configIds(3, 2),
+                    readyCount: 2,
+                    remainingCount: 3,
+                    estimatedUnitUsd: 0.06,
+                    estimatedTotalUsd: 0.18,
+                    estimatedMinutes: 24,
+                }),
+                { status: 200 },
+            );
+        };
+
+        expect(productionActionLabel(state)).toBe("重新开始");
+        expect(await rebindBeforeQuoteIfEligible(state, "cup", "token", fetcher)).toBeUndefined();
+        const quote = await fetchProductionQuote("cup", "token", fetcher);
+        expect(methods).toEqual(["GET"]);
+        expect(quote.remainingCount).toBe(3);
+        expect(buildProductionCommand(state, "cup", "request-old-path", 12_000, undefined, quote).content.split("\n").at(-1)).toBe("retry: renders");
+    });
+
+    test("posts the eligible action to the fixed loopback endpoint before quoting", async () => {
+        const state = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), batchId: "杯子 01", recovery: eligibleRecovery } });
+        const calls: Array<{ url: string; init?: RequestInit }> = [];
+        const fetcher = async (input: string | URL | Request, init?: RequestInit) => {
+            calls.push({ url: String(input), init });
+            return new Response(
+                JSON.stringify({
+                    ok: true,
+                    batchId: "杯子 01",
+                    missing: ["正面图_01.jpg"],
+                    remainingCount: 2,
+                    superseded: ["angle_inventory", "final_prompts"],
+                    supersededDir: "artifacts/_superseded/20260802T120000Z_1234abcd",
+                    message: "已剔除缺失白底图，请确认新报价。",
+                }),
+                { status: 200 },
+            );
+        };
+
+        expect(buildProductionRebindUrl("http://127.0.0.1:17373", "杯子 01")).toBe("http://127.0.0.1:17373/workflow-production/%E6%9D%AF%E5%AD%90%2001/rebind-recompute");
+        const result = await rebindBeforeQuoteIfEligible(state, "杯子 01", " token ", fetcher);
+        expect(result).toMatchObject({ batchId: "杯子 01", remainingCount: 2, superseded: ["angle_inventory", "final_prompts"] });
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.url).toBe("http://127.0.0.1:17373/workflow-production/%E6%9D%AF%E5%AD%90%2001/rebind-recompute");
+        expect(calls[0]?.init).toMatchObject({ method: "POST", body: "{}", headers: { "Content-Type": "application/json", "X-Canvas-Agent-Token": "token" } });
+    });
+
+    test("passes through safe refusal copy and rejects an untrusted success response", async () => {
+        await expect(
+            fetchProductionRebind(
+                "cup",
+                "token",
+                async () => new Response(JSON.stringify({ ok: false, error: "render_outputs_exist", message: "本批已有 2 张成图，不能整体重排。请恢复缺失文件后重新开始。" }), { status: 409 }),
+            ),
+        ).rejects.toThrow("本批已有 2 张成图，不能整体重排。请恢复缺失文件后重新开始。");
+
+        await expect(
+            fetchProductionRebind(
+                "cup",
+                "token",
+                async () => new Response(JSON.stringify({ ok: true, batchId: "cup", missing: ["../secret.jpg"], remainingCount: 1, superseded: [], supersededDir: "artifacts/_superseded/20260802T120000Z_1234abcd" }), { status: 200 }),
+            ),
+        ).rejects.toThrow("本机真实制作服务没有返回可信的重新分配结果，本次没有开始。");
+    });
+});
+
+import { isSameProductionTarget, shouldRebindBeforeQuote } from "../src/lib/canvas/canvas-workflow-production";
+
+describe("RB-01 recovery target and async guardrails", () => {
+    const recovery = {
+        kind: "missing_reference" as const,
+        files: ["正面图.jpg"],
+        recomputeEligible: true,
+    };
+
+    test("does not show or post a stale recovery from a different batch", async () => {
+        const state = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), batchId: "old-batch", recovery } });
+        let requests = 0;
+        const fetcher = async () => {
+            requests += 1;
+            return new Response("{}", { status: 500 });
+        };
+
+        expect(productionActionLabel(state, "current-batch")).toBe("重新开始");
+        expect(isRebindRecomputeVisible(state, "current-batch")).toBe(false);
+        expect(shouldRebindBeforeQuote(state, "current-batch")).toBe(false);
+        expect(await rebindBeforeQuoteIfEligible(state, "current-batch", "token", fetcher)).toBeUndefined();
+        expect(requests).toBe(0);
+    });
+
+    test("never posts rebind for an explicit closed command", async () => {
+        const state = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), batchId: "cup", recovery } });
+        let requests = 0;
+        const fetcher = async () => {
+            requests += 1;
+            return new Response("{}", { status: 500 });
+        };
+
+        expect(shouldRebindBeforeQuote(state, "cup", "retry: qc")).toBe(false);
+        expect(await rebindBeforeQuoteIfEligible(state, "cup", "token", fetcher, "retry: qc")).toBeUndefined();
+        expect(requests).toBe(0);
+        expect(buildProductionCommand(state, "cup", "request-explicit-guard", 13_000, "retry: qc", { remainingCount: 0 }).content.split("\n").at(-1)).toBe("retry: qc");
+    });
+
+    test("accepts an async result only while card and batch still identify the same target", () => {
+        const expected = { mode: "production" as const, cardId: "card-a", batchId: "cup", materialCount: 2 };
+        expect(isSameProductionTarget(expected, { ...expected, materialCount: 3 })).toBe(true);
+        expect(isSameProductionTarget(expected, { ...expected, cardId: "card-b" })).toBe(false);
+        expect(isSameProductionTarget(expected, { ...expected, batchId: "plate" })).toBe(false);
+        expect(isSameProductionTarget(expected, { mode: "error", message: "连线已变化" })).toBe(false);
+    });
+
+    test("rejects path-bearing refusal messages but keeps the approved inputs guidance", async () => {
+        const generic = "白底图重新分配请求未被本机工作台接受，本次没有开始。";
+        for (const message of [
+            "失败位置 C:\\Users\\John\\config.txt",
+            "失败位置 \\\\server\\share\\config.txt",
+            "失败位置 /home/john/config.txt",
+            "失败位置：/home/john/config.txt",
+            "失败位置 ../config.txt",
+            "失败位置：../config.txt",
+            "失败位置 .\\config.txt",
+        ]) {
+            await expect(
+                fetchProductionRebind("cup", "token", async () => new Response(JSON.stringify({ ok: false, error: "inputs_unavailable", message }), { status: 409 })),
+            ).rejects.toThrow(generic);
+        }
+
+        const approved = "白底图目录整体无法访问，本次已停止。请恢复 inputs/white_bg 后再重新开始。";
+        await expect(
+            fetchProductionRebind("cup", "token", async () => new Response(JSON.stringify({ ok: false, error: "inputs_unavailable", message: approved }), { status: 409 })),
+        ).rejects.toThrow(approved);
+    });
+});
+
+describe("RB-01 sensitive token parity", () => {
+    test("fails closed for every newly aligned sensitive filename token", () => {
+        for (const file of ["password.txt", "authorization.txt", "sk-.jpg"]) {
+            const state = readProductionState({
+                workflowProduction: {
+                    ...productionMetadata("failed", 0),
+                    recovery: { kind: "missing_reference", files: [file], recomputeEligible: true },
+                },
+            });
+            expect(state.recovery).toBeUndefined();
+        }
+    });
+
+    test("degrades refusal copy containing aligned sensitive tokens to the generic message", async () => {
+        const generic = "白底图重新分配请求未被本机工作台接受，本次没有开始。";
+        for (const message of ["缺失 password.txt", "缺失 authorization.txt", "缺失 sk-.jpg"]) {
+            await expect(
+                fetchProductionRebind("cup", "token", async () => new Response(JSON.stringify({ ok: false, error: "inputs_unavailable", message }), { status: 409 })),
+            ).rejects.toThrow(generic);
+        }
+    });
+});

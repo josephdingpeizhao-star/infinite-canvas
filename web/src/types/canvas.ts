@@ -37,6 +37,11 @@ export type CanvasWorkflowDemoOutputMetadata = {
     index: number;
 };
 export type CanvasWorkflowProductionStatus = "idle" | "queued" | "running" | "paused" | "completed" | "failed";
+export type CanvasWorkflowProductionRecovery = {
+    kind: "missing_reference" | "inputs_unavailable";
+    files: string[];
+    recomputeEligible: boolean;
+};
 export type CanvasWorkflowProductionMetadata = {
     status: CanvasWorkflowProductionStatus;
     producedCount: number;
@@ -49,6 +54,7 @@ export type CanvasWorkflowProductionMetadata = {
     step?: string;
     message?: string;
     errorMessage?: string;
+    recovery?: CanvasWorkflowProductionRecovery;
 };
 export type CanvasWorkflowProductionOutputMetadata = {
     workflowNodeId: string;

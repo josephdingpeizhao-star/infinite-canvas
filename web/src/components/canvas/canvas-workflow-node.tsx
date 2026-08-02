@@ -4,7 +4,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_COUNT, WORKFLOW_DEMO_TOTAL } from "@/lib/canvas/canvas-workflow-demo";
 import { REPAIR_PROJECTION_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-delivery";
 import { isWorkflowImageDownloadDisabled } from "@/lib/canvas/canvas-workflow-image-export";
-import { COMPLETED_PRODUCTION_ACTION_LABEL, completedProductionStatusText, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
+import { completedProductionStatusText, productionActionLabel, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
 import { ACCEPTANCE_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-receiving";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionStatus } from "@/types/canvas";
@@ -110,7 +110,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, down
                     }}
                 >
                     {running || queued ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
-                    {production ? productionActionLabel(productionState.status) : workflowActionLabel(demoState.status)}
+                    {production ? productionActionLabel(productionState, production.batchId) : workflowActionLabel(demoState.status)}
                 </button>
                 <button
                     type="button"
@@ -236,13 +236,4 @@ function productionStatusText(status: CanvasWorkflowProductionStatus, producedCo
     if (status === "completed") return completedProductionStatusText(message, totalCount);
     if (status === "failed") return errorMessage || "这一步没做好，机器已停下。已经完成的成果都保留了。";
     return "已连接已登记批次。点击开始后先核对真实费用，确认前不会执行。";
-}
-
-function productionActionLabel(status: CanvasWorkflowProductionStatus) {
-    if (status === "queued") return "等待接单";
-    if (status === "running") return "真实制作中";
-    if (status === "paused") return "继续制作";
-    if (status === "completed") return COMPLETED_PRODUCTION_ACTION_LABEL;
-    if (status === "failed") return "重新开始";
-    return "开始真实制作";
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { applyProductionQuote, buildProductionCommand, expireProductionState, fetchProductionQuote, isProductionStartBlocked, readProductionState, resolveProductionSelection, WORKFLOW_COUNT_DATA_MISSING_MESSAGE, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
+import { applyProductionQuote, buildProductionCommand, expireProductionState, fetchProductionQuote, isProductionStartBlocked, isSameProductionTarget, isTerminalRebindError, readProductionState, rebindBeforeQuoteIfEligible, resolveProductionSelection, shouldRebindBeforeQuote, WORKFLOW_COUNT_DATA_MISSING_MESSAGE, WorkflowProductionRebindError, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
@@ -46,7 +46,34 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
             if (!workflow) return true;
             const state = readProductionState(workflow.metadata);
             if (isProductionStartBlocked(state)) return true;
+            const rebindAttempted = shouldRebindBeforeQuote(state, selection.batchId, requestedCommand);
             try {
+                const rebind = await rebindBeforeQuoteIfEligible(state, selection.batchId, token, globalThis.fetch, requestedCommand);
+                if (rebind) {
+                    const currentTarget = resolveProductionSelection(nodeId, nodesRef.current, connectionsRef.current);
+                    if (!isSameProductionTarget(selection, currentTarget)) {
+                        warn("信息卡或素材连线已经变化，请核对后重新开始。");
+                        return true;
+                    }
+                    setNodes((items) =>
+                        items.map((node) => {
+                            if (node.id !== nodeId || node.type !== CanvasNodeType.Workflow) return node;
+                            const current = readProductionState(node.metadata);
+                            return {
+                                ...node,
+                                metadata: {
+                                    ...node.metadata,
+                                    workflowProduction: {
+                                        ...current,
+                                        recovery: undefined,
+                                        errorMessage: rebind.message || `已剔除缺失白底图，正用剩余 ${rebind.remainingCount} 张重新报价。`,
+                                        message: undefined,
+                                    },
+                                },
+                            };
+                        }),
+                    );
+                }
                 const quote = await fetchProductionQuote(selection.batchId, token);
                 const latest = resolveProductionSelection(nodeId, nodesRef.current, connectionsRef.current);
                 if (latest.mode !== "production" || latest.cardId !== selection.cardId || latest.batchId !== selection.batchId) {
@@ -63,11 +90,27 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
                 pendingRef.current = next;
                 setPending(next);
             } catch (error) {
-                warn(safeQuoteError(error));
+                if (rebindAttempted) {
+                    const currentTarget = resolveProductionSelection(nodeId, nodesRef.current, connectionsRef.current);
+                    if (!isSameProductionTarget(selection, currentTarget)) {
+                        warn("信息卡或素材连线已经变化，请核对后重新开始。");
+                        return true;
+                    }
+                }
+                if (isTerminalRebindError(error)) {
+                    setNodes((items) =>
+                        items.map((node) => {
+                            if (node.id !== nodeId || node.type !== CanvasNodeType.Workflow) return node;
+                            const current = readProductionState(node.metadata);
+                            return { ...node, metadata: { ...node.metadata, workflowProduction: { ...current, recovery: undefined, errorMessage: safeProductionStartError(error) } } };
+                        }),
+                    );
+                }
+                warn(safeProductionStartError(error));
             }
             return true;
         },
-        [connectionsRef, nodesRef, token, warn],
+        [connectionsRef, nodesRef, setNodes, token, warn],
     );
 
     const cancelConfirmation = useCallback(() => {
@@ -139,7 +182,8 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
     };
 }
 
-function safeQuoteError(error: unknown) {
+function safeProductionStartError(error: unknown) {
+    if (error instanceof WorkflowProductionRebindError) return error.message;
     const message = error instanceof Error ? error.message : "";
     return message === "本机真实制作服务尚未就绪，请重新启动画布服务后再试。" || message === "本机真实制作服务没有返回可信的费用估算，本次没有开始。" || message === WORKFLOW_COUNT_DATA_MISSING_MESSAGE
         ? message

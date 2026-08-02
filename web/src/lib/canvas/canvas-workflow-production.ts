@@ -1,4 +1,4 @@
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkflowProductionMetadata } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkflowProductionMetadata, type CanvasWorkflowProductionRecovery } from "@/types/canvas";
 import {
     requireClosedWorkflowCommand,
     type ClosedWorkflowCommand,
@@ -8,10 +8,14 @@ export const WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS = 8_000;
 export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 12 * 60_000;
 export const WORKFLOW_PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
 export const COMPLETED_PRODUCTION_ACTION_LABEL = "继续";
+export const REBIND_RECOMPUTE_ACTION_LABEL = "剔除缺失图并重新分配";
 export const WORKFLOW_COUNT_DATA_MISSING_MESSAGE = "本批次张数或编号信息不完整，请重启工作台 + 刷新画布后再试。";
 
 const PRODUCTION_STATUSES = new Set(["idle", "queued", "running", "paused", "completed", "failed"]);
 const CONFIG_ID_PATTERN = /^(main|detail)_(0[1-9]|[12][0-9]|30)$/;
+const RECOVERY_FILE_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} ._()（）-]{0,79}$/u;
+const RECOVERY_FILE_DENY_PATTERN = /(authorization|password|bearer|token|api[ _-]?key|secret|sk-|令牌|密钥|凭据)/iu;
+const TERMINAL_REBIND_ERRORS = new Set(["missing_files_restored", "render_outputs_exist", "inputs_unavailable"]);
 
 export type WorkflowProductionQuote = {
     batchId: string;
@@ -28,6 +32,25 @@ export type WorkflowProductionSelection =
     | { mode: "demo" }
     | { mode: "error"; message: string }
     | { mode: "production"; cardId: string; batchId: string; materialCount: number };
+
+export type WorkflowProductionRebindResult = {
+    batchId: string;
+    missing: string[];
+    remainingCount: number;
+    superseded: string[];
+    supersededDir: string;
+    message?: string;
+};
+
+export class WorkflowProductionRebindError extends Error {
+    constructor(
+        message: string,
+        readonly code?: string,
+    ) {
+        super(message);
+        this.name = "WorkflowProductionRebindError";
+    }
+}
 
 export type ConnectedProductionSummary = {
     batchId: string;
@@ -59,7 +82,19 @@ export function readProductionState(metadata?: CanvasNodeMetadata): CanvasWorkfl
         step: stringValue(value?.step),
         message: stringValue(value?.message),
         errorMessage: realErrorMessage ?? (missingCounts ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : undefined),
+        recovery: readProductionRecovery(value?.recovery),
     };
+}
+
+export function readProductionRecovery(value: unknown): CanvasWorkflowProductionRecovery | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    const record = value as Record<string, unknown>;
+    if (Object.keys(record).sort().join(",") !== "files,kind,recomputeEligible") return undefined;
+    if (record.kind !== "missing_reference" && record.kind !== "inputs_unavailable") return undefined;
+    if (typeof record.recomputeEligible !== "boolean" || !Array.isArray(record.files) || record.files.length > 60) return undefined;
+    if (!record.files.every(isSafeRecoveryFile) || new Set(record.files).size !== record.files.length) return undefined;
+    if (record.kind === "inputs_unavailable" && (record.recomputeEligible || record.files.length)) return undefined;
+    return { kind: record.kind, files: [...record.files] as string[], recomputeEligible: record.recomputeEligible };
 }
 
 export function resolveProductionSelection(machineId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): WorkflowProductionSelection {
@@ -131,6 +166,93 @@ export function buildProductionQuoteUrl(baseUrl: string, batchId: string) {
     return `${WORKFLOW_PRODUCTION_ORIGIN}/workflow-production/${encodeURIComponent(batchId)}/quote`;
 }
 
+export function buildProductionRebindUrl(baseUrl: string, batchId: string) {
+    const quoteUrl = buildProductionQuoteUrl(baseUrl, batchId);
+    return quoteUrl ? quoteUrl.replace(/\/quote$/, "/rebind-recompute") : null;
+}
+
+export async function fetchProductionRebind(batchId: string, token: string, fetcher: typeof fetch = globalThis.fetch): Promise<WorkflowProductionRebindResult> {
+    const url = buildProductionRebindUrl(WORKFLOW_PRODUCTION_ORIGIN, batchId);
+    if (!url || !token.trim()) throw new WorkflowProductionRebindError("本机真实制作服务尚未就绪，请重新启动画布服务后再试。");
+    const response = await fetcher(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Canvas-Agent-Token": token.trim() },
+        body: "{}",
+    });
+    let payload: Record<string, unknown> = {};
+    try {
+        payload = (await response.json()) as Record<string, unknown>;
+    } catch {
+        payload = {};
+    }
+    if (!response.ok) {
+        const message = safeRebindMessage(payload.message) ?? "白底图重新分配请求未被本机工作台接受，本次没有开始。";
+        throw new WorkflowProductionRebindError(message, stringValue(payload.error));
+    }
+    if (
+        payload.ok !== true ||
+        payload.batchId !== batchId ||
+        !Array.isArray(payload.missing) ||
+        !payload.missing.every(isSafeRecoveryFile) ||
+        new Set(payload.missing).size !== payload.missing.length ||
+        !Array.isArray(payload.superseded) ||
+        !payload.superseded.every(safeArtifactKey) ||
+        new Set(payload.superseded).size !== payload.superseded.length ||
+        typeof payload.remainingCount !== "number" ||
+        !Number.isInteger(payload.remainingCount) ||
+        payload.remainingCount < 1 ||
+        typeof payload.supersededDir !== "string" ||
+        !/^artifacts\/_superseded\/[0-9]{8}T[0-9]{6}Z_[a-f0-9]{8}$/.test(payload.supersededDir) ||
+        (payload.message !== undefined && !safeRebindMessage(payload.message))
+    ) {
+        throw new WorkflowProductionRebindError("本机真实制作服务没有返回可信的重新分配结果，本次没有开始。");
+    }
+    return {
+        batchId,
+        missing: [...payload.missing] as string[],
+        remainingCount: payload.remainingCount,
+        superseded: [...payload.superseded] as string[],
+        supersededDir: payload.supersededDir,
+        message: safeRebindMessage(payload.message),
+    };
+}
+
+export function isRebindRecomputeVisible(state: CanvasWorkflowProductionMetadata, batchId: string | undefined = state.batchId) {
+    return Boolean(batchId && state.batchId === batchId && state.status === "failed" && state.recovery?.kind === "missing_reference" && state.recovery.recomputeEligible === true);
+}
+
+export function shouldRebindBeforeQuote(state: CanvasWorkflowProductionMetadata, batchId: string, requestedCommand?: ClosedWorkflowCommand) {
+    return requestedCommand === undefined && isRebindRecomputeVisible(state, batchId);
+}
+
+export function isSameProductionTarget(expected: WorkflowProductionSelection, current: WorkflowProductionSelection) {
+    return expected.mode === "production" && current.mode === "production" && expected.cardId === current.cardId && expected.batchId === current.batchId;
+}
+
+export async function rebindBeforeQuoteIfEligible(
+    state: CanvasWorkflowProductionMetadata,
+    batchId: string,
+    token: string,
+    fetcher: typeof fetch = globalThis.fetch,
+    requestedCommand?: ClosedWorkflowCommand,
+) {
+    return shouldRebindBeforeQuote(state, batchId, requestedCommand) ? fetchProductionRebind(batchId, token, fetcher) : undefined;
+}
+
+export function isTerminalRebindError(error: unknown) {
+    return error instanceof WorkflowProductionRebindError && Boolean(error.code && TERMINAL_REBIND_ERRORS.has(error.code));
+}
+
+export function productionActionLabel(state: CanvasWorkflowProductionMetadata, batchId: string | undefined = state.batchId) {
+    if (state.status === "queued") return "等待接单";
+    if (state.status === "running") return "真实制作中";
+    if (state.status === "paused") return "继续制作";
+    if (state.status === "completed") return COMPLETED_PRODUCTION_ACTION_LABEL;
+    if (isRebindRecomputeVisible(state, batchId)) return REBIND_RECOMPUTE_ACTION_LABEL;
+    if (state.status === "failed") return "重新开始";
+    return "开始真实制作";
+}
+
 export async function fetchProductionQuote(batchId: string, token: string, fetcher: typeof fetch = globalThis.fetch): Promise<WorkflowProductionQuote> {
     const url = buildProductionQuoteUrl(WORKFLOW_PRODUCTION_ORIGIN, batchId);
     if (!url || !token.trim()) throw new Error("本机真实制作服务尚未就绪，请重新启动画布服务后再试。");
@@ -199,6 +321,7 @@ export function buildProductionCommand(
             errorMessage: undefined,
             message: undefined,
             step: undefined,
+            recovery: undefined,
         },
     };
 }
@@ -245,6 +368,19 @@ export function resetInterruptedProductions(nodes: CanvasNodeData[]) {
 
 function stringValue(value: unknown) {
     return typeof value === "string" && value ? value : undefined;
+}
+
+function isSafeRecoveryFile(value: unknown): value is string {
+    return typeof value === "string" && RECOVERY_FILE_PATTERN.test(value) && !RECOVERY_FILE_DENY_PATTERN.test(value);
+}
+
+function safeArtifactKey(value: unknown): value is string {
+    return typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(value);
+}
+
+function safeRebindMessage(value: unknown) {
+    if (typeof value !== "string" || !value.length || value.length > 240 || /[\r\n]/.test(value) || RECOVERY_FILE_DENY_PATTERN.test(value)) return undefined;
+    return /[\\/]/.test(value.replaceAll("inputs/white_bg", "inputs_white_bg")) ? undefined : value;
 }
 
 function timestamp(value: unknown) {

@@ -164,6 +164,12 @@
 | 160 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CX-01 版本归纳与真人待测清单 | Unreleased 记录真实制作不再受个人 Codex 配置影响；待测试页登记生产钉死、缺省边界、恢复路径与真机 rollout 验收；todo 经检查无对应条目，无需改动 | 离线载荷合同不替代真实批次重启与 rollout 档位验收，文档不写具体日期 | — |
 | 161 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | RS-01 终态后免刷新重新提交 | 删除 #37 的页面会话锁；终态重新报价并亲手确认后可再次写入，最终写入时仍按最新状态拦截飞行中命令；同步版本说明与真人待验项 | GT-01 已使阶段 E 逐闸门批准协议作废，故 #37 的单页仪式退役；提交资格自此唯一判定为飞行中互斥（`queued` / `running`） | — |
 | 162 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` + `web/tests/canvas-batch-intake.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CAT-08 详情图模块05手持防呆 | 详情手持上限统一为本批详情张数减一，1 张详情时上限为 0；载荷校验、输入框范围、人话提示和边界测试共用同一规则 | 为恒定承载模块05的尺寸标注图位预留非手持名额；主图上限、载荷结构、契约摘要和 `web/dist` 保持不变 | — |
+| 163 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-workflow-production.ts` | RB-01 恢复元数据、端点合同与主按钮判据 | 对 `recovery` 做严格嵌套解析；新增固定回环 rebind URL、POST 响应校验、可见性与标签纯函数，排队命令清除旧恢复状态 | 只有服务端明确判定的个别白底图缺失可进入重排；不可信字段失败关闭，既有封闭命令选择不变 | — |
+| 164 | `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` | RB-01 报价前重排与失败卡按钮 | eligible 失败主按钮先 POST 重排，成功后继续既有报价和人工费用确认；三类终态拒绝清除过期恢复资格，其他失败保留原入口 | 防止已恢复、已有成图或目录整体不可用时重复请求；非 eligible 点击仍完全沿用原报价路径 | — |
+| 165 | `web/tests/canvas-workflow-production.test.ts` | RB-01 追加回归合同 | 文件末尾追加恢复解析矩阵、按钮资格、URL/POST 成功与拒绝校验、非 eligible 零 POST 和旧命令回归 | 锁定失败关闭与用户修正 C，不修改任何既有测试正文 | — |
+| 166 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | RB-01 版本归纳与真人待测清单 | Unreleased 归纳缺失分级处置；待测试页登记个别缺失、目录不可用、已有成图、旧行为和失败关闭验收点；todo 经检查无对应条目，无需改动 | 自动合同不替代真实失败卡、归档重排、报价与费用确认验收，文档不写具体日期 | — |
+| 167 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` + `web/tests/canvas-workflow-production.test.ts` | RB-01 批次对账、命令隔离与异步竞态复检 | 特殊按钮与 POST 同时核对机器批次和当前信息卡批次；显式闭集命令不触发重排；POST 返回后重新核对 cardId/batchId，路径型拒绝文案失败关闭，EOF 追加对应回归 | 防止过期 recovery 归档错批、批次助手意外触发重排或异步连线变化污染新状态，同时保留批准的 `inputs/white_bg` 指引 | — |
+| 168 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` | RB-01 敏感词矩阵对齐 | recovery 文件名与拒绝文案补拒 `authorization`、`password` 和任意 `sk-` 片段，EOF 追加双通道回归 | 与主仓净化器保持同一失败关闭边界，防止敏感字段名通过前端可读通道 | — |
 
 ## 退役锚点（编号不复用）
 
