@@ -170,6 +170,7 @@
 | 166 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | RB-01 版本归纳与真人待测清单 | Unreleased 归纳缺失分级处置；待测试页登记个别缺失、目录不可用、已有成图、旧行为和失败关闭验收点；todo 经检查无对应条目，无需改动 | 自动合同不替代真实失败卡、归档重排、报价与费用确认验收，文档不写具体日期 | — |
 | 167 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` + `web/tests/canvas-workflow-production.test.ts` | RB-01 批次对账、命令隔离与异步竞态复检 | 特殊按钮与 POST 同时核对机器批次和当前信息卡批次；显式闭集命令不触发重排；POST 返回后重新核对 cardId/batchId，路径型拒绝文案失败关闭，EOF 追加对应回归 | 防止过期 recovery 归档错批、批次助手意外触发重排或异步连线变化污染新状态，同时保留批准的 `inputs/white_bg` 指引 | — |
 | 168 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` | RB-01 敏感词矩阵对齐 | recovery 文件名与拒绝文案补拒 `authorization`、`password` 和任意 `sk-` 片段，EOF 追加双通道回归 | 与主仓净化器保持同一失败关闭边界，防止敏感字段名通过前端可读通道 | — |
+| 169 | `web/dist/` | RB-01 最新本机运行副本 | 按当前 HEAD 源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | `dd045f1` 当时未重建部署产物，导致白底原图缺失的分级处置界面从未上线；本次补齐后用户硬刷新画布页即可加载 | — |
 
 ## 退役锚点（编号不复用）
 
