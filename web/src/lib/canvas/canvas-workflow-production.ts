@@ -9,7 +9,12 @@ export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 12 * 60_000;
 export const WORKFLOW_PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
 export const COMPLETED_PRODUCTION_ACTION_LABEL = "继续";
 export const REBIND_RECOMPUTE_ACTION_LABEL = "剔除缺失图并重新分配";
+export const IMAGE_SERVICE_FAILURE_ACTION_LABEL = "再次尝试";
 export const WORKFLOW_COUNT_DATA_MISSING_MESSAGE = "本批次张数或编号信息不完整，请重启工作台 + 刷新画布后再试。";
+
+const PRODUCTION_FAILURE_FALLBACK_TEXT = "这一步没做好，机器已停下。已经完成的成果都保留了。";
+const IMAGE_SERVICE_FAILURE_SOURCE_TEXT = "本次异常来自图片服务，不是工作流的问题。";
+const IMAGE_SERVICE_FAILURE_RETRY_TEXT = "待服务恢复后点下方按钮再试一次，费用会重新报价并需你亲手确认。";
 
 const PRODUCTION_STATUSES = new Set(["idle", "queued", "running", "paused", "completed", "failed"]);
 const CONFIG_ID_PATTERN = /^(main|detail)_(0[1-9]|[12][0-9]|30)$/;
@@ -82,6 +87,7 @@ export function readProductionState(metadata?: CanvasNodeMetadata): CanvasWorkfl
         step: stringValue(value?.step),
         message: stringValue(value?.message),
         errorMessage: realErrorMessage ?? (missingCounts ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : undefined),
+        failureSource: value?.failureSource === "image_service" ? value.failureSource : undefined,
         recovery: readProductionRecovery(value?.recovery),
     };
 }
@@ -249,8 +255,13 @@ export function productionActionLabel(state: CanvasWorkflowProductionMetadata, b
     if (state.status === "paused") return "继续制作";
     if (state.status === "completed") return COMPLETED_PRODUCTION_ACTION_LABEL;
     if (isRebindRecomputeVisible(state, batchId)) return REBIND_RECOMPUTE_ACTION_LABEL;
-    if (state.status === "failed") return "重新开始";
+    if (state.status === "failed") return isImageServiceFailure(state.status, state.failureSource) ? IMAGE_SERVICE_FAILURE_ACTION_LABEL : "重新开始";
     return "开始真实制作";
+}
+
+export function productionFailureStatusText(errorMessage: string | undefined, failureSource: CanvasWorkflowProductionMetadata["failureSource"]) {
+    const baseText = errorMessage || PRODUCTION_FAILURE_FALLBACK_TEXT;
+    return isImageServiceFailure("failed", failureSource) ? `${baseText} ${IMAGE_SERVICE_FAILURE_SOURCE_TEXT} ${IMAGE_SERVICE_FAILURE_RETRY_TEXT}` : baseText;
 }
 
 export async function fetchProductionQuote(batchId: string, token: string, fetcher: typeof fetch = globalThis.fetch): Promise<WorkflowProductionQuote> {
@@ -368,6 +379,10 @@ export function resetInterruptedProductions(nodes: CanvasNodeData[]) {
 
 function stringValue(value: unknown) {
     return typeof value === "string" && value ? value : undefined;
+}
+
+function isImageServiceFailure(status: CanvasWorkflowProductionMetadata["status"], failureSource: CanvasWorkflowProductionMetadata["failureSource"]) {
+    return status === "failed" && failureSource === "image_service";
 }
 
 function isSafeRecoveryFile(value: unknown): value is string {

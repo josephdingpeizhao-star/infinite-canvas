@@ -4,10 +4,10 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_COUNT, WORKFLOW_DEMO_TOTAL } from "@/lib/canvas/canvas-workflow-demo";
 import { REPAIR_PROJECTION_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-delivery";
 import { isWorkflowImageDownloadDisabled } from "@/lib/canvas/canvas-workflow-image-export";
-import { completedProductionStatusText, productionActionLabel, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
+import { completedProductionStatusText, productionActionLabel, productionFailureStatusText, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
 import { ACCEPTANCE_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-receiving";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionStatus } from "@/types/canvas";
+import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionMetadata, CanvasWorkflowProductionStatus } from "@/types/canvas";
 
 type CanvasWorkflowNodeProps = {
     node: CanvasNodeData;
@@ -32,7 +32,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, down
     const queued = state.status === "queued";
     const awaitingConfirmation = !production && demoState.status === "awaiting_confirmation";
     const statusLabel = production ? productionStatusLabel(productionState.status) : workflowStatusLabel(demoState.status);
-    const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.totalCount, productionState.message, productionState.errorMessage) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage);
+    const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.totalCount, productionState.message, productionState.errorMessage, productionState.failureSource) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage);
     const compactCompletedLayout = Boolean(production && productionState.status === "completed" && (REPAIR_PROJECTION_ENTRY_ENABLED || ACCEPTANCE_ENTRY_ENABLED));
     const completedActions: Array<{ key: string; label: string; disabled?: boolean; wide?: boolean; onClick: (nodeId: string) => void }> = [
         { key: "download-selected", label: "下载选中的图片", disabled: isWorkflowImageDownloadDisabled(downloadableSelectedImageCount), onClick: onDownloadSelected },
@@ -229,11 +229,11 @@ function productionStatusLabel(status: CanvasWorkflowProductionStatus) {
     return "待机";
 }
 
-function productionStatusText(status: CanvasWorkflowProductionStatus, producedCount: number, totalCount: number | undefined, message?: string, errorMessage?: string) {
+function productionStatusText(status: CanvasWorkflowProductionStatus, producedCount: number, totalCount: number | undefined, message?: string, errorMessage?: string, failureSource?: CanvasWorkflowProductionMetadata["failureSource"]) {
     if (status === "queued") return "费用已确认，等待本机工作台接单。";
     if (status === "running") return message || `正在制作，已完成 ${producedCount}/${totalCount ?? "—"} 张。`;
     if (status === "paused") return `已完成 ${producedCount}/${totalCount ?? "—"} 张。成果都已保留；再次开始会从既有路由续跑。`;
     if (status === "completed") return completedProductionStatusText(message, totalCount);
-    if (status === "failed") return errorMessage || "这一步没做好，机器已停下。已经完成的成果都保留了。";
+    if (status === "failed") return productionFailureStatusText(errorMessage, failureSource);
     return "已连接已登记批次。点击开始后先核对真实费用，确认前不会执行。";
 }

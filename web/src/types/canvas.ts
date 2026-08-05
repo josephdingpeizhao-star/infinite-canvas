@@ -54,6 +54,7 @@ export type CanvasWorkflowProductionMetadata = {
     step?: string;
     message?: string;
     errorMessage?: string;
+    failureSource?: "image_service";
     recovery?: CanvasWorkflowProductionRecovery;
 };
 export type CanvasWorkflowProductionOutputMetadata = {

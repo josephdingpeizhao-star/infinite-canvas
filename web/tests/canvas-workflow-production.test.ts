@@ -518,3 +518,75 @@ describe("RB-01 sensitive token parity", () => {
         }
     });
 });
+
+import {
+    IMAGE_SERVICE_FAILURE_ACTION_LABEL,
+    productionFailureStatusText,
+} from "../src/lib/canvas/canvas-workflow-production";
+
+describe("ER-02f image-service failure attribution", () => {
+    const fallbackText = "这一步没做好，机器已停下。已经完成的成果都保留了。";
+    const sourceText = "本次异常来自图片服务，不是工作流的问题。";
+    const retryText = "待服务恢复后点下方按钮再试一次，费用会重新报价并需你亲手确认。";
+
+    test("accepts only the exact image_service failure source", () => {
+        const withoutSource = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), errorMessage: "图片生成失败。" } });
+        expect(withoutSource.failureSource).toBeUndefined();
+        expect(productionActionLabel(withoutSource)).toBe("重新开始");
+        expect(productionFailureStatusText(withoutSource.errorMessage, withoutSource.failureSource)).toBe("图片生成失败。");
+
+        for (const failureSource of [null, 0, false, "other", "IMAGE_SERVICE", "image_service ", {}]) {
+            const state = readProductionState({
+                workflowProduction: { ...productionMetadata("failed", 0), errorMessage: "图片生成失败。", failureSource } as never,
+            });
+            expect(state.failureSource).toBeUndefined();
+            expect(productionActionLabel(state)).toBe("重新开始");
+            expect(productionFailureStatusText(state.errorMessage, state.failureSource)).toBe("图片生成失败。");
+        }
+
+        const attributed = readProductionState({ workflowProduction: { ...productionMetadata("failed", 0), errorMessage: "图片生成失败。", failureSource: "image_service" } });
+        expect(attributed.failureSource).toBe("image_service");
+        expect(productionActionLabel(attributed)).toBe(IMAGE_SERVICE_FAILURE_ACTION_LABEL);
+        expect(IMAGE_SERVICE_FAILURE_ACTION_LABEL).toBe("再次尝试");
+        expect(productionFailureStatusText(attributed.errorMessage, attributed.failureSource)).toBe(`图片生成失败。 ${sourceText} ${retryText}`);
+    });
+
+    test("does not change non-failed labels or completed status copy", () => {
+        const cases = [
+            ["queued", "等待接单"],
+            ["running", "真实制作中"],
+            ["paused", "继续制作"],
+            ["completed", COMPLETED_PRODUCTION_ACTION_LABEL],
+        ] as const;
+        for (const [status, label] of cases) {
+            const state = readProductionState({ workflowProduction: { ...productionMetadata(status, status === "completed" ? 5 : 0, 3, 2), failureSource: "image_service" } });
+            expect(state.failureSource).toBe("image_service");
+            expect(productionActionLabel(state)).toBe(label);
+        }
+        expect(completedProductionStatusText("后端完成文案。", 5)).toBe("后端完成文案。");
+        expect(completedProductionStatusText(undefined, 5)).toBe("5 张真实图片已上桌。点击继续后，机器会按当前批次状态处理下一步。");
+    });
+
+    test("keeps RB-01 action priority over image-service attribution", () => {
+        const state = readProductionState({
+            workflowProduction: {
+                ...productionMetadata("failed", 0),
+                recovery: { kind: "missing_reference", files: ["正面图.jpg"], recomputeEligible: true },
+            },
+        });
+        expect(state.failureSource).toBeUndefined();
+        expect(productionActionLabel(state)).toBe(REBIND_RECOMPUTE_ACTION_LABEL);
+    });
+
+    test("keeps production command content byte-for-byte identical", () => {
+        const plain = readProductionState({ workflowProduction: productionMetadata("failed", 2, 3, 2) });
+        const attributed = readProductionState({ workflowProduction: { ...productionMetadata("failed", 2, 3, 2), failureSource: "image_service" } });
+        expect(buildProductionCommand(attributed, "cup", "request-same", 14_000).content).toBe(buildProductionCommand(plain, "cup", "request-same", 14_000).content);
+    });
+
+    test("appends attribution after the existing error or fallback only when confirmed", () => {
+        expect(productionFailureStatusText(undefined, "image_service")).toBe(`${fallbackText} ${sourceText} ${retryText}`);
+        expect(productionFailureStatusText(undefined, undefined)).toBe(fallbackText);
+        expect(productionFailureStatusText("服务返回失败。", undefined)).toBe("服务返回失败。");
+    });
+});

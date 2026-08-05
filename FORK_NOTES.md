@@ -171,6 +171,8 @@
 | 167 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` + `web/tests/canvas-workflow-production.test.ts` | RB-01 批次对账、命令隔离与异步竞态复检 | 特殊按钮与 POST 同时核对机器批次和当前信息卡批次；显式闭集命令不触发重排；POST 返回后重新核对 cardId/batchId，路径型拒绝文案失败关闭，EOF 追加对应回归 | 防止过期 recovery 归档错批、批次助手意外触发重排或异步连线变化污染新状态，同时保留批准的 `inputs/white_bg` 指引 | — |
 | 168 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` | RB-01 敏感词矩阵对齐 | recovery 文件名与拒绝文案补拒 `authorization`、`password` 和任意 `sk-` 片段，EOF 追加双通道回归 | 与主仓净化器保持同一失败关闭边界，防止敏感字段名通过前端可读通道 | — |
 | 169 | `web/dist/` | RB-01 最新本机运行副本 | 按当前 HEAD 源码重建；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | `dd045f1` 当时未重建部署产物，导致白底原图缺失的分级处置界面从未上线；本次补齐后用户硬刷新画布页即可加载 | — |
+| 170 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` + `web/tests/canvas-workflow-production.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ER-02f 图片服务失败归因与回归登记 | 严格读取可选 `failureSource: "image_service"`；确认为图片服务失败时由纯函数追加固定说明并把生产主按钮改为“再次尝试”，EOF 追加解析、非失败态、RB-01 优先级、命令零漂移与正文回归 | 让用户分清外部图片服务异常与工作流问题，同时保持断点续跑、重新报价、人工费用确认及其他失败行为不变 | — |
+| 171 | `web/dist/` | ER-02f 最新本机运行副本 | 按最终源码重建并完成静态资源、关键文案与树指纹核验；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 用户硬刷新画布页即可加载图片服务归因与“再次尝试”文案，无需重启未改动的后端工作台 | — |
 
 ## 退役锚点（编号不复用）
 
