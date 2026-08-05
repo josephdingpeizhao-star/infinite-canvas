@@ -53,6 +53,7 @@ import {
     type WorkflowCommandTarget,
 } from "@/stores/canvas/use-canvas-workflow-command-store";
 import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
+import { buildConnectionsToAdd, describeBatchConnectResult, planBatchConnections } from "@/lib/canvas/canvas-batch-connect";
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
@@ -703,18 +704,21 @@ function InfiniteCanvasPage() {
 
     const connectNodes = useCallback(
         (current: ConnectionHandle, targetNodeId: string) => {
-            if (current.nodeId === targetNodeId) return;
-
-            const connection = normalizeConnection(current.nodeId, targetNodeId, nodesRef.current, current.handleType);
-            if (!connection) {
-                message.warning("配置节点之间不能连接");
-                return;
-            }
-            const { fromNodeId, toNodeId } = connection;
-            const exists = connectionsRef.current.some((conn) => conn.fromNodeId === fromNodeId && conn.toNodeId === toNodeId);
-            if (!exists) {
-                setConnections((prev) => [...prev, { id: `conn-${Date.now()}`, fromNodeId, toNodeId }]);
-            }
+            const plan = planBatchConnections({
+                originNodeId: current.nodeId,
+                targetNodeId,
+                selectedNodeIds: selectedNodeIdsRef.current,
+                nodes: nodesRef.current,
+                existingConnections: connectionsRef.current,
+                handleType: current.handleType,
+                host: {
+                    normalizeConnection,
+                    isNodeHidden: (node) => isHiddenBatchChild(node, nodesRef.current),
+                },
+            });
+            if (plan.additions.length) setConnections((prev) => [...prev, ...buildConnectionsToAdd(plan.additions)]);
+            const notice = describeBatchConnectResult(plan);
+            if (notice) message[notice.severity](notice.message);
             setContextMenu(null);
         },
         [message],
