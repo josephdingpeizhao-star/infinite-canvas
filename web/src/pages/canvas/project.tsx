@@ -57,7 +57,7 @@ import { buildConnectionsToAdd, describeBatchConnectResult, planBatchConnections
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
-import { batchSourceFilePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
+import { COMPONENT_WHITE_BG_IMAGE_LIMIT, SET_GROUP_IMAGE_LIMIT, batchImageSelectionPatch, batchSourceFilePatch, batchTypeChangePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, readBatchIntakeState, resetBatchDeclarationState, resetInterruptedBatchIntakes } from "@/lib/canvas/canvas-batch-intake";
 import { MATERIAL_UPLOAD_ACCEPT, materialFileKind, materialUploadFocus, runMaterialUploadBatch, type MaterialFileKind, type MaterialUploadMode } from "@/lib/canvas/canvas-material-upload";
 import { buildWorkflowImageDownloadPlan, executeWorkflowImageDownloadPlan, type WorkflowImageDownloadMethod, type WorkflowImageDownloadPlan, type WorkflowImageDownloadScope } from "@/lib/canvas/canvas-workflow-image-export";
 import { connectedProductionSummary, resetInterruptedProductions, resolveProductionSelection } from "@/lib/canvas/canvas-workflow-production";
@@ -77,7 +77,9 @@ import {
     CanvasNodeType,
     type CanvasAssistantImage,
     type CanvasAssistantSession,
+    type CanvasBatchImageCategory,
     type CanvasBatchSourceFile,
+    type CanvasBatchType,
     type CanvasConnection,
     type CanvasImageGenerationType,
     type CanvasNodeData,
@@ -259,6 +261,8 @@ function InfiniteCanvasPage() {
     const containerRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const uploadTargetRef = useRef<{ mode: MaterialUploadMode; nodeId?: string; position?: Position } | null>(null);
+    const batchSetImageInputRef = useRef<HTMLInputElement>(null);
+    const batchSetUploadTargetRef = useRef<{ nodeId: string; imageCategory: Exclude<CanvasBatchImageCategory, "white_bg"> } | null>(null);
     const clipboardRef = useRef<CanvasClipboard | null>(null);
     const historyRef = useRef<{ past: CanvasHistoryEntry[]; future: CanvasHistoryEntry[] }>({ past: [], future: [] });
     const lastHistoryRef = useRef<CanvasHistoryEntry | null>(null);
@@ -2086,6 +2090,94 @@ function InfiniteCanvasPage() {
         input.click();
     }, []);
 
+    const handleBatchTypeChange = useCallback((nodeId: string, batchType: CanvasBatchType) => {
+        setNodes((current) =>
+            current.map((node) => {
+                if (node.id !== nodeId || node.type !== CanvasNodeType.BatchInfo) return node;
+                const state = readBatchIntakeState(node.metadata);
+                if (state.status !== "draft" && state.status !== "failed") return node;
+                return { ...node, metadata: { ...node.metadata, content: undefined, batchIntake: resetBatchDeclarationState(state, batchTypeChangePatch(state, batchType)) } };
+            }),
+        );
+    }, []);
+
+    const handleBatchSetUploadRequest = useCallback((nodeId: string, imageCategory: Exclude<CanvasBatchImageCategory, "white_bg">) => {
+        const card = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.BatchInfo);
+        const state = readBatchIntakeState(card?.metadata);
+        if (!card || state.batch_type !== "set" || (state.status !== "draft" && state.status !== "failed")) {
+            message.warning("套装图片只能在套装信息卡可编辑时上传。");
+            return;
+        }
+        const input = batchSetImageInputRef.current;
+        if (!input) return;
+        batchSetUploadTargetRef.current = { nodeId, imageCategory };
+        input.click();
+    }, [message]);
+
+    const handleBatchSetImageInputChange = useCallback(
+        async (event: ReactChangeEvent<HTMLInputElement>) => {
+            const files = Array.from(event.target.files || []);
+            const target = batchSetUploadTargetRef.current;
+            batchSetUploadTargetRef.current = null;
+            event.target.value = "";
+            if (!target || !files.length) return;
+            const limit = target.imageCategory === "set_group" ? SET_GROUP_IMAGE_LIMIT : COMPONENT_WHITE_BG_IMAGE_LIMIT;
+            if (files.length < limit.minimum || files.length > limit.maximum) {
+                message.warning(target.imageCategory === "set_group" ? "套装合影白底图请选择 1–3 张。" : "各单件白底图请选择 2–8 张。");
+                return;
+            }
+            if (files.some((file) => materialFileKind(file) !== "image")) {
+                message.warning("套装上传区只接受图片文件。");
+                return;
+            }
+            const card = nodesRef.current.find((node) => node.id === target.nodeId && node.type === CanvasNodeType.BatchInfo);
+            const state = readBatchIntakeState(card?.metadata);
+            if (!card || state.batch_type !== "set" || (state.status !== "draft" && state.status !== "failed")) {
+                message.warning("套装信息卡已锁定，本次没有加入图片。");
+                return;
+            }
+            try {
+                const uploadedNodes: CanvasNodeData[] = [];
+                for (const [index, file] of files.entries()) {
+                    const [image, sourceFile] = await Promise.all([uploadImage(file), createBatchSourceFile(file)]);
+                    const nextSize = fitNodeSize(image.width, image.height);
+                    uploadedNodes.push({
+                        id: `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        type: CanvasNodeType.Image,
+                        title: file.name,
+                        position: { x: card.position.x + card.width + 48 + (index % 3) * 28, y: card.position.y + Math.floor(index / 3) * 28 },
+                        width: nextSize.width,
+                        height: nextSize.height,
+                        metadata: imageMetadata(image, sourceFile),
+                    });
+                }
+                const latestCard = nodesRef.current.find((node) => node.id === target.nodeId && node.type === CanvasNodeType.BatchInfo);
+                const latestState = readBatchIntakeState(latestCard?.metadata);
+                if (!latestCard || latestState.batch_type !== "set" || (latestState.status !== "draft" && latestState.status !== "failed")) {
+                    message.warning("套装信息卡在上传期间已锁定，本次没有加入图片。");
+                    return;
+                }
+                const declarationPatch = batchImageSelectionPatch(target.imageCategory, uploadedNodes.map((node) => node.id));
+                setNodes((current) => {
+                    let accepted = false;
+                    const updated = current.map((node) => {
+                        if (node.id !== target.nodeId || node.type !== CanvasNodeType.BatchInfo) return node;
+                        const currentState = readBatchIntakeState(node.metadata);
+                        if (currentState.batch_type !== "set" || (currentState.status !== "draft" && currentState.status !== "failed")) return node;
+                        accepted = true;
+                        return { ...node, metadata: { ...node.metadata, content: undefined, batchIntake: resetBatchDeclarationState(currentState, declarationPatch) } };
+                    });
+                    return accepted ? [...updated, ...uploadedNodes] : current;
+                });
+                setSelectedNodeIds(new Set(uploadedNodes.map((node) => node.id)));
+                setSelectedConnectionId(null);
+            } catch {
+                message.error("套装图片上传失败，本次没有加入信息卡，请重新选择。");
+            }
+        },
+        [message],
+    );
+
     const handleImageInputChange = useCallback(
         async (event: ReactChangeEvent<HTMLInputElement>) => {
             const files = Array.from(event.target.files || []);
@@ -2885,9 +2977,13 @@ function InfiniteCanvasPage() {
                                         connectedStyleReferenceCount={connectedStyleReferenceImageIds(contentNode.id, nodes, connections).length}
                                         connectedOriginalFileNames={connectedBatchOriginalFileNames(contentNode.id, nodes, connections)}
                                         connectedStyleReferenceFileNames={connectedStyleReferenceFileNames(contentNode.id, nodes, connections)}
+                                        setGroupFileNames={batchSetImageFileNames(contentNode, nodes, "setGroupImageNodeIds")}
+                                        componentWhiteBgFileNames={batchSetImageFileNames(contentNode, nodes, "componentWhiteBgImageNodeIds")}
                                         categoryCatalog={batchIntake.categoryCatalog}
                                         categoryCatalogStatus={batchIntake.categoryCatalogStatus}
                                         onChange={batchIntake.updateFacts}
+                                        onBatchTypeChange={handleBatchTypeChange}
+                                        onUploadSetImages={handleBatchSetUploadRequest}
                                         onRegister={batchIntake.requestRegistration}
                                         onSupplementStyle={styleReferenceIntake.requestSupplement}
                                         onRemoveStyle={confirmStyleReferenceRemoval}
@@ -3067,6 +3163,7 @@ function InfiniteCanvasPage() {
                 ) : null}
 
                 <input ref={imageInputRef} type="file" accept={MATERIAL_UPLOAD_ACCEPT} multiple className="hidden" onChange={handleImageInputChange} />
+                <input ref={batchSetImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleBatchSetImageInputChange} />
 
                 <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} />
 
@@ -3325,6 +3422,11 @@ function Shortcut({ keys, value }: { keys: string[]; value: string }) {
             <span className="text-right text-sm opacity-55">{value}</span>
         </div>
     );
+}
+
+function batchSetImageFileNames(card: CanvasNodeData, nodes: CanvasNodeData[], field: "setGroupImageNodeIds" | "componentWhiteBgImageNodeIds") {
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    return (readBatchIntakeState(card.metadata)[field] || []).map((id) => nodesById.get(id)?.metadata?.sourceFile?.name || nodesById.get(id)?.title || id);
 }
 
 function imageExtension(dataUrl: string) {

@@ -1,11 +1,13 @@
-import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
+import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchImageCategory, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasBatchType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
 export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
 export const BATCH_CATEGORY_ORIGIN = "http://127.0.0.1:17373";
 export const BATCH_CATEGORY_URL = `${BATCH_CATEGORY_ORIGIN}/batch-categories`;
-export const BATCH_INTAKE_CONTRACT_SHA256 = "ac9e633c814b2032eb5d72c436a773c03a7dc3f4500d3383580ee7b3f3c18de0";
+export const BATCH_INTAKE_CONTRACT_SHA256 = "266f01ac2532a334e8b4378ee369d49a9a6f97cbe256fbce8daef06b357b9a61";
 export const BATCH_CATEGORY_UNAVAILABLE_MESSAGE = "产品品类暂时无法读取，请重启工作台并刷新画布后再登记。";
+export const SET_GROUP_IMAGE_LIMIT = { minimum: 1, maximum: 3 } as const;
+export const COMPONENT_WHITE_BG_IMAGE_LIMIT = { minimum: 2, maximum: 8 } as const;
 export const DUPLICATE_PRODUCT_IMAGE_MESSAGE =
     "同一张图被重复加入本次产品原图登记，不能建批。" +
     "请删除重复项，只保留一张；产品原图连工作流机器，风格参考图连信息卡。";
@@ -47,6 +49,7 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
     const status = value && BATCH_INTAKE_STATUSES.has(value.status) ? value.status : "draft";
     return {
         status,
+        batch_type: validBatchType(value?.batch_type) ? value.batch_type : undefined,
         category: nonemptyString(value?.category),
         contractHash: nonemptyString(value?.contractHash),
         productType: nonemptyString(value?.productType),
@@ -66,6 +69,8 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
         updatedAt: finiteTimestamp(value?.updatedAt),
         workflowNodeId: nonemptyString(value?.workflowNodeId),
         sourceImageNodeIds: uniqueStrings(value?.sourceImageNodeIds),
+        setGroupImageNodeIds: uniqueStrings(value?.setGroupImageNodeIds),
+        componentWhiteBgImageNodeIds: uniqueStrings(value?.componentWhiteBgImageNodeIds),
         batchId: nonemptyString(value?.batchId),
         uploadBaseUrl: nonemptyString(value?.uploadBaseUrl),
         expectedCount: nonnegativeInteger(value?.expectedCount),
@@ -83,6 +88,8 @@ export function validateBatchIntakeFacts(
     if (!category || state.category !== category.key || state.contractHash !== contractHash || contractHash !== BATCH_INTAKE_CONTRACT_SHA256) {
         return { ok: false, message: BATCH_CATEGORY_UNAVAILABLE_MESSAGE };
     }
+    const batchTypeResult = validateBatchTypeDeclaration(state);
+    if (!batchTypeResult.ok) return batchTypeResult;
     const dimensions: Record<CanvasBatchDimensionKey, number | undefined> = {
         length_cm: state.productLengthCm,
         width_cm: state.productWidthCm,
@@ -134,9 +141,59 @@ export function validateBatchIntakeFacts(
     };
 }
 
+export function validateBatchTypeDeclaration(state: CanvasBatchIntakeMetadata): { ok: true; batch_type: CanvasBatchType } | { ok: false; message: string } {
+    if (!validBatchType(state.batch_type)) return { ok: false, message: "商品类型声明无效，请重新选择单品或套装。" };
+    const setGroupCount = state.setGroupImageNodeIds?.length || 0;
+    const componentCount = state.componentWhiteBgImageNodeIds?.length || 0;
+    if (state.batch_type === "single") {
+        if (setGroupCount || componentCount) return { ok: false, message: "单品批次不能包含套装图片，请切换为套装或清空后再登记。" };
+        return { ok: true, batch_type: state.batch_type };
+    }
+    if (setGroupCount < SET_GROUP_IMAGE_LIMIT.minimum || setGroupCount > SET_GROUP_IMAGE_LIMIT.maximum) {
+        return { ok: false, message: "套装合影白底图必须上传 1–3 张。" };
+    }
+    if (componentCount < COMPONENT_WHITE_BG_IMAGE_LIMIT.minimum || componentCount > COMPONENT_WHITE_BG_IMAGE_LIMIT.maximum) {
+        return { ok: false, message: "各单件白底图必须上传 2–8 张。" };
+    }
+    return { ok: true, batch_type: state.batch_type };
+}
+
+export function batchTypeChangePatch(state: CanvasBatchIntakeMetadata, batchType: CanvasBatchType) {
+    return batchType === "single"
+        ? { batch_type: batchType, setGroupImageNodeIds: [] as string[], componentWhiteBgImageNodeIds: [] as string[] }
+        : { batch_type: batchType, setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])], componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])] };
+}
+
+export function batchImageSelectionPatch(imageCategory: Exclude<CanvasBatchImageCategory, "white_bg">, nodeIds: string[]) {
+    return imageCategory === "set_group" ? { setGroupImageNodeIds: uniqueStrings(nodeIds) } : { componentWhiteBgImageNodeIds: uniqueStrings(nodeIds) };
+}
+
+export function resetBatchDeclarationState(state: CanvasBatchIntakeMetadata, patch: Partial<CanvasBatchIntakeMetadata>): CanvasBatchIntakeMetadata {
+    return {
+        ...state,
+        ...patch,
+        status: "draft",
+        requestId: undefined,
+        requestedAt: undefined,
+        updatedAt: undefined,
+        workflowNodeId: undefined,
+        sourceImageNodeIds: undefined,
+        batchId: undefined,
+        uploadBaseUrl: undefined,
+        expectedCount: undefined,
+        receivedCount: undefined,
+        errorMessage: undefined,
+        receipt: undefined,
+        facts: undefined,
+    };
+}
+
 export function categoryDefaultPatch(category: CanvasBatchCategoryMetadata, contractHash: string) {
     const option = (field: CanvasBatchAdvancedOptionKey) => category.form.advanced_options.find((item) => item.field === field)!;
     return {
+        batch_type: "single" as const,
+        setGroupImageNodeIds: [] as string[],
+        componentWhiteBgImageNodeIds: [] as string[],
         category: category.key,
         contractHash,
         productType: category.product_noun,
@@ -155,6 +212,9 @@ export function categoryDefaultPatch(category: CanvasBatchCategoryMetadata, cont
 export function categorySwitchPatch(state: CanvasBatchIntakeMetadata, category: CanvasBatchCategoryMetadata, contractHash: string) {
     return {
         ...categoryDefaultPatch(category, contractHash),
+        batch_type: state.batch_type,
+        setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
+        componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])],
         productLengthCm: state.productLengthCm,
         productWidthCm: state.productWidthCm,
         productHeightCm: state.productHeightCm,
@@ -198,17 +258,27 @@ export function resolveBatchIntakeSelection(batchInfoNodeId: string, nodes: Canv
     const sourceImages = uniqueStrings(connections.filter((item) => item.toNodeId === workflowNodeId && nodesById.get(item.fromNodeId)?.type === CanvasNodeType.Image).map((item) => item.fromNodeId)).map((id) => nodesById.get(id)!);
     if (!sourceImages.length) return { ok: false, message: "请把至少 1 张磁盘原图连接到同一台工作流机器。" };
 
-    for (const image of sourceImages) {
+    const state = readBatchIntakeState(card.metadata);
+    const sourceImageNodeIds = [
+        ...sourceImages.map((image) => image.id),
+        ...(state.setGroupImageNodeIds || []),
+        ...(state.componentWhiteBgImageNodeIds || []),
+    ];
+    if (sourceImageNodeIds.length !== new Set(sourceImageNodeIds).size) return { ok: false, message: DUPLICATE_PRODUCT_IMAGE_MESSAGE };
+    const allSourceImages = sourceImageNodeIds.map((id) => nodesById.get(id));
+    if (allSourceImages.some((image) => !image || image.type !== CanvasNodeType.Image)) return { ok: false, message: "套装图片已不存在，请重新上传后再登记。" };
+
+    for (const image of allSourceImages as CanvasNodeData[]) {
         const sourceFile = image.metadata?.sourceFile;
         if (!sourceFile) return { ok: false, message: `“${image.title || image.id}”不是从磁盘直接拖入的原图，请移除后再登记。` };
         if (!image.metadata?.storageKey?.startsWith("image:") || !validSourceFile(sourceFile)) {
             return { ok: false, message: `“${image.title || image.id}”缺少完整的原图凭证，请从磁盘重新拖入。` };
         }
     }
-    const sourceHashes = sourceImages.map((image) => image.metadata!.sourceFile!.sha256.toLowerCase());
+    const sourceHashes = (allSourceImages as CanvasNodeData[]).map((image) => image.metadata!.sourceFile!.sha256.toLowerCase());
     if (sourceHashes.length !== new Set(sourceHashes).size) return { ok: false, message: DUPLICATE_PRODUCT_IMAGE_MESSAGE };
 
-    return { ok: true, workflowNodeId, sourceImageNodeIds: sourceImages.map((image) => image.id) };
+    return { ok: true, workflowNodeId, sourceImageNodeIds };
 }
 
 export function connectedBatchOriginalImageIds(batchInfoNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
@@ -256,6 +326,9 @@ export function buildBatchIntakeCommand(
             updatedAt: now,
             workflowNodeId: selection.workflowNodeId,
             sourceImageNodeIds: [...selection.sourceImageNodeIds],
+            batch_type: state.batch_type,
+            setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
+            componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])],
             batchId: undefined,
             uploadBaseUrl: undefined,
             expectedCount: selection.sourceImageNodeIds.length,
@@ -458,6 +531,10 @@ function validMinimumDefault(minimum: unknown, defaultValue: unknown) {
 
 function uniqueStrings(value: unknown) {
     return Array.from(new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : []));
+}
+
+function validBatchType(value: unknown): value is CanvasBatchType {
+    return value === "single" || value === "set";
 }
 
 function nonemptyString(value: unknown) {

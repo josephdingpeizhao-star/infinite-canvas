@@ -100,6 +100,8 @@ export type CanvasWorkflowReceivingBoxMetadata = {
     closedAt?: string;
 };
 export type CanvasBatchIntakeStatus = "draft" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
+export type CanvasBatchType = "single" | "set";
+export type CanvasBatchImageCategory = "white_bg" | "set_group" | "component_white_bg";
 export type CanvasBatchSourceFile = {
     name: string;
     size: number;
@@ -163,6 +165,7 @@ export type CanvasBatchIntakeReceipt = {
 };
 export type CanvasBatchIntakeMetadata = {
     status: CanvasBatchIntakeStatus;
+    batch_type?: CanvasBatchType;
     category?: string;
     contractHash?: string;
     productType?: string;
@@ -182,6 +185,8 @@ export type CanvasBatchIntakeMetadata = {
     updatedAt?: number;
     workflowNodeId?: string;
     sourceImageNodeIds?: string[];
+    setGroupImageNodeIds?: string[];
+    componentWhiteBgImageNodeIds?: string[];
     batchId?: string;
     uploadBaseUrl?: string;
     expectedCount?: number;

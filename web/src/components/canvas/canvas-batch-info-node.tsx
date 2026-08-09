@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Trash2, Upload } from "lucide-react";
 
 import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, detailHandheldLimitMessage, handheldCountMaximum, readBatchIntakeState } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, detailHandheldLimitMessage, handheldCountMaximum, readBatchIntakeState, validateBatchTypeDeclaration } from "@/lib/canvas/canvas-batch-intake";
 import { batchRegistrationButtonLabel, styleRemovalButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceRemovalState, readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchIntakeMetadata, CanvasNodeData } from "@/types/canvas";
+import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchImageCategory, CanvasBatchIntakeMetadata, CanvasBatchType, CanvasNodeData } from "@/types/canvas";
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
@@ -20,9 +20,13 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceCount,
     connectedOriginalFileNames,
     connectedStyleReferenceFileNames,
+    setGroupFileNames,
+    componentWhiteBgFileNames,
     categoryCatalog,
     categoryCatalogStatus,
     onChange,
+    onBatchTypeChange,
+    onUploadSetImages,
     onRegister,
     onSupplementStyle,
     onRemoveStyle,
@@ -32,15 +36,20 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceCount: number;
     connectedOriginalFileNames: string[];
     connectedStyleReferenceFileNames: string[];
+    setGroupFileNames: string[];
+    componentWhiteBgFileNames: string[];
     categoryCatalog?: CanvasBatchCategoryCatalog;
     categoryCatalogStatus: "loading" | "ready" | "error";
     onChange: (nodeId: string, patch: Partial<EditableFacts>) => void;
+    onBatchTypeChange: (nodeId: string, batchType: CanvasBatchType) => void;
+    onUploadSetImages: (nodeId: string, imageCategory: Exclude<CanvasBatchImageCategory, "white_bg">) => void;
     onRegister: (nodeId: string) => void;
     onSupplementStyle: (nodeId: string) => void;
     onRemoveStyle?: (nodeId: string) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const state = readBatchIntakeState(node.metadata);
+    const batchType = state.batch_type;
     const [advancedExpanded, setAdvancedExpanded] = useState(false);
     const category = categoryCatalog?.categories.find((item) => item.key === state.category);
     const editable = (state.status === "draft" || state.status === "failed") && categoryCatalogStatus === "ready";
@@ -56,7 +65,8 @@ export function CanvasBatchInfoNode({
     const styleActionBusy = styleBusy || removalBusy;
     const hasRegisteredStyle = (styleState.receipt?.fileCount || 0) > 0 && removalState.status !== "completed";
     const styleBlocked = styleState.status === "integrity_blocked";
-    const countError = category ? imageCountError(state, category) : undefined;
+    const batchTypeResult = validateBatchTypeDeclaration(state);
+    const countError = (batchTypeResult.ok ? undefined : batchTypeResult.message) || (category ? imageCountError(state, category) : undefined);
     const totalCount =
         category && validImageCount(state.mainImageCount, category.form.image_counts.main) && validImageCount(state.detailImageCount, category.form.image_counts.detail)
             ? state.mainImageCount + state.detailImageCount
@@ -83,7 +93,9 @@ export function CanvasBatchInfoNode({
             {completed ? (
                 <div className="grid gap-2 rounded-xl border p-3 text-xs" style={{ borderColor: theme.node.activeStroke, background: theme.node.panel }}>
                     <ReceiptRow label="批次号" value={batchId || "登记完成"} />
+                    <ReceiptRow label="商品类型" value={batchType === "set" ? "套装" : batchType === "single" ? "单品" : "无法确认"} />
                     <ReceiptRow label="接收原图" value={`${imageCount} 张`} />
+                    {batchType === "set" ? <ReceiptRow label="套装图片" value={`合影 ${setGroupFileNames.length} + 单件 ${componentWhiteBgFileNames.length}`} /> : null}
                     <ReceiptRow label="品类" value={category?.display_name || state.category || "品类信息暂不可用"} />
                     {category ? category.form.dimensions.fields.filter((field) => dimensionValue(state, field.key) !== undefined).map((field) => (
                         <ReceiptRow key={field.key} label={field.label} value={`${dimensionValue(state, field.key)} ${field.unit}`} />
@@ -148,6 +160,17 @@ export function CanvasBatchInfoNode({
                     </div>
 
                     <div className="grid gap-2">
+                        <fieldset className="grid gap-1 text-[11px]" style={{ color: theme.node.muted }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
+                            <legend>商品类型</legend>
+                            <div className="grid grid-cols-2 gap-2">
+                                {(["single", "set"] as const).map((value) => (
+                                    <label key={value} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs" style={{ borderColor: batchType === value ? theme.node.activeStroke : theme.node.stroke, background: theme.node.panel, color: theme.node.text }}>
+                                        <input type="radio" name={`batch-type-${node.id}`} value={value} checked={batchType === value} disabled={!editable} onChange={() => onBatchTypeChange(node.id, value)} />
+                                        {value === "single" ? "单品（默认）" : "套装"}
+                                    </label>
+                                ))}
+                            </div>
+                        </fieldset>
                         <label className="grid gap-1 text-[11px]" style={{ color: theme.node.muted }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
                             产品品类
                             <select
@@ -216,6 +239,12 @@ export function CanvasBatchInfoNode({
                             手持：主 {state.handheldMainCount ?? "—"} + 详情 {state.handheldDetailCount ?? "—"}
                         </span>
                     </div>
+                    {batchType === "set" ? (
+                        <div className="grid gap-2">
+                            <BatchImageUploadArea label="套装合影白底图" range="1–3 张，必传" names={setGroupFileNames} disabled={!editable} onUpload={() => onUploadSetImages(node.id, "set_group")} />
+                            <BatchImageUploadArea label="各单件白底图" range="2–8 张，必传" names={componentWhiteBgFileNames} disabled={!editable} onUpload={() => onUploadSetImages(node.id, "component_white_bg")} />
+                        </div>
+                    ) : null}
                     <div className="grid gap-2 rounded-xl border px-3 py-2 text-[11px] opacity-65" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
                         <div className="flex items-center justify-between gap-3">
                             <span>风格参考</span>
@@ -263,6 +292,20 @@ export function CanvasBatchInfoNode({
                     </button>
                 </div>
             ) : null}
+        </div>
+    );
+}
+
+function BatchImageUploadArea({ label, range, names, disabled, onUpload }: { label: string; range: string; names: string[]; disabled: boolean; onUpload: () => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    return (
+        <div className="grid gap-2 rounded-xl border px-3 py-2 text-[11px]" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
+            <div className="flex items-center justify-between gap-3"><span className="font-medium">{label}</span><span style={{ color: theme.node.muted }}>{range}</span></div>
+            <IntakeFileList label={`已选择 ${names.length} 张`} names={names} emptyText={`尚未上传${label}`} />
+            <button type="button" className="inline-flex min-h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-55" style={{ borderColor: theme.node.activeStroke, background: "transparent", color: theme.node.text }} disabled={disabled} onMouseDown={stopEvent} onPointerDown={stopEvent} onClick={(event) => { event.stopPropagation(); onUpload(); }}>
+                <Upload className="size-4" />
+                选择图片（可多选）
+            </button>
         </div>
     );
 }

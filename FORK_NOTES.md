@@ -176,6 +176,16 @@
 | 172 | `web/src/lib/canvas/canvas-batch-connect.ts` + `web/src/pages/canvas/project.tsx` + `web/tests/canvas-batch-connect.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | BC-01 多选节点批量连线、回归与真人待测登记 | 由纯函数逐条复用既有方向、隐藏和合法性判据，统一去重、跳过分类、汇总文案及唯一连线编号；页面唯一入口只注入宿主能力并一次写入，新增单条兼容、混选、方向、去重与编号测试 | 多选后可从任意选中节点拖到同一目标并连接全部有效项，重复与拒绝项明确汇总；单条合同、一次撤销和纯前端零费用边界保持不变 | — |
 | 173 | `web/dist/` | BC-01 最新本机运行副本 | 按最终源码重建并统计文件数与总字节数；dist 继续作为 Git 忽略的本机运行产物，不进入提交 | 用户硬刷新画布页即可加载多选批量连线交互，无需触发生产、模型或图片服务 | — |
 | 174 | `.gitignore` + `web/dist/` | 成品随仓分发（用户拍板） | 删除 `.gitignore` 的 `web/dist` 一行，当前 dist（12 文件 / 2,763,680 字节，与 #173 重建结果逐字节同批）进入提交；自本锚点起"dist 不入提交"的旧约定作废，#169/#171/#173 中的相应表述保留为历史记录 | 同事克隆或拉取后无需本机构建即可直接运行画布界面；此后每次前端源码改动必须重建 dist 并随同提交，纪律同主仓教训㊱ | — |
+| 175 | `web/src/types/canvas.ts` | ST-01 商品类型与套装图片登记元数据 | 新增 `single/set` 商品类型、三类图片类别及信息卡两组套装图片节点 ID | 让商品类型声明和套装图片归属随画布保存，既有十项商品事实结构不变 | — |
+| 176 | `web/src/lib/canvas/canvas-batch-intake.ts` | ST-01 v3 摘要、声明校验、数量门与三类来源合并 | 契约哈希更新为 v3；新卡默认单品，缺失或非法声明失败关闭；套装按 1–3/2–8 校验并把两组节点 ID 合入既有上传清单，切回单品清空套装选择 | 未授权的登记 hook 继续复用原 Blob/SHA 上传通道，单品命令与十项事实不漂移 | — |
+| 177 | `web/src/components/canvas/canvas-batch-info-node.tsx` | ST-01 商品类型单选、套装上传区与回执 | 草稿/可修正状态可选单品或套装；套装联动显示两个多选上传区，登记后锁定，完成回执显示类型和套装图片数量 | 用户在原信息卡内完成声明与必传图片选择，不增加新页面或费用入口 | — |
+| 178 | `web/src/pages/canvas/project.tsx` | ST-01 套装图片本地持久化与信息卡接线 | 两类上传复用 `uploadImage + createBatchSourceFile` 生成原字节 SHA 凭证和图片节点；只把节点 ID 写回信息卡并交给既有登记控制器上传 | 保持原素材上传、白底图连线和未授权 hook 不变 | — |
+| 179 | `web/tests/st01-set-batch-declaration.test.ts` | ST-01 离线合同回归 | 新增 v3 哈希、声明矩阵、数量门、单品清空、品类切换、三类合并、单品零回归、卡面锁定和页面接线测试 | 用纯函数、内存节点和静态渲染锁定第一期边界，零端口、零网络、零费用 | — |
+| 180 | `web/tests/cfg01-clear-water-retirement.test.ts` | v3 契约摘要机械同步 | 仅把旧哈希字面量替换为 ST-01 新哈希，测试结构与其他正文逐字不动 | 契约根层新增 `batch_type` 后保持跨仓摘要互锚 | — |
+| 181 | `CHANGELOG.md` | Unreleased | 新增一条 ST-01 用户可感知记录 | 归纳单品默认、套装联动上传与单品零漂移 | — |
+| 182 | `docs/content/docs/progress/pending-test.mdx` | ST-01 真人待验清单 | 登记单品默认、套装数量门、切换清理、登记锁定、回执与零费用制作闸门验收项 | 自动合同不替代真实画布和工作台联动验收，文档不写具体日期 | — |
+| 183 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/tests/st01-set-batch-declaration.test.ts` | ST-01 登记校验层次修正与 G 发白盒回归 | `resolveBatchIntakeSelection` 只负责接线、原图凭证及跨类别节点 ID/SHA 重复检查，不再提前解析商品类型；`validateBatchIntakeFacts` 与信息卡登记入口的载荷双闸门继续保留；新增回归钉死重复 SHA 文案优先级，G 发在隔离副本重加提前闸门后 NC-01 与 ST-01 同时变红，复原后两文件 19 项全绿 | 保持涉费登记载荷失败关闭，同时让旧重复图守卫不被新声明校验遮蔽；既有 NC-01 测试正文未改 | — |
+| 184 | `web/dist/` | ST-01 最新本机运行副本 | 按最终源码隔离重建为 12 文件 / 2,788,788 字节；树 SHA-256 `65321d6b18b249ac7e5774234655cb503a9cfa3e856b4f14d4d8f87c986a7bad`（相对路径统一 `/`、`StringComparer.Ordinal`、每行 `relative\|length\|sha256`、UTF-8 无 BOM、LF 且无尾换行）；新哈希 `266f01ac2532a334e8b4378ee369d49a9a6f97cbe256fbce8daef06b357b9a61` 及 `batch_type`、两组节点 ID、商品类型、两类上传区、1–3/2–8 必传和非法声明文案探针均命中，旧哈希零命中 | dist 与源码同窗交付并保持未暂存，用户硬刷新即可加载 ST-01 声明界面；未启动服务或触发生产/费用 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -198,6 +208,7 @@
 - `web/src/components/canvas/canvas-batch-advanced-options.tsx`：只渲染品类端点下发的人话标题、说明与默认方向，不持有任何业务文案或默认值。
 - `web/src/pages/canvas/use-canvas-batch-intake.ts`：页面私有建批控制器；加载并复用品类目录，只写 `build: batch` 命令，服务接单后从 localforage 取原始 Blob 并逐图交付。
 - `web/tests/canvas-batch-intake.test.ts`：覆盖十项事实、品类目录与摘要、三维/手持边界、下拉/折叠/失败态、单卡单机原图连线、中文编码、浏览器 Blob 哈希、回环鉴权、硬停止和无自动重试。
+- `web/tests/st01-set-batch-declaration.test.ts`：覆盖 v3 契约哈希、商品类型失败关闭、套装 1–3/2–8 数量门、单品清空、品类切换保留、三类图片 ID 合并、单品命令零回归、信息卡联动锁定及页面 SHA 上传接线。
 - `web/tests/cfg01-clear-water-retirement.test.ts`：覆盖新契约摘要互锚、两项高级选项严格键集与退役键拒绝，以及 10 项载荷不含清水字段。
 - `web/src/lib/canvas/canvas-workflow-production.ts`：M2-b 真实模式选择、17373 只读费用估算、确认后 `run: next` / 既有 `retry: renders` 命令、中断状态和 `queued` / `running` 飞行中互斥合同；不实现后台工序路由。
 - `web/tests/canvas-workflow-acceptance-dormancy.test.ts`：AC-01 单点休眠合同，锁定“已收货框”新建入口默认关闭；不重复既有收货框、关账或交付能力测试。
