@@ -189,7 +189,7 @@ export function CanvasBatchInfoNode({
                                 {category.form.dimensions.fields.map((field) => (
                                     <NumberField
                                         key={field.key}
-                                        label={`${field.label}${category.form.dimensions.required.includes(field.key) ? " *" : ""}`}
+                                        label={`${field.label}${batchType === "set" ? "（选填）" : category.form.dimensions.required.includes(field.key) ? " *" : ""}`}
                                         value={dimensionValue(state, field.key)}
                                         minimum={field.minimum}
                                         maximum={field.maximum}

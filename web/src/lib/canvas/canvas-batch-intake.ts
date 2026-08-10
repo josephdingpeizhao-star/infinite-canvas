@@ -4,7 +4,7 @@ export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
 export const BATCH_CATEGORY_ORIGIN = "http://127.0.0.1:17373";
 export const BATCH_CATEGORY_URL = `${BATCH_CATEGORY_ORIGIN}/batch-categories`;
-export const BATCH_INTAKE_CONTRACT_SHA256 = "266f01ac2532a334e8b4378ee369d49a9a6f97cbe256fbce8daef06b357b9a61";
+export const BATCH_INTAKE_CONTRACT_SHA256 = "a030df8d0aa9c96d9275d7c6f463fbc9d8f10af57e8c4539c2cb9d0d903456d3";
 export const BATCH_CATEGORY_UNAVAILABLE_MESSAGE = "产品品类暂时无法读取，请重启工作台并刷新画布后再登记。";
 export const SET_GROUP_IMAGE_LIMIT = { minimum: 1, maximum: 3 } as const;
 export const COMPONENT_WHITE_BG_IMAGE_LIMIT = { minimum: 2, maximum: 8 } as const;
@@ -97,7 +97,7 @@ export function validateBatchIntakeFacts(
     };
     for (const field of category.form.dimensions.fields) {
         const value = dimensions[field.key];
-        if (value === undefined && !category.form.dimensions.required.includes(field.key)) continue;
+        if (value === undefined && (batchTypeResult.batch_type === "set" || !category.form.dimensions.required.includes(field.key))) continue;
         if (!Number.isInteger(value) || value! < field.minimum || value! > field.maximum) {
             return { ok: false, message: `${field.label}必须填写 ${field.minimum}–${field.maximum} 的整数${field.unit}。` };
         }
@@ -130,7 +130,7 @@ export function validateBatchIntakeFacts(
             product_type: category.product_noun,
             length_cm: dimensions.length_cm ?? null,
             width_cm: dimensions.width_cm ?? null,
-            height_cm: dimensions.height_cm!,
+            height_cm: dimensions.height_cm ?? null,
             main_image_count: state.mainImageCount!,
             detail_image_count: state.detailImageCount!,
             handheld_main: state.handheldMainCount!,
@@ -318,7 +318,7 @@ export function buildBatchIntakeCommand(
             productType: factsResult.facts.product_type,
             productLengthCm: factsResult.facts.length_cm ?? undefined,
             productWidthCm: factsResult.facts.width_cm ?? undefined,
-            productHeightCm: factsResult.facts.height_cm,
+            productHeightCm: factsResult.facts.height_cm ?? undefined,
             facts: factsResult.facts,
             status: "queued" as const,
             requestId,

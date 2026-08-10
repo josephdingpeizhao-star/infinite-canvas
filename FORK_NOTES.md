@@ -186,6 +186,9 @@
 | 182 | `docs/content/docs/progress/pending-test.mdx` | ST-01 真人待验清单 | 登记单品默认、套装数量门、切换清理、登记锁定、回执与零费用制作闸门验收项 | 自动合同不替代真实画布和工作台联动验收，文档不写具体日期 | — |
 | 183 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/tests/st01-set-batch-declaration.test.ts` | ST-01 登记校验层次修正与 G 发白盒回归 | `resolveBatchIntakeSelection` 只负责接线、原图凭证及跨类别节点 ID/SHA 重复检查，不再提前解析商品类型；`validateBatchIntakeFacts` 与信息卡登记入口的载荷双闸门继续保留；新增回归钉死重复 SHA 文案优先级，G 发在隔离副本重加提前闸门后 NC-01 与 ST-01 同时变红，复原后两文件 19 项全绿 | 保持涉费登记载荷失败关闭，同时让旧重复图守卫不被新声明校验遮蔽；既有 NC-01 测试正文未改 | — |
 | 184 | `web/dist/` | ST-01 最新本机运行副本 | 按最终源码隔离重建为 12 文件 / 2,788,788 字节；树 SHA-256 `65321d6b18b249ac7e5774234655cb503a9cfa3e856b4f14d4d8f87c986a7bad`（相对路径统一 `/`、`StringComparer.Ordinal`、每行 `relative\|length\|sha256`、UTF-8 无 BOM、LF 且无尾换行）；新哈希 `266f01ac2532a334e8b4378ee369d49a9a6f97cbe256fbce8daef06b357b9a61` 及 `batch_type`、两组节点 ID、商品类型、两类上传区、1–3/2–8 必传和非法声明文案探针均命中，旧哈希零命中 | dist 与源码同窗交付并保持未暂存，用户硬刷新即可加载 ST-01 声明界面；未启动服务或触发生产/费用 | — |
+| 185 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` | ST-03b 套装尺寸选填与 v4 合同 | `height_cm` 与长宽对齐允许空值；套装留空时统一提交 JSON `null`、回执元数据归一为 `undefined`，三维输入保留但显示选填；单品仍按品类必填尺寸校验 | 套装尺寸语义交由套装及各单件身份档案承接，同时保持单品登记、已填写套装尺寸和既有回执行为不变 | — |
+| 186 | `web/tests/st01-set-batch-declaration.test.ts` + `web/tests/cfg01-clear-water-retirement.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ST-03b 离线合同与真人验收登记 | 契约摘要更新为 `a030df8d0aa9c96d9275d7c6f463fbc9d8f10af57e8c4539c2cb9d0d903456d3`；新增套装三维全空、单品缺高度、套装填值、回执归一和卡面选填回归，并登记画布/工作台真人走查 | 用离线测试锁定“套装放行、单品不放宽”，真实联动仍由用户验收 | — |
+| 187 | `web/dist/` | ST-03b 最新本机运行副本 | 按当前源码重建，运行副本包含 v4 新哈希及套装尺寸选填界面，旧合同哈希零残留 | 源码与运行成品同窗交付，用户硬刷新即可加载；未启动服务、未联网或触发生产费用 | — |
 
 ## 退役锚点（编号不复用）
 

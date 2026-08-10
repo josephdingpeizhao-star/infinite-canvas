@@ -113,7 +113,7 @@ export type CanvasBatchIntakeFacts = {
     product_type: string;
     length_cm: number | null;
     width_cm: number | null;
-    height_cm: number;
+    height_cm: number | null;
     main_image_count: number;
     detail_image_count: number;
     handheld_main: number;

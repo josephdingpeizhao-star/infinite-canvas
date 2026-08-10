@@ -20,7 +20,7 @@ import {
 } from "../src/lib/canvas/canvas-batch-intake";
 import { CanvasNodeType, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchIntakeMetadata, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
-const CONTRACT_HASH = "266f01ac2532a334e8b4378ee369d49a9a6f97cbe256fbce8daef06b357b9a61";
+const CONTRACT_HASH = "a030df8d0aa9c96d9275d7c6f463fbc9d8f10af57e8c4539c2cb9d0d903456d3";
 const CATEGORY: CanvasBatchCategoryMetadata = {
     key: "杯类",
     display_name: "杯类",
@@ -102,7 +102,7 @@ function renderCard(state: CanvasBatchIntakeMetadata) {
 }
 
 describe("ST-01 set batch declaration", () => {
-    test("pins the v3 contract hash", () => {
+    test("pins the v4 contract hash", () => {
         expect(BATCH_INTAKE_CONTRACT_SHA256).toBe(CONTRACT_HASH);
     });
 
@@ -174,6 +174,56 @@ describe("ST-01 set batch declaration", () => {
         expect(command.content).toBe("# batch-intake\n# request-id: request-1\n# requested-at: 1000\nbuild: batch");
         expect(command.state).toMatchObject({ batch_type: "single", category: "杯类", contractHash: CONTRACT_HASH, sourceImageNodeIds: ["white"], setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: [] });
         expect(Object.keys(command.state.facts || {})).toEqual(["product_type", "length_cm", "width_cm", "height_cm", "main_image_count", "detail_image_count", "handheld_main", "handheld_detail", "forbid_pouring_and_heating", "missing_d_no_retake"]);
+    });
+
+    test("lets set batches omit all dimensions while single height remains required", () => {
+        const missingDimensions = intakeState({
+            batch_type: "set",
+            productLengthCm: undefined,
+            productWidthCm: undefined,
+            productHeightCm: undefined,
+            setGroupImageNodeIds: ["g"],
+            componentWhiteBgImageNodeIds: ["c1", "c2"],
+        });
+        const result = validateBatchIntakeFacts(missingDimensions, CATEGORY, CONTRACT_HASH);
+        expect(result).toEqual({
+            ok: true,
+            facts: {
+                product_type: "杯子",
+                length_cm: null,
+                width_cm: null,
+                height_cm: null,
+                main_image_count: 6,
+                detail_image_count: 8,
+                handheld_main: 2,
+                handheld_detail: 1,
+                forbid_pouring_and_heating: true,
+                missing_d_no_retake: true,
+            },
+        });
+        const command = buildBatchIntakeCommand(missingDimensions, CATEGORY, CONTRACT_HASH, { workflowNodeId: "machine", sourceImageNodeIds: ["white", "g", "c1", "c2"] }, "request-set", 1000);
+        expect(command.state.productHeightCm).toBeUndefined();
+        expect(command.state.facts?.height_cm).toBeNull();
+
+        expect(validateBatchIntakeFacts(intakeState({ productHeightCm: undefined }), CATEGORY, CONTRACT_HASH)).toEqual({
+            ok: false,
+            message: "高必须填写 1–9999 的整数厘米。",
+        });
+
+        const supplied = validateBatchIntakeFacts(missingDimensions, CATEGORY, CONTRACT_HASH);
+        expect(supplied.ok && supplied.facts.height_cm).toBeNull();
+        const suppliedSet = validateBatchIntakeFacts({ ...missingDimensions, productLengthCm: 10, productWidthCm: 11, productHeightCm: 12 }, CATEGORY, CONTRACT_HASH);
+        expect(suppliedSet.ok && suppliedSet.facts).toMatchObject({ length_cm: 10, width_cm: 11, height_cm: 12 });
+    });
+
+    test("marks all three dimensions optional only on the set form", () => {
+        const setHtml = renderCard(intakeState({ batch_type: "set", productLengthCm: undefined, productWidthCm: undefined, productHeightCm: undefined, setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] }));
+        expect(setHtml).toContain("长（选填）");
+        expect(setHtml).toContain("宽（选填）");
+        expect(setHtml).toContain("高（选填）");
+        const singleHtml = renderCard(intakeState());
+        expect(singleHtml).toContain("高 *");
+        expect(singleHtml).not.toContain("高（选填）");
     });
 
     test("shows set-only upload areas and locks the declaration after queueing", () => {
