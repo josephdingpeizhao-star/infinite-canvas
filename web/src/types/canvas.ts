@@ -101,7 +101,6 @@ export type CanvasWorkflowReceivingBoxMetadata = {
 };
 export type CanvasBatchIntakeStatus = "draft" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
 export type CanvasBatchType = "single" | "set";
-export type CanvasBatchImageCategory = "white_bg" | "set_group" | "component_white_bg";
 export type CanvasBatchSourceFile = {
     name: string;
     size: number;
@@ -185,7 +184,9 @@ export type CanvasBatchIntakeMetadata = {
     updatedAt?: number;
     workflowNodeId?: string;
     sourceImageNodeIds?: string[];
+    /** 套装批次中由用户从已连线原图勾选的合影节点。 */
     setGroupImageNodeIds?: string[];
+    /** 套装登记时由“全部连线原图 − 合影勾选”派生的单件节点。 */
     componentWhiteBgImageNodeIds?: string[];
     batchId?: string;
     uploadBaseUrl?: string;

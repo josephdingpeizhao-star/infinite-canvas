@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
 
 import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, batchTypeChangePatch, detailHandheldLimitMessage, handheldCountMaximum, readBatchIntakeState, validateBatchTypeDeclaration } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, COMPONENT_WHITE_BG_IMAGE_LIMIT, SET_GROUP_IMAGE_LIMIT, batchTypeChangePatch, detailHandheldLimitMessage, handheldCountMaximum, readBatchIntakeState, validateBatchTypeDeclaration } from "@/lib/canvas/canvas-batch-intake";
 import { batchRegistrationButtonLabel, styleRemovalButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceRemovalState, readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchImageCategory, CanvasBatchIntakeMetadata, CanvasBatchType, CanvasNodeData } from "@/types/canvas";
+import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchIntakeMetadata, CanvasBatchType, CanvasNodeData } from "@/types/canvas";
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
@@ -20,13 +20,14 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceCount,
     connectedOriginalFileNames,
     connectedStyleReferenceFileNames,
+    connectedImages = [],
     setGroupFileNames,
     componentWhiteBgFileNames,
     categoryCatalog,
     categoryCatalogStatus,
     onChange,
     onBatchTypeChange,
-    onUploadSetImages,
+    onSetGroupSelectionChange,
     onRegister,
     onSupplementStyle,
     onRemoveStyle,
@@ -36,13 +37,14 @@ export function CanvasBatchInfoNode({
     connectedStyleReferenceCount: number;
     connectedOriginalFileNames: string[];
     connectedStyleReferenceFileNames: string[];
+    connectedImages?: Array<{ id: string; name: string }>;
     setGroupFileNames: string[];
     componentWhiteBgFileNames: string[];
     categoryCatalog?: CanvasBatchCategoryCatalog;
     categoryCatalogStatus: "loading" | "ready" | "error";
     onChange: (nodeId: string, patch: Partial<EditableFacts>) => void;
     onBatchTypeChange: (nodeId: string, batchType: CanvasBatchType) => void;
-    onUploadSetImages: (nodeId: string, imageCategory: Exclude<CanvasBatchImageCategory, "white_bg">) => void;
+    onSetGroupSelectionChange?: (nodeId: string, nodeIds: string[]) => void;
     onRegister: (nodeId: string) => void;
     onSupplementStyle: (nodeId: string) => void;
     onRemoveStyle?: (nodeId: string) => void;
@@ -65,8 +67,9 @@ export function CanvasBatchInfoNode({
     const styleActionBusy = styleBusy || removalBusy;
     const hasRegisteredStyle = (styleState.receipt?.fileCount || 0) > 0 && removalState.status !== "completed";
     const styleBlocked = styleState.status === "integrity_blocked";
-    const batchTypeResult = validateBatchTypeDeclaration(state);
-    const countError = (batchTypeResult.ok ? undefined : batchTypeResult.message) || (category ? imageCountError(state, category) : undefined);
+    const batchTypeResult = validateBatchTypeDeclaration(state, connectedImages.map((image) => image.id));
+    const noSetImagesMessage = batchType === "set" && connectedImages.length === 0 ? "请先把套装全部白底图（合影+各单件）连接到工作流机器" : undefined;
+    const countError = noSetImagesMessage || (batchTypeResult.ok ? undefined : batchTypeResult.message) || (category ? imageCountError(state, category) : undefined);
     const totalCount =
         category && validImageCount(state.mainImageCount, category.form.image_counts.main) && validImageCount(state.detailImageCount, category.form.image_counts.detail)
             ? state.mainImageCount + state.detailImageCount
@@ -100,7 +103,18 @@ export function CanvasBatchInfoNode({
                     <ReceiptRow label="批次号" value={batchId || "登记完成"} />
                     <ReceiptRow label="商品类型" value={batchType === "set" ? "套装" : batchType === "single" ? "单品" : "无法确认"} />
                     <ReceiptRow label="接收原图" value={`${imageCount} 张`} />
-                    {batchType === "set" ? <ReceiptRow label="套装图片" value={`合影 ${setGroupFileNames.length} + 单件 ${componentWhiteBgFileNames.length}`} /> : null}
+                    {batchType === "set" ? (
+                        <>
+                            <ReceiptRow label="套装图片" value={`合影 ${setGroupFileNames.length} + 单件 ${componentWhiteBgFileNames.length}`} />
+                            <SetRoleAssignment
+                                connectedImages={connectedImages}
+                                selectedIds={state.setGroupImageNodeIds || []}
+                                editable={false}
+                                errorMessage={batchTypeResult.ok ? undefined : batchTypeResult.message}
+                                onChange={() => undefined}
+                            />
+                        </>
+                    ) : null}
                     <ReceiptRow label="品类" value={category?.display_name || state.category || "品类信息暂不可用"} />
                     {category ? category.form.dimensions.fields.filter((field) => dimensionValue(state, field.key) !== undefined).map((field) => (
                         <ReceiptRow key={field.key} label={field.label} value={`${dimensionValue(state, field.key)} ${field.unit}`} />
@@ -245,10 +259,13 @@ export function CanvasBatchInfoNode({
                         </span>
                     </div>
                     {batchType === "set" ? (
-                        <div className="grid gap-2">
-                            <BatchImageUploadArea label="套装合影白底图" range="1–3 张，必传" names={setGroupFileNames} disabled={!editable} onUpload={() => onUploadSetImages(node.id, "set_group")} />
-                            <BatchImageUploadArea label="各单件白底图" range="2–8 张，必传" names={componentWhiteBgFileNames} disabled={!editable} onUpload={() => onUploadSetImages(node.id, "component_white_bg")} />
-                        </div>
+                        <SetRoleAssignment
+                            connectedImages={connectedImages}
+                            selectedIds={state.setGroupImageNodeIds || []}
+                            editable={editable}
+                            errorMessage={batchTypeResult.ok ? undefined : batchTypeResult.message}
+                            onChange={(nodeIds) => onSetGroupSelectionChange?.(node.id, nodeIds)}
+                        />
                     ) : null}
                     <div className="grid gap-2 rounded-xl border px-3 py-2 text-[11px] opacity-65" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
                         <div className="flex items-center justify-between gap-3">
@@ -301,16 +318,51 @@ export function CanvasBatchInfoNode({
     );
 }
 
-function BatchImageUploadArea({ label, range, names, disabled, onUpload }: { label: string; range: string; names: string[]; disabled: boolean; onUpload: () => void }) {
+function SetRoleAssignment({
+    connectedImages,
+    selectedIds,
+    editable,
+    errorMessage,
+    onChange,
+}: {
+    connectedImages: Array<{ id: string; name: string }>;
+    selectedIds: string[];
+    editable: boolean;
+    errorMessage?: string;
+    onChange: (nodeIds: string[]) => void;
+}) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const selectedIdSet = new Set(selectedIds);
+    const selectedConnectedCount = connectedImages.filter((image) => selectedIdSet.has(image.id)).length;
+    const componentCount = connectedImages.length - selectedConnectedCount;
+    const toggle = (nodeId: string, checked: boolean) => {
+        const nextIds = new Set(selectedIds);
+        if (checked) nextIds.add(nodeId);
+        else nextIds.delete(nodeId);
+        onChange(connectedImages.filter((image) => nextIds.has(image.id)).map((image) => image.id));
+    };
     return (
-        <div className="grid gap-2 rounded-xl border px-3 py-2 text-[11px]" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
-            <div className="flex items-center justify-between gap-3"><span className="font-medium">{label}</span><span style={{ color: theme.node.muted }}>{range}</span></div>
-            <IntakeFileList label={`已选择 ${names.length} 张`} names={names} emptyText={`尚未上传${label}`} />
-            <button type="button" className="inline-flex min-h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-55" style={{ borderColor: theme.node.activeStroke, background: "transparent", color: theme.node.text }} disabled={disabled} onMouseDown={stopEvent} onPointerDown={stopEvent} onClick={(event) => { event.stopPropagation(); onUpload(); }}>
-                <Upload className="size-4" />
-                选择图片（可多选）
-            </button>
+        <div className="grid gap-2 rounded-xl border px-3 py-2 text-[11px]" style={{ borderColor: errorMessage ? "#ef4444" : theme.node.stroke, background: theme.node.panel }}>
+            <div className="font-medium">套装角色分配</div>
+            {connectedImages.length ? connectedImages.map((image) => (
+                <label key={image.id} className="flex min-h-8 items-center gap-3 rounded-lg border px-2.5" style={{ borderColor: theme.node.stroke }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
+                    <span className="min-w-0 flex-1 truncate" title={image.name}>{image.name}</span>
+                    <span className="inline-flex shrink-0 items-center gap-1.5">
+                        <input
+                            type="checkbox"
+                            aria-label={`${image.name} 合影`}
+                            checked={selectedIdSet.has(image.id)}
+                            disabled={!editable}
+                            onChange={(event) => toggle(image.id, event.target.checked)}
+                        />
+                        合影
+                    </span>
+                </label>
+            )) : <div style={{ color: theme.node.muted }}>请先把套装全部白底图（合影+各单件）连接到工作流机器</div>}
+            <div style={{ color: errorMessage ? "#f87171" : theme.node.muted }}>
+                合影 {selectedConnectedCount} 张（须 {SET_GROUP_IMAGE_LIMIT.minimum}–{SET_GROUP_IMAGE_LIMIT.maximum}）＋ 单件 {componentCount}=N−X 张（须 {COMPONENT_WHITE_BG_IMAGE_LIMIT.minimum}–{COMPONENT_WHITE_BG_IMAGE_LIMIT.maximum}）
+            </div>
+            {errorMessage ? <div style={{ color: "#f87171" }}>{errorMessage}</div> : null}
         </div>
     );
 }

@@ -192,6 +192,8 @@
 | 188 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` | ST-03c 套装手持建批入口禁用 | 选择套装时主图/详情图手持立即归零并置灰，套装切换品类和旧画布读取继续保持 0；切回单品按当前品类恢复两项默认值，提交前仍以同一事实校验拒绝非零套装载荷 | 只收紧建批入口，单品合法手持与后续运行时接口保持原样 | — |
 | 189 | `web/tests/st01-set-batch-declaration.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ST-03c 第一段离线合同与真人验收登记 | 覆盖套装 0 放行、非零拒绝、旧值归零、品类切换、卡面置灰、切回单品恢复默认和单品合法值；登记真人走查“变灰、不可选、归零、切回恢复” | 自动检查锁定入口防呆，真实画布交互仍由用户验收 | — |
 | 190 | `web/dist/` | ST-03c 第一段最新本机运行副本 | 按最终源码离线重建为 12 文件 / 2,790,067 字节；树 SHA-256 `ccda981e320d7eb8c38a515cc22f6f804aeb892729bbe0e48a74e72f9daaf20e`，入口引用文件全部存在，套装手持拒绝文案、两项手持标签、零值汇总及 Unreleased 用户文案探针均命中 | 源码与运行成品同窗交付，用户硬刷新即可验收套装手持入口；未启动服务、未联网或触发生产费用 | — |
+| 191 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` + `web/src/pages/canvas/project.tsx` + `web/tests/st01-set-batch-declaration.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ST-05 连线全集与卡面合影勾选 | 退役套装二次上传管道；套装只从工作流机器连线全集选图，信息卡勾选 1–3 张合影并按连线顺序派生 2–8 张单件，断线勾选失败关闭，登记载荷显式携带派生划分；单品路径和重复 SHA 优先级保持不变 | 让套装建批回到与单品一致的唯一素材入口，角色分配集中在批次卡且不放宽任何重复图门禁 | — |
+| 192 | `web/dist/` | ST-05 最新本机运行副本 | 按最终源码同盘隔离重建为 12 文件 / 2,789,276 字节；树 SHA-256 `1d9f570932f3895c9f662a8b923c5a4331dbdf3f8f12a70dca62c470aabef5d4`（相对路径统一 `/`、`StringComparer.Ordinal`、每行 `relative\|length\|sha256`、UTF-8 无 BOM、LF 且无尾换行）；入口引用全部存在，角色分配与三条失败关闭文案均命中，六条退役上传文案均为零命中 | 源码与运行成品同窗交付，用户硬刷新即可验收连线全集与卡面合影勾选；未启动服务、未联网或触发生产费用 | — |
 
 ## 退役锚点（编号不复用）
 

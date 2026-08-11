@@ -7,7 +7,6 @@ import { CanvasBatchInfoNode } from "../src/components/canvas/canvas-batch-info-
 import {
     BATCH_INTAKE_CONTRACT_SHA256,
     DUPLICATE_PRODUCT_IMAGE_MESSAGE,
-    batchImageSelectionPatch,
     batchTypeChangePatch,
     buildBatchIntakeCommand,
     categoryDefaultPatch,
@@ -15,6 +14,7 @@ import {
     readBatchIntakeState,
     resetBatchDeclarationState,
     resolveBatchIntakeSelection,
+    setGroupSelectionPatch,
     validateBatchIntakeFacts,
     validateBatchTypeDeclaration,
 } from "../src/lib/canvas/canvas-batch-intake";
@@ -88,20 +88,24 @@ function connection(id: string, fromNodeId: string, toNodeId: string): CanvasCon
     return { id, fromNodeId, toNodeId };
 }
 
-function renderCard(state: CanvasBatchIntakeMetadata) {
+function renderCard(state: CanvasBatchIntakeMetadata, connectedImages?: Array<{ id: string; name: string }>) {
+    const effectiveConnectedImages = connectedImages || (state.batch_type === "set"
+        ? [{ id: "g", name: "group.png" }, { id: "c1", name: "one.png" }, { id: "c2", name: "two.png" }]
+        : [{ id: "white", name: "white.png" }]);
     return renderToStaticMarkup(createElement(CanvasBatchInfoNode, {
         node: batchCard(state),
-        connectedOriginalCount: 1,
+        connectedOriginalCount: effectiveConnectedImages.length,
         connectedStyleReferenceCount: 0,
-        connectedOriginalFileNames: ["white.png"],
+        connectedOriginalFileNames: effectiveConnectedImages.map((image) => image.name),
         connectedStyleReferenceFileNames: [],
+        connectedImages: effectiveConnectedImages,
         setGroupFileNames: ["group.png"],
         componentWhiteBgFileNames: ["one.png", "two.png"],
         categoryCatalog: CATALOG,
         categoryCatalogStatus: "ready",
         onChange: () => undefined,
         onBatchTypeChange: () => undefined,
-        onUploadSetImages: () => undefined,
+        onSetGroupSelectionChange: () => undefined,
         onRegister: () => undefined,
         onSupplementStyle: () => undefined,
     }));
@@ -119,7 +123,7 @@ describe("ST-01 set batch declaration", () => {
             expect(validateBatchIntakeFacts(state, CATEGORY, CONTRACT_HASH).ok).toBe(false);
         }
         expect(validateBatchTypeDeclaration(intakeState({ batch_type: "single" }))).toEqual({ ok: true, batch_type: "single" });
-        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] }))).toEqual({ ok: true, batch_type: "set" });
+        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"] }), ["g", "c1", "c2"])).toEqual({ ok: true, batch_type: "set" });
     });
 
     test("keeps duplicate product SHA rejection ahead of missing or illegal batch_type", () => {
@@ -140,20 +144,21 @@ describe("ST-01 set batch declaration", () => {
         }
     });
 
-    test("enforces set 1–3 group and 2–8 component images and keeps single at zero", () => {
+    test("enforces set 1–3 selected group and 2–8 derived component images and keeps single at zero", () => {
         expect(validateBatchTypeDeclaration(intakeState({ batch_type: "single", setGroupImageNodeIds: ["g"] })).ok).toBe(false);
         expect(validateBatchTypeDeclaration(intakeState({ batch_type: "single", componentWhiteBgImageNodeIds: ["c"] })).ok).toBe(false);
-        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: ["c1", "c2"] }))).toEqual({ ok: false, message: "套装合影白底图必须上传 1–3 张。" });
-        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g1", "g2", "g3", "g4"], componentWhiteBgImageNodeIds: ["c1", "c2"] })).ok).toBe(false);
-        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1"] }))).toEqual({ ok: false, message: "各单件白底图必须上传 2–8 张。" });
-        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: Array.from({ length: 9 }, (_, index) => `c${index}`) })).ok).toBe(false);
-        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g1", "g2", "g3"], componentWhiteBgImageNodeIds: Array.from({ length: 8 }, (_, index) => `c${index}`) }))).toEqual({ ok: true, batch_type: "set" });
+        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: [] }), ["c1", "c2"])).toEqual({ ok: false, message: "请从已连接的图中勾选 1–3 张套装合影。" });
+        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g1", "g2", "g3", "g4"] }), ["g1", "g2", "g3", "g4", "c1", "c2"]).ok).toBe(false);
+        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"] }), ["g", "c1"])).toEqual({ ok: false, message: "未勾选为合影的图即各单件白底图，须为 2–8 张。" });
+        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g1", "g2", "g3"] }), ["g1", "g2", "g3", ...Array.from({ length: 9 }, (_, index) => `c${index}`)])).toEqual({ ok: false, message: "未勾选为合影的图即各单件白底图，须为 2–8 张。" });
+        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g1", "g2", "g3"] }), ["g1", "g2", "g3", ...Array.from({ length: 8 }, (_, index) => `c${index}`)])).toEqual({ ok: true, batch_type: "set" });
+        expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["gone"] }), ["c1", "c2", "c3"])).toEqual({ ok: false, message: "合影勾选中包含已断开的图，请重新勾选。" });
     });
 
     test("defaults new category forms to single and keeps set hand-held counts at zero across declaration changes", () => {
         expect(categoryDefaultPatch(CATEGORY, CONTRACT_HASH)).toMatchObject({ batch_type: "single", setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: [] });
         const setState = intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"], status: "failed", requestId: "old" });
-        expect(batchTypeChangePatch(setState, "set")).toMatchObject({ batch_type: "set", handheldMainCount: 0, handheldDetailCount: 0 });
+        expect(batchTypeChangePatch(setState, "set")).toMatchObject({ batch_type: "set", setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: [], handheldMainCount: 0, handheldDetailCount: 0 });
         const zeroedSetState = resetBatchDeclarationState(setState, batchTypeChangePatch(setState, "set"));
         expect(batchTypeChangePatch(zeroedSetState, "single", CATEGORY)).toEqual({
             batch_type: "single",
@@ -174,11 +179,11 @@ describe("ST-01 set batch declaration", () => {
         expect(categorySwitchPatch(setState, CATEGORY, CONTRACT_HASH)).toMatchObject({
             batch_type: "set",
             setGroupImageNodeIds: ["g"],
-            componentWhiteBgImageNodeIds: ["c1", "c2"],
+            componentWhiteBgImageNodeIds: [],
             handheldMainCount: 0,
             handheldDetailCount: 0,
         });
-        expect(batchImageSelectionPatch("set_group", ["g", "g"])).toEqual({ setGroupImageNodeIds: ["g"] });
+        expect(setGroupSelectionPatch(["g", "g"])).toEqual({ setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: [] });
     });
 
     test("normalizes legacy set metadata before validation and restores current category defaults on single", () => {
@@ -208,7 +213,7 @@ describe("ST-01 set batch declaration", () => {
             legacySetState,
             CATEGORY,
             CONTRACT_HASH,
-            { workflowNodeId: "machine", sourceImageNodeIds: ["white", "g", "c1", "c2"] },
+            { workflowNodeId: "machine", sourceImageNodeIds: ["g", "c1", "c2"], setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] },
             "request-legacy-set",
             1_000,
         );
@@ -220,20 +225,44 @@ describe("ST-01 set batch declaration", () => {
         expect(Object.keys(command.state).sort()).toEqual(BATCH_INTAKE_ALLOWED_KEYS);
     });
 
-    test("merges connected white-bg, group, and component IDs without changing the single selection path", () => {
-        const white = sourceNode("white", "1");
+    test("derives the minimum set partition from three connected images without changing the single selection path", () => {
         const group = sourceNode("group", "2");
         const componentOne = sourceNode("component-one", "3");
         const componentTwo = sourceNode("component-two", "4");
         const machine = workflowNode();
-        const links = [connection("card-machine", "card", machine.id), connection("white-machine", white.id, machine.id)];
-        const setState = intakeState({ batch_type: "set", setGroupImageNodeIds: [group.id], componentWhiteBgImageNodeIds: [componentOne.id, componentTwo.id] });
-        expect(resolveBatchIntakeSelection("card", [batchCard(setState), machine, white, group, componentOne, componentTwo], links)).toEqual({
+        const links = [connection("card-machine", "card", machine.id), connection("group-machine", group.id, machine.id), connection("one-machine", componentOne.id, machine.id), connection("two-machine", componentTwo.id, machine.id)];
+        const setState = intakeState({ batch_type: "set", setGroupImageNodeIds: [group.id], componentWhiteBgImageNodeIds: [] });
+        const selection = resolveBatchIntakeSelection("card", [batchCard(setState), machine, group, componentOne, componentTwo], links);
+        expect(selection).toEqual({
             ok: true,
             workflowNodeId: "machine",
-            sourceImageNodeIds: ["white", "group", "component-one", "component-two"],
+            sourceImageNodeIds: ["group", "component-one", "component-two"],
+            setGroupImageNodeIds: ["group"],
+            componentWhiteBgImageNodeIds: ["component-one", "component-two"],
         });
-        expect(resolveBatchIntakeSelection("card", [batchCard(intakeState()), machine, white], links)).toEqual({ ok: true, workflowNodeId: "machine", sourceImageNodeIds: ["white"] });
+        expect(buildBatchIntakeCommand(setState, CATEGORY, CONTRACT_HASH, selection as Extract<typeof selection, { ok: true }>, "request-set", 1000).state).toMatchObject({
+            sourceImageNodeIds: ["group", "component-one", "component-two"],
+            setGroupImageNodeIds: ["group"],
+            componentWhiteBgImageNodeIds: ["component-one", "component-two"],
+        });
+
+        const white = sourceNode("white", "1");
+        const singleLinks = [connection("card-machine", "card", machine.id), connection("white-machine", white.id, machine.id)];
+        expect(resolveBatchIntakeSelection("card", [batchCard(intakeState()), machine, white], singleLinks)).toEqual({ ok: true, workflowNodeId: "machine", sourceImageNodeIds: ["white"] });
+    });
+
+    test("derives the maximum set partition in connected-image order", () => {
+        const ids = ["g1", "c1", "g2", "c2", "c3", "g3", "c4", "c5", "c6", "c7", "c8"];
+        const nodes = ids.map((id, index) => sourceNode(id, (index + 1).toString(16)));
+        const machine = workflowNode();
+        const state = intakeState({ batch_type: "set", setGroupImageNodeIds: ["g1", "g2", "g3"], componentWhiteBgImageNodeIds: [] });
+        const result = resolveBatchIntakeSelection("card", [batchCard(state), machine, ...nodes], [connection("card-machine", "card", machine.id), ...ids.map((id, index) => connection(`image-${index}`, id, machine.id))]);
+        expect(result).toMatchObject({
+            ok: true,
+            sourceImageNodeIds: ids,
+            setGroupImageNodeIds: ["g1", "g2", "g3"],
+            componentWhiteBgImageNodeIds: ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"],
+        });
     });
 
     test("places batch_type beside the existing contract fields and keeps the single command and ten facts unchanged", () => {
@@ -271,7 +300,7 @@ describe("ST-01 set batch declaration", () => {
                 missing_d_no_retake: true,
             },
         });
-        const command = buildBatchIntakeCommand(missingDimensions, CATEGORY, CONTRACT_HASH, { workflowNodeId: "machine", sourceImageNodeIds: ["white", "g", "c1", "c2"] }, "request-set", 1000);
+        const command = buildBatchIntakeCommand(missingDimensions, CATEGORY, CONTRACT_HASH, { workflowNodeId: "machine", sourceImageNodeIds: ["g", "c1", "c2"], setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] }, "request-set", 1000);
         expect(command.state.productHeightCm).toBeUndefined();
         expect(command.state.facts?.height_cm).toBeNull();
 
@@ -342,34 +371,52 @@ describe("ST-01 set batch declaration", () => {
         expect(componentSource).toContain('checked={batchType === value} disabled={!editable} onChange={() => changeBatchType(value)}');
     });
 
-    test("shows set-only upload areas and locks the declaration after queueing", () => {
+    test("shows connected-image role checkboxes, live counts, and a read-only locked state", () => {
         const singleHtml = renderCard(intakeState());
         expect(singleHtml).toContain("单品（默认）");
-        expect(singleHtml).not.toContain("套装合影白底图");
+        expect(singleHtml).not.toContain("套装角色分配");
         const missingTypeHtml = renderCard(intakeState({ batch_type: undefined }));
         expect(missingTypeHtml.match(/<input type="radio"[^>]*checked=""/g) || []).toHaveLength(0);
-        const setHtml = renderCard(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] }));
-        expect(setHtml).toContain("套装合影白底图");
-        expect(setHtml).toContain("各单件白底图");
-        expect(setHtml).toContain("选择图片（可多选）");
+        const setHtml = renderCard(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: [] }));
+        expect(setHtml).toContain("套装角色分配");
+        expect(setHtml).toContain("group.png");
+        expect(setHtml).toContain("合影 1 张（须 1–3）＋ 单件 2=N−X 张（须 2–8）");
+        expect(setHtml.match(/type="checkbox"/g) || []).toHaveLength(3);
         const queuedHtml = renderCard(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"], status: "queued" }));
         expect(queuedHtml.match(/<input type="radio"[^>]*disabled=""/g) || []).toHaveLength(2);
-        expect(queuedHtml.match(/<button[^>]*disabled=""[^>]*>[\s\S]*?选择图片（可多选）<\/button>/g) || []).toHaveLength(2);
+        expect(queuedHtml.match(/type="checkbox"[^>]*disabled=""/g) || []).toHaveLength(3);
+        expect(renderCard(intakeState({ batch_type: "set", setGroupImageNodeIds: [] }), [])).toContain("请先把套装全部白底图（合影+各单件）连接到工作流机器");
     });
 
-    test("wires the two upload categories through the existing SHA and blob path without changing the intake hook", () => {
+    test("retires the set upload pipeline and wires checkbox patches into the existing line-upload intake", () => {
         const projectSource = readFileSync(new URL("../src/pages/canvas/project.tsx", import.meta.url), "utf8");
         const componentSource = readFileSync(new URL("../src/components/canvas/canvas-batch-info-node.tsx", import.meta.url), "utf8");
         const hookSource = readFileSync(new URL("../src/pages/canvas/use-canvas-batch-intake.ts", import.meta.url), "utf8");
         expect(projectSource).toContain("Promise.all([uploadImage(file), createBatchSourceFile(file)])");
-        expect(projectSource).toContain('accept="image/*" multiple');
-        expect(projectSource).toContain("onUploadSetImages={handleBatchSetUploadRequest}");
+        expect(projectSource).not.toContain('accept="image/*" multiple');
+        expect(projectSource).not.toContain("handleBatchSetUploadRequest");
+        expect(projectSource).not.toContain("batchSetImageInputRef");
+        expect(projectSource).toContain("onSetGroupSelectionChange={handleSetGroupSelectionChange}");
         expect(componentSource).toContain('checked={batchType === value} disabled={!editable}');
-        expect(componentSource).toContain('label="套装合影白底图" range="1–3 张，必传" names={setGroupFileNames} disabled={!editable}');
-        expect(componentSource).toContain('label="各单件白底图" range="2–8 张，必传" names={componentWhiteBgFileNames} disabled={!editable}');
+        expect(componentSource).toContain("<SetRoleAssignment");
+        expect(componentSource).not.toContain("BatchImageUploadArea");
         expect(componentSource).not.toContain('state.batch_type || "single"');
         expect(hookSource).toContain("selection.sourceImageNodeIds.map");
         expect(hookSource).not.toContain("setGroupImageNodeIds");
         expect(hookSource).not.toContain("componentWhiteBgImageNodeIds");
+    });
+
+    test("rejects disconnected group selections and duplicate content across derived roles", () => {
+        const machine = workflowNode();
+        const group = sourceNode("group", "a");
+        const componentOne = sourceNode("component-one", "a");
+        const componentTwo = sourceNode("component-two", "b");
+        const links = [connection("card-machine", "card", machine.id), connection("group-machine", group.id, machine.id), connection("one-machine", componentOne.id, machine.id), connection("two-machine", componentTwo.id, machine.id)];
+        const duplicateState = intakeState({ batch_type: "set", setGroupImageNodeIds: [group.id], componentWhiteBgImageNodeIds: [] });
+        expect(resolveBatchIntakeSelection("card", [batchCard(duplicateState), machine, group, componentOne, componentTwo], links)).toEqual({ ok: false, message: DUPLICATE_PRODUCT_IMAGE_MESSAGE });
+
+        const disconnectedState = intakeState({ batch_type: "set", setGroupImageNodeIds: ["gone"], componentWhiteBgImageNodeIds: [] });
+        const distinctOne = sourceNode("component-one", "c");
+        expect(resolveBatchIntakeSelection("card", [batchCard(disconnectedState), machine, group, distinctOne, componentTwo], links)).toEqual({ ok: false, message: "合影勾选中包含已断开的图，请重新勾选。" });
     });
 });

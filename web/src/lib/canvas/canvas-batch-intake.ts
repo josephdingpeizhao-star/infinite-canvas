@@ -1,4 +1,4 @@
-import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchImageCategory, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasBatchType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
+import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasBatchType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
 export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
@@ -29,6 +29,8 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 export type BatchIntakeSelection = {
     workflowNodeId: string;
     sourceImageNodeIds: string[];
+    setGroupImageNodeIds?: string[];
+    componentWhiteBgImageNodeIds?: string[];
 };
 
 export type BatchIntakeSource = {
@@ -85,11 +87,12 @@ export function validateBatchIntakeFacts(
     state: CanvasBatchIntakeMetadata,
     category: CanvasBatchCategoryMetadata | undefined,
     contractHash: string,
+    connectedImageNodeIds?: string[],
 ): { ok: true; facts: CanvasBatchIntakeFacts } | { ok: false; message: string } {
     if (!category || state.category !== category.key || state.contractHash !== contractHash || contractHash !== BATCH_INTAKE_CONTRACT_SHA256) {
         return { ok: false, message: BATCH_CATEGORY_UNAVAILABLE_MESSAGE };
     }
-    const batchTypeResult = validateBatchTypeDeclaration(state);
+    const batchTypeResult = validateBatchTypeDeclaration(state, connectedImageNodeIds);
     if (!batchTypeResult.ok) return batchTypeResult;
     if (batchTypeResult.batch_type === "set" && (state.handheldMainCount !== 0 || state.handheldDetailCount !== 0)) {
         return { ok: false, message: "套装批次暂不支持手持，主图与详情手持数量必须为 0。" };
@@ -145,7 +148,10 @@ export function validateBatchIntakeFacts(
     };
 }
 
-export function validateBatchTypeDeclaration(state: CanvasBatchIntakeMetadata): { ok: true; batch_type: CanvasBatchType } | { ok: false; message: string } {
+export function validateBatchTypeDeclaration(
+    state: CanvasBatchIntakeMetadata,
+    connectedImageNodeIds?: string[],
+): { ok: true; batch_type: CanvasBatchType } | { ok: false; message: string } {
     if (!validBatchType(state.batch_type)) return { ok: false, message: "商品类型声明无效，请重新选择单品或套装。" };
     const setGroupCount = state.setGroupImageNodeIds?.length || 0;
     const componentCount = state.componentWhiteBgImageNodeIds?.length || 0;
@@ -153,11 +159,19 @@ export function validateBatchTypeDeclaration(state: CanvasBatchIntakeMetadata): 
         if (setGroupCount || componentCount) return { ok: false, message: "单品批次不能包含套装图片，请切换为套装或清空后再登记。" };
         return { ok: true, batch_type: state.batch_type };
     }
-    if (setGroupCount < SET_GROUP_IMAGE_LIMIT.minimum || setGroupCount > SET_GROUP_IMAGE_LIMIT.maximum) {
-        return { ok: false, message: "套装合影白底图必须上传 1–3 张。" };
+    if (connectedImageNodeIds === undefined) return { ok: true, batch_type: state.batch_type };
+    const connectedIds = uniqueStrings(connectedImageNodeIds);
+    const connectedIdSet = new Set(connectedIds);
+    const setGroupIds = uniqueStrings(state.setGroupImageNodeIds);
+    if (setGroupIds.some((id) => !connectedIdSet.has(id))) {
+        return { ok: false, message: "合影勾选中包含已断开的图，请重新勾选。" };
     }
-    if (componentCount < COMPONENT_WHITE_BG_IMAGE_LIMIT.minimum || componentCount > COMPONENT_WHITE_BG_IMAGE_LIMIT.maximum) {
-        return { ok: false, message: "各单件白底图必须上传 2–8 张。" };
+    if (setGroupIds.length < SET_GROUP_IMAGE_LIMIT.minimum || setGroupIds.length > SET_GROUP_IMAGE_LIMIT.maximum) {
+        return { ok: false, message: "请从已连接的图中勾选 1–3 张套装合影。" };
+    }
+    const derivedComponentCount = connectedIds.filter((id) => !setGroupIds.includes(id)).length;
+    if (derivedComponentCount < COMPONENT_WHITE_BG_IMAGE_LIMIT.minimum || derivedComponentCount > COMPONENT_WHITE_BG_IMAGE_LIMIT.maximum) {
+        return { ok: false, message: "未勾选为合影的图即各单件白底图，须为 2–8 张。" };
     }
     return { ok: true, batch_type: state.batch_type };
 }
@@ -173,15 +187,18 @@ export function batchTypeChangePatch(state: CanvasBatchIntakeMetadata, batchType
         }
         : {
             batch_type: batchType,
-            setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
-            componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])],
+            setGroupImageNodeIds: [] as string[],
+            componentWhiteBgImageNodeIds: [] as string[],
             handheldMainCount: 0,
             handheldDetailCount: 0,
         };
 }
 
-export function batchImageSelectionPatch(imageCategory: Exclude<CanvasBatchImageCategory, "white_bg">, nodeIds: string[]) {
-    return imageCategory === "set_group" ? { setGroupImageNodeIds: uniqueStrings(nodeIds) } : { componentWhiteBgImageNodeIds: uniqueStrings(nodeIds) };
+export function setGroupSelectionPatch(nodeIds: string[]) {
+    return {
+        setGroupImageNodeIds: uniqueStrings(nodeIds),
+        componentWhiteBgImageNodeIds: [] as string[],
+    };
 }
 
 export function resetBatchDeclarationState(state: CanvasBatchIntakeMetadata, patch: Partial<CanvasBatchIntakeMetadata>): CanvasBatchIntakeMetadata {
@@ -231,7 +248,7 @@ export function categorySwitchPatch(state: CanvasBatchIntakeMetadata, category: 
         ...defaults,
         batch_type: state.batch_type,
         setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
-        componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])],
+        componentWhiteBgImageNodeIds: [] as string[],
         productLengthCm: state.productLengthCm,
         productWidthCm: state.productWidthCm,
         productHeightCm: state.productHeightCm,
@@ -277,26 +294,31 @@ export function resolveBatchIntakeSelection(batchInfoNodeId: string, nodes: Canv
     const sourceImages = uniqueStrings(connections.filter((item) => item.toNodeId === workflowNodeId && nodesById.get(item.fromNodeId)?.type === CanvasNodeType.Image).map((item) => item.fromNodeId)).map((id) => nodesById.get(id)!);
     if (!sourceImages.length) return { ok: false, message: "请把至少 1 张磁盘原图连接到同一台工作流机器。" };
 
-    const state = readBatchIntakeState(card.metadata);
-    const sourceImageNodeIds = [
-        ...sourceImages.map((image) => image.id),
-        ...(state.setGroupImageNodeIds || []),
-        ...(state.componentWhiteBgImageNodeIds || []),
-    ];
-    if (sourceImageNodeIds.length !== new Set(sourceImageNodeIds).size) return { ok: false, message: DUPLICATE_PRODUCT_IMAGE_MESSAGE };
-    const allSourceImages = sourceImageNodeIds.map((id) => nodesById.get(id));
-    if (allSourceImages.some((image) => !image || image.type !== CanvasNodeType.Image)) return { ok: false, message: "套装图片已不存在，请重新上传后再登记。" };
-
-    for (const image of allSourceImages as CanvasNodeData[]) {
+    const sourceImageNodeIds = sourceImages.map((image) => image.id);
+    for (const image of sourceImages) {
         const sourceFile = image.metadata?.sourceFile;
         if (!sourceFile) return { ok: false, message: `“${image.title || image.id}”不是从磁盘直接拖入的原图，请移除后再登记。` };
         if (!image.metadata?.storageKey?.startsWith("image:") || !validSourceFile(sourceFile)) {
             return { ok: false, message: `“${image.title || image.id}”缺少完整的原图凭证，请从磁盘重新拖入。` };
         }
     }
-    const sourceHashes = (allSourceImages as CanvasNodeData[]).map((image) => image.metadata!.sourceFile!.sha256.toLowerCase());
+    const sourceHashes = sourceImages.map((image) => image.metadata!.sourceFile!.sha256.toLowerCase());
     if (sourceHashes.length !== new Set(sourceHashes).size) return { ok: false, message: DUPLICATE_PRODUCT_IMAGE_MESSAGE };
 
+    const state = readBatchIntakeState(card.metadata);
+    const declaration = validateBatchTypeDeclaration(state, sourceImageNodeIds);
+    if (!declaration.ok) return declaration;
+    if (declaration.batch_type === "set") {
+        const setGroupImageNodeIds = uniqueStrings(state.setGroupImageNodeIds);
+        const setGroupImageIdSet = new Set(setGroupImageNodeIds);
+        return {
+            ok: true,
+            workflowNodeId,
+            sourceImageNodeIds,
+            setGroupImageNodeIds,
+            componentWhiteBgImageNodeIds: sourceImageNodeIds.filter((id) => !setGroupImageIdSet.has(id)),
+        };
+    }
     return { ok: true, workflowNodeId, sourceImageNodeIds };
 }
 
@@ -326,7 +348,7 @@ export function buildBatchIntakeCommand(
     requestId: string,
     now: number,
 ) {
-    const factsResult = validateBatchIntakeFacts(state, category, contractHash);
+    const factsResult = validateBatchIntakeFacts(state, category, contractHash, selection.sourceImageNodeIds);
     if (!factsResult.ok) throw new Error(factsResult.message);
     return {
         content: `# batch-intake\n# request-id: ${requestId}\n# requested-at: ${now}\nbuild: batch`,
@@ -346,8 +368,8 @@ export function buildBatchIntakeCommand(
             workflowNodeId: selection.workflowNodeId,
             sourceImageNodeIds: [...selection.sourceImageNodeIds],
             batch_type: state.batch_type,
-            setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
-            componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])],
+            setGroupImageNodeIds: [...(selection.setGroupImageNodeIds || [])],
+            componentWhiteBgImageNodeIds: [...(selection.componentWhiteBgImageNodeIds || [])],
             batchId: undefined,
             uploadBaseUrl: undefined,
             expectedCount: selection.sourceImageNodeIds.length,
