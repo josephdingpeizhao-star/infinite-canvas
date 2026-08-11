@@ -189,6 +189,9 @@
 | 185 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` | ST-03b 套装尺寸选填与 v4 合同 | `height_cm` 与长宽对齐允许空值；套装留空时统一提交 JSON `null`、回执元数据归一为 `undefined`，三维输入保留但显示选填；单品仍按品类必填尺寸校验 | 套装尺寸语义交由套装及各单件身份档案承接，同时保持单品登记、已填写套装尺寸和既有回执行为不变 | — |
 | 186 | `web/tests/st01-set-batch-declaration.test.ts` + `web/tests/cfg01-clear-water-retirement.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ST-03b 离线合同与真人验收登记 | 契约摘要更新为 `a030df8d0aa9c96d9275d7c6f463fbc9d8f10af57e8c4539c2cb9d0d903456d3`；新增套装三维全空、单品缺高度、套装填值、回执归一和卡面选填回归，并登记画布/工作台真人走查 | 用离线测试锁定“套装放行、单品不放宽”，真实联动仍由用户验收 | — |
 | 187 | `web/dist/` | ST-03b 最新本机运行副本 | 按当前源码重建，运行副本包含 v4 新哈希及套装尺寸选填界面，旧合同哈希零残留 | 源码与运行成品同窗交付，用户硬刷新即可加载；未启动服务、未联网或触发生产费用 | — |
+| 188 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` | ST-03c 套装手持建批入口禁用 | 选择套装时主图/详情图手持立即归零并置灰，套装切换品类和旧画布读取继续保持 0；切回单品按当前品类恢复两项默认值，提交前仍以同一事实校验拒绝非零套装载荷 | 只收紧建批入口，单品合法手持与后续运行时接口保持原样 | — |
+| 189 | `web/tests/st01-set-batch-declaration.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ST-03c 第一段离线合同与真人验收登记 | 覆盖套装 0 放行、非零拒绝、旧值归零、品类切换、卡面置灰、切回单品恢复默认和单品合法值；登记真人走查“变灰、不可选、归零、切回恢复” | 自动检查锁定入口防呆，真实画布交互仍由用户验收 | — |
+| 190 | `web/dist/` | ST-03c 第一段最新本机运行副本 | 按最终源码离线重建为 12 文件 / 2,790,067 字节；树 SHA-256 `ccda981e320d7eb8c38a515cc22f6f804aeb892729bbe0e48a74e72f9daaf20e`，入口引用文件全部存在，套装手持拒绝文案、两项手持标签、零值汇总及 Unreleased 用户文案探针均命中 | 源码与运行成品同窗交付，用户硬刷新即可验收套装手持入口；未启动服务、未联网或触发生产费用 | — |
 
 ## 退役锚点（编号不复用）
 

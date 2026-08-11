@@ -3,7 +3,7 @@ import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Tr
 
 import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, detailHandheldLimitMessage, handheldCountMaximum, readBatchIntakeState, validateBatchTypeDeclaration } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, batchTypeChangePatch, detailHandheldLimitMessage, handheldCountMaximum, readBatchIntakeState, validateBatchTypeDeclaration } from "@/lib/canvas/canvas-batch-intake";
 import { batchRegistrationButtonLabel, styleRemovalButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceRemovalState, readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -71,6 +71,11 @@ export function CanvasBatchInfoNode({
         category && validImageCount(state.mainImageCount, category.form.image_counts.main) && validImageCount(state.detailImageCount, category.form.image_counts.detail)
             ? state.mainImageCount + state.detailImageCount
             : undefined;
+    const changeBatchType = (nextBatchType: CanvasBatchType) => {
+        const patch = batchTypeChangePatch(state, nextBatchType, category);
+        onBatchTypeChange(node.id, nextBatchType);
+        onChange(node.id, { handheldMainCount: patch.handheldMainCount, handheldDetailCount: patch.handheldDetailCount });
+    };
 
     return (
         <div className="flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto p-4" style={{ color: theme.node.text }}>
@@ -165,7 +170,7 @@ export function CanvasBatchInfoNode({
                             <div className="grid grid-cols-2 gap-2">
                                 {(["single", "set"] as const).map((value) => (
                                     <label key={value} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs" style={{ borderColor: batchType === value ? theme.node.activeStroke : theme.node.stroke, background: theme.node.panel, color: theme.node.text }}>
-                                        <input type="radio" name={`batch-type-${node.id}`} value={value} checked={batchType === value} disabled={!editable} onChange={() => onBatchTypeChange(node.id, value)} />
+                                        <input type="radio" name={`batch-type-${node.id}`} value={value} checked={batchType === value} disabled={!editable} onChange={() => changeBatchType(value)} />
                                         {value === "single" ? "单品（默认）" : "套装"}
                                     </label>
                                 ))}
@@ -207,18 +212,18 @@ export function CanvasBatchInfoNode({
                             <div className="grid grid-cols-2 gap-2">
                                 <NumberField
                                     label="主图手持"
-                                    value={state.handheldMainCount}
+                                    value={batchType === "set" ? 0 : state.handheldMainCount}
                                     minimum={category.form.handheld.main.minimum}
                                     maximum={validImageCount(state.mainImageCount, category.form.image_counts.main) ? state.mainImageCount : category.form.image_counts.main.maximum}
-                                    disabled={!editable}
+                                    disabled={!editable || batchType === "set"}
                                     onChange={(handheldMainCount) => onChange(node.id, { handheldMainCount })}
                                 />
                                 <NumberField
                                     label="详情图手持"
-                                    value={state.handheldDetailCount}
+                                    value={batchType === "set" ? 0 : state.handheldDetailCount}
                                     minimum={category.form.handheld.detail.minimum}
                                     maximum={handheldCountMaximum("detail", validImageCount(state.detailImageCount, category.form.image_counts.detail) ? state.detailImageCount : category.form.image_counts.detail.maximum)}
-                                    disabled={!editable}
+                                    disabled={!editable || batchType === "set"}
                                     onChange={(handheldDetailCount) => onChange(node.id, { handheldDetailCount })}
                                 />
                             </div>
@@ -236,7 +241,7 @@ export function CanvasBatchInfoNode({
                     <div className="flex items-center justify-between rounded-xl border px-3 py-2 text-[11px]" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
                         <span>共 {totalCount ?? "—"} 张</span>
                         <span>
-                            手持：主 {state.handheldMainCount ?? "—"} + 详情 {state.handheldDetailCount ?? "—"}
+                            手持：主 {batchType === "set" ? 0 : state.handheldMainCount ?? "—"} + 详情 {batchType === "set" ? 0 : state.handheldDetailCount ?? "—"}
                         </span>
                     </div>
                     {batchType === "set" ? (

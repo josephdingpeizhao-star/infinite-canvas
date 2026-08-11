@@ -47,9 +47,10 @@ export class BatchIntakeIntegrityError extends Error {
 export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatchIntakeMetadata {
     const value = metadata?.batchIntake;
     const status = value && BATCH_INTAKE_STATUSES.has(value.status) ? value.status : "draft";
+    const batchType = validBatchType(value?.batch_type) ? value.batch_type : undefined;
     return {
         status,
-        batch_type: validBatchType(value?.batch_type) ? value.batch_type : undefined,
+        batch_type: batchType,
         category: nonemptyString(value?.category),
         contractHash: nonemptyString(value?.contractHash),
         productType: nonemptyString(value?.productType),
@@ -61,8 +62,8 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
         skipMissingDAngle: typeof value?.skipMissingDAngle === "boolean" ? value.skipMissingDAngle : undefined,
         mainImageCount: positiveInteger(value?.mainImageCount),
         detailImageCount: positiveInteger(value?.detailImageCount),
-        handheldMainCount: nonnegativeInteger(value?.handheldMainCount),
-        handheldDetailCount: nonnegativeInteger(value?.handheldDetailCount),
+        handheldMainCount: batchType === "set" ? 0 : nonnegativeInteger(value?.handheldMainCount),
+        handheldDetailCount: batchType === "set" ? 0 : nonnegativeInteger(value?.handheldDetailCount),
         facts: value?.facts,
         requestId: nonemptyString(value?.requestId),
         requestedAt: finiteTimestamp(value?.requestedAt),
@@ -90,6 +91,9 @@ export function validateBatchIntakeFacts(
     }
     const batchTypeResult = validateBatchTypeDeclaration(state);
     if (!batchTypeResult.ok) return batchTypeResult;
+    if (batchTypeResult.batch_type === "set" && (state.handheldMainCount !== 0 || state.handheldDetailCount !== 0)) {
+        return { ok: false, message: "套装批次暂不支持手持，主图与详情手持数量必须为 0。" };
+    }
     const dimensions: Record<CanvasBatchDimensionKey, number | undefined> = {
         length_cm: state.productLengthCm,
         width_cm: state.productWidthCm,
@@ -158,10 +162,22 @@ export function validateBatchTypeDeclaration(state: CanvasBatchIntakeMetadata): 
     return { ok: true, batch_type: state.batch_type };
 }
 
-export function batchTypeChangePatch(state: CanvasBatchIntakeMetadata, batchType: CanvasBatchType) {
+export function batchTypeChangePatch(state: CanvasBatchIntakeMetadata, batchType: CanvasBatchType, category?: CanvasBatchCategoryMetadata) {
     return batchType === "single"
-        ? { batch_type: batchType, setGroupImageNodeIds: [] as string[], componentWhiteBgImageNodeIds: [] as string[] }
-        : { batch_type: batchType, setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])], componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])] };
+        ? {
+            batch_type: batchType,
+            setGroupImageNodeIds: [] as string[],
+            componentWhiteBgImageNodeIds: [] as string[],
+            handheldMainCount: category?.form.handheld.main.default ?? state.handheldMainCount,
+            handheldDetailCount: category?.form.handheld.detail.default ?? state.handheldDetailCount,
+        }
+        : {
+            batch_type: batchType,
+            setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
+            componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])],
+            handheldMainCount: 0,
+            handheldDetailCount: 0,
+        };
 }
 
 export function batchImageSelectionPatch(imageCategory: Exclude<CanvasBatchImageCategory, "white_bg">, nodeIds: string[]) {
@@ -210,14 +226,17 @@ export function categoryDefaultPatch(category: CanvasBatchCategoryMetadata, cont
 }
 
 export function categorySwitchPatch(state: CanvasBatchIntakeMetadata, category: CanvasBatchCategoryMetadata, contractHash: string) {
+    const defaults = categoryDefaultPatch(category, contractHash);
     return {
-        ...categoryDefaultPatch(category, contractHash),
+        ...defaults,
         batch_type: state.batch_type,
         setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
         componentWhiteBgImageNodeIds: [...(state.componentWhiteBgImageNodeIds || [])],
         productLengthCm: state.productLengthCm,
         productWidthCm: state.productWidthCm,
         productHeightCm: state.productHeightCm,
+        handheldMainCount: state.batch_type === "set" ? 0 : defaults.handheldMainCount,
+        handheldDetailCount: state.batch_type === "set" ? 0 : defaults.handheldDetailCount,
     };
 }
 

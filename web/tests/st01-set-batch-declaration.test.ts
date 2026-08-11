@@ -43,6 +43,12 @@ const CATEGORY: CanvasBatchCategoryMetadata = {
     },
 };
 const CATALOG: CanvasBatchCategoryCatalog = { contractHash: CONTRACT_HASH, categories: [CATEGORY] };
+const BATCH_INTAKE_ALLOWED_KEYS = [
+    "status", "category", "contractHash", "batch_type", "productType", "productLengthCm", "productWidthCm", "productHeightCm", "allowClearWater",
+    "prohibitPouringAndHeating", "skipMissingDAngle", "mainImageCount", "detailImageCount", "handheldMainCount", "handheldDetailCount", "facts", "requestId",
+    "requestedAt", "updatedAt", "workflowNodeId", "sourceImageNodeIds", "setGroupImageNodeIds", "componentWhiteBgImageNodeIds", "batchId", "uploadBaseUrl",
+    "expectedCount", "receivedCount", "errorMessage", "receipt",
+].sort();
 
 function intakeState(patch: Partial<CanvasBatchIntakeMetadata> = {}) {
     return readBatchIntakeState({
@@ -144,13 +150,74 @@ describe("ST-01 set batch declaration", () => {
         expect(validateBatchTypeDeclaration(intakeState({ batch_type: "set", setGroupImageNodeIds: ["g1", "g2", "g3"], componentWhiteBgImageNodeIds: Array.from({ length: 8 }, (_, index) => `c${index}`) }))).toEqual({ ok: true, batch_type: "set" });
     });
 
-    test("defaults new category forms to single, clears set metadata on single, and preserves set across category switches", () => {
+    test("defaults new category forms to single and keeps set hand-held counts at zero across declaration changes", () => {
         expect(categoryDefaultPatch(CATEGORY, CONTRACT_HASH)).toMatchObject({ batch_type: "single", setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: [] });
         const setState = intakeState({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"], status: "failed", requestId: "old" });
-        expect(batchTypeChangePatch(setState, "single")).toEqual({ batch_type: "single", setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: [] });
-        expect(resetBatchDeclarationState(setState, batchTypeChangePatch(setState, "single"))).toMatchObject({ status: "draft", batch_type: "single", setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: [], requestId: undefined });
-        expect(categorySwitchPatch(setState, CATEGORY, CONTRACT_HASH)).toMatchObject({ batch_type: "set", setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] });
+        expect(batchTypeChangePatch(setState, "set")).toMatchObject({ batch_type: "set", handheldMainCount: 0, handheldDetailCount: 0 });
+        const zeroedSetState = resetBatchDeclarationState(setState, batchTypeChangePatch(setState, "set"));
+        expect(batchTypeChangePatch(zeroedSetState, "single", CATEGORY)).toEqual({
+            batch_type: "single",
+            setGroupImageNodeIds: [],
+            componentWhiteBgImageNodeIds: [],
+            handheldMainCount: CATEGORY.form.handheld.main.default,
+            handheldDetailCount: CATEGORY.form.handheld.detail.default,
+        });
+        expect(resetBatchDeclarationState(zeroedSetState, batchTypeChangePatch(zeroedSetState, "single", CATEGORY))).toMatchObject({
+            status: "draft",
+            batch_type: "single",
+            setGroupImageNodeIds: [],
+            componentWhiteBgImageNodeIds: [],
+            handheldMainCount: 2,
+            handheldDetailCount: 1,
+            requestId: undefined,
+        });
+        expect(categorySwitchPatch(setState, CATEGORY, CONTRACT_HASH)).toMatchObject({
+            batch_type: "set",
+            setGroupImageNodeIds: ["g"],
+            componentWhiteBgImageNodeIds: ["c1", "c2"],
+            handheldMainCount: 0,
+            handheldDetailCount: 0,
+        });
         expect(batchImageSelectionPatch("set_group", ["g", "g"])).toEqual({ setGroupImageNodeIds: ["g"] });
+    });
+
+    test("normalizes legacy set metadata before validation and restores current category defaults on single", () => {
+        const legacySetState = readBatchIntakeState({
+            batchIntake: {
+                status: "draft",
+                ...categoryDefaultPatch(CATEGORY, CONTRACT_HASH),
+                batch_type: "set",
+                setGroupImageNodeIds: ["g"],
+                componentWhiteBgImageNodeIds: ["c1", "c2"],
+                productHeightCm: 12,
+                handheldMainCount: 5,
+                handheldDetailCount: 4,
+            },
+        });
+        expect(legacySetState).toMatchObject({ batch_type: "set", handheldMainCount: 0, handheldDetailCount: 0 });
+        expect(validateBatchIntakeFacts(legacySetState, CATEGORY, CONTRACT_HASH)).toMatchObject({
+            ok: true,
+            facts: { handheld_main: 0, handheld_detail: 0 },
+        });
+        expect(batchTypeChangePatch(legacySetState, "single", CATEGORY)).toMatchObject({
+            batch_type: "single",
+            handheldMainCount: CATEGORY.form.handheld.main.default,
+            handheldDetailCount: CATEGORY.form.handheld.detail.default,
+        });
+        const command = buildBatchIntakeCommand(
+            legacySetState,
+            CATEGORY,
+            CONTRACT_HASH,
+            { workflowNodeId: "machine", sourceImageNodeIds: ["white", "g", "c1", "c2"] },
+            "request-legacy-set",
+            1_000,
+        );
+        expect(command.state).toMatchObject({
+            handheldMainCount: 0,
+            handheldDetailCount: 0,
+            facts: { handheld_main: 0, handheld_detail: 0 },
+        });
+        expect(Object.keys(command.state).sort()).toEqual(BATCH_INTAKE_ALLOWED_KEYS);
     });
 
     test("merges connected white-bg, group, and component IDs without changing the single selection path", () => {
@@ -173,6 +240,7 @@ describe("ST-01 set batch declaration", () => {
         const command = buildBatchIntakeCommand(intakeState(), CATEGORY, CONTRACT_HASH, { workflowNodeId: "machine", sourceImageNodeIds: ["white"] }, "request-1", 1000);
         expect(command.content).toBe("# batch-intake\n# request-id: request-1\n# requested-at: 1000\nbuild: batch");
         expect(command.state).toMatchObject({ batch_type: "single", category: "杯类", contractHash: CONTRACT_HASH, sourceImageNodeIds: ["white"], setGroupImageNodeIds: [], componentWhiteBgImageNodeIds: [] });
+        expect(Object.keys(command.state).sort()).toEqual(BATCH_INTAKE_ALLOWED_KEYS);
         expect(Object.keys(command.state.facts || {})).toEqual(["product_type", "length_cm", "width_cm", "height_cm", "main_image_count", "detail_image_count", "handheld_main", "handheld_detail", "forbid_pouring_and_heating", "missing_d_no_retake"]);
     });
 
@@ -184,6 +252,8 @@ describe("ST-01 set batch declaration", () => {
             productHeightCm: undefined,
             setGroupImageNodeIds: ["g"],
             componentWhiteBgImageNodeIds: ["c1", "c2"],
+            handheldMainCount: 0,
+            handheldDetailCount: 0,
         });
         const result = validateBatchIntakeFacts(missingDimensions, CATEGORY, CONTRACT_HASH);
         expect(result).toEqual({
@@ -195,8 +265,8 @@ describe("ST-01 set batch declaration", () => {
                 height_cm: null,
                 main_image_count: 6,
                 detail_image_count: 8,
-                handheld_main: 2,
-                handheld_detail: 1,
+                handheld_main: 0,
+                handheld_detail: 0,
                 forbid_pouring_and_heating: true,
                 missing_d_no_retake: true,
             },
@@ -216,6 +286,27 @@ describe("ST-01 set batch declaration", () => {
         expect(suppliedSet.ok && suppliedSet.facts).toMatchObject({ length_cm: 10, width_cm: 11, height_cm: 12 });
     });
 
+    test("rejects nonzero set hand-held counts while preserving legal single counts", () => {
+        const setState = intakeState({
+            batch_type: "set",
+            setGroupImageNodeIds: ["g"],
+            componentWhiteBgImageNodeIds: ["c1", "c2"],
+            handheldMainCount: 0,
+            handheldDetailCount: 0,
+        });
+        expect(validateBatchIntakeFacts(setState, CATEGORY, CONTRACT_HASH)).toMatchObject({
+            ok: true,
+            facts: { handheld_main: 0, handheld_detail: 0 },
+        });
+        for (const patch of [{ handheldMainCount: 1 }, { handheldDetailCount: 1 }]) {
+            expect(validateBatchIntakeFacts({ ...setState, ...patch }, CATEGORY, CONTRACT_HASH)).toEqual({
+                ok: false,
+                message: "套装批次暂不支持手持，主图与详情手持数量必须为 0。",
+            });
+        }
+        expect(validateBatchIntakeFacts(intakeState({ handheldMainCount: 3, handheldDetailCount: 2 }), CATEGORY, CONTRACT_HASH).ok).toBe(true);
+    });
+
     test("marks all three dimensions optional only on the set form", () => {
         const setHtml = renderCard(intakeState({ batch_type: "set", productLengthCm: undefined, productWidthCm: undefined, productHeightCm: undefined, setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] }));
         expect(setHtml).toContain("长（选填）");
@@ -224,6 +315,31 @@ describe("ST-01 set batch declaration", () => {
         const singleHtml = renderCard(intakeState());
         expect(singleHtml).toContain("高 *");
         expect(singleHtml).not.toContain("高（选填）");
+    });
+
+    test("disables both set hand-held inputs at zero while leaving single inputs editable", () => {
+        const setHtml = renderCard(intakeState({
+            batch_type: "set",
+            setGroupImageNodeIds: ["g"],
+            componentWhiteBgImageNodeIds: ["c1", "c2"],
+            handheldMainCount: 5,
+            handheldDetailCount: 4,
+        }));
+        expect(setHtml).toMatch(/title="主图手持"[\s\S]*?<input(?=[^>]*value="0")(?=[^>]*disabled="")[^>]*>/);
+        expect(setHtml).toMatch(/title="详情图手持"[\s\S]*?<input(?=[^>]*value="0")(?=[^>]*disabled="")[^>]*>/);
+        expect(setHtml).toContain("手持：主 0 + 详情 0");
+
+        const singleHtml = renderCard(intakeState());
+        expect(singleHtml).toMatch(/title="主图手持"[\s\S]*?<input(?![^>]*disabled="")(?=[^>]*value="2")[^>]*>/);
+        expect(singleHtml).toMatch(/title="详情图手持"[\s\S]*?<input(?![^>]*disabled="")(?=[^>]*value="1")[^>]*>/);
+    });
+
+    test("wires batch type radio changes to the declaration patch before applying live category hand-held defaults", () => {
+        const componentSource = readFileSync(new URL("../src/components/canvas/canvas-batch-info-node.tsx", import.meta.url), "utf8");
+        expect(componentSource).toMatch(
+            /const changeBatchType = \(nextBatchType: CanvasBatchType\) => \{\s+const patch = batchTypeChangePatch\(state, nextBatchType, category\);\s+onBatchTypeChange\(node\.id, nextBatchType\);\s+onChange\(node\.id, \{ handheldMainCount: patch\.handheldMainCount, handheldDetailCount: patch\.handheldDetailCount \}\);\s+\};/,
+        );
+        expect(componentSource).toContain('checked={batchType === value} disabled={!editable} onChange={() => changeBatchType(value)}');
     });
 
     test("shows set-only upload areas and locks the declaration after queueing", () => {
