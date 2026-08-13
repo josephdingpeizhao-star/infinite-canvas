@@ -56,9 +56,9 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
         category: nonemptyString(value?.category),
         contractHash: nonemptyString(value?.contractHash),
         productType: nonemptyString(value?.productType),
-        productLengthCm: finiteNumber(value?.productLengthCm),
-        productWidthCm: finiteNumber(value?.productWidthCm),
-        productHeightCm: finiteNumber(value?.productHeightCm),
+        productLengthCm: batchType === "set" ? undefined : finiteNumber(value?.productLengthCm),
+        productWidthCm: batchType === "set" ? undefined : finiteNumber(value?.productWidthCm),
+        productHeightCm: batchType === "set" ? undefined : finiteNumber(value?.productHeightCm),
         allowClearWater: typeof value?.allowClearWater === "boolean" ? value.allowClearWater : undefined,
         prohibitPouringAndHeating: typeof value?.prohibitPouringAndHeating === "boolean" ? value.prohibitPouringAndHeating : undefined,
         skipMissingDAngle: typeof value?.skipMissingDAngle === "boolean" ? value.skipMissingDAngle : undefined,
@@ -94,6 +94,9 @@ export function validateBatchIntakeFacts(
     }
     const batchTypeResult = validateBatchTypeDeclaration(state, connectedImageNodeIds);
     if (!batchTypeResult.ok) return batchTypeResult;
+    if (batchTypeResult.batch_type === "set" && [state.productLengthCm, state.productWidthCm, state.productHeightCm].some((value) => value !== undefined)) {
+        return { ok: false, message: "套装批次不填写长、宽、高，请清空三项尺寸后再登记。" };
+    }
     if (batchTypeResult.batch_type === "set" && (state.handheldMainCount !== 0 || state.handheldDetailCount !== 0)) {
         return { ok: false, message: "套装批次暂不支持手持，主图与详情手持数量必须为 0。" };
     }
@@ -135,9 +138,9 @@ export function validateBatchIntakeFacts(
         ok: true,
         facts: {
             product_type: category.product_noun,
-            length_cm: dimensions.length_cm ?? null,
-            width_cm: dimensions.width_cm ?? null,
-            height_cm: dimensions.height_cm ?? null,
+            length_cm: batchTypeResult.batch_type === "set" ? null : dimensions.length_cm ?? null,
+            width_cm: batchTypeResult.batch_type === "set" ? null : dimensions.width_cm ?? null,
+            height_cm: batchTypeResult.batch_type === "set" ? null : dimensions.height_cm ?? null,
             main_image_count: state.mainImageCount!,
             detail_image_count: state.detailImageCount!,
             handheld_main: state.handheldMainCount!,
@@ -189,6 +192,9 @@ export function batchTypeChangePatch(state: CanvasBatchIntakeMetadata, batchType
             batch_type: batchType,
             setGroupImageNodeIds: [] as string[],
             componentWhiteBgImageNodeIds: [] as string[],
+            productLengthCm: undefined,
+            productWidthCm: undefined,
+            productHeightCm: undefined,
             handheldMainCount: 0,
             handheldDetailCount: 0,
         };

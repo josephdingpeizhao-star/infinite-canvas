@@ -251,6 +251,54 @@ describe("ST-01 set batch declaration", () => {
         expect(resolveBatchIntakeSelection("card", [batchCard(intakeState()), machine, white], singleLinks)).toEqual({ ok: true, workflowNodeId: "machine", sourceImageNodeIds: ["white"] });
     });
 
+    test("clears stored dimensions across the single to set to single round trip", () => {
+        const normalizedLegacySet = readBatchIntakeState({
+            batchIntake: {
+                ...intakeState(),
+                batch_type: "set",
+                productLengthCm: 10,
+                productWidthCm: 11,
+                productHeightCm: 12,
+            },
+        });
+        expect(normalizedLegacySet).toMatchObject({
+            productLengthCm: undefined,
+            productWidthCm: undefined,
+            productHeightCm: undefined,
+        });
+
+        const singleWithDimensions = intakeState({
+            batch_type: "single",
+            productLengthCm: 10,
+            productWidthCm: 11,
+            productHeightCm: 12,
+        });
+        const setPatch = batchTypeChangePatch(singleWithDimensions, "set");
+        expect(setPatch).toMatchObject({
+            batch_type: "set",
+            productLengthCm: undefined,
+            productWidthCm: undefined,
+            productHeightCm: undefined,
+        });
+        const storedSet = resetBatchDeclarationState(singleWithDimensions, setPatch);
+        expect(storedSet).toMatchObject({
+            productLengthCm: undefined,
+            productWidthCm: undefined,
+            productHeightCm: undefined,
+        });
+
+        const restoredSingle = resetBatchDeclarationState(
+            readBatchIntakeState({ batchIntake: storedSet }),
+            batchTypeChangePatch(readBatchIntakeState({ batchIntake: storedSet }), "single", CATEGORY),
+        );
+        expect(restoredSingle).toMatchObject({
+            batch_type: "single",
+            productLengthCm: undefined,
+            productWidthCm: undefined,
+            productHeightCm: undefined,
+        });
+    });
+
     test("derives the maximum set partition in connected-image order", () => {
         const ids = ["g1", "c1", "g2", "c2", "c3", "g3", "c4", "c5", "c6", "c7", "c8"];
         const nodes = ids.map((id, index) => sourceNode(id, (index + 1).toString(16)));
@@ -312,7 +360,7 @@ describe("ST-01 set batch declaration", () => {
         const supplied = validateBatchIntakeFacts(missingDimensions, CATEGORY, CONTRACT_HASH);
         expect(supplied.ok && supplied.facts.height_cm).toBeNull();
         const suppliedSet = validateBatchIntakeFacts({ ...missingDimensions, productLengthCm: 10, productWidthCm: 11, productHeightCm: 12 }, CATEGORY, CONTRACT_HASH);
-        expect(suppliedSet.ok && suppliedSet.facts).toMatchObject({ length_cm: 10, width_cm: 11, height_cm: 12 });
+        expect(suppliedSet).toEqual({ ok: false, message: "套装批次不填写长、宽、高，请清空三项尺寸后再登记。" });
     });
 
     test("rejects nonzero set hand-held counts while preserving legal single counts", () => {
@@ -336,14 +384,16 @@ describe("ST-01 set batch declaration", () => {
         expect(validateBatchIntakeFacts(intakeState({ handheldMainCount: 3, handheldDetailCount: 2 }), CATEGORY, CONTRACT_HASH).ok).toBe(true);
     });
 
-    test("marks all three dimensions optional only on the set form", () => {
-        const setHtml = renderCard(intakeState({ batch_type: "set", productLengthCm: undefined, productWidthCm: undefined, productHeightCm: undefined, setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] }));
-        expect(setHtml).toContain("长（选填）");
-        expect(setHtml).toContain("宽（选填）");
-        expect(setHtml).toContain("高（选填）");
+    test("marks all three dimensions as unused and disables them only on the set form", () => {
+        const setHtml = renderCard(intakeState({ batch_type: "set", productLengthCm: 10, productWidthCm: 11, productHeightCm: 12, setGroupImageNodeIds: ["g"], componentWhiteBgImageNodeIds: ["c1", "c2"] }));
+        for (const label of ["长", "宽", "高"]) {
+            expect(setHtml).toContain(`${label}（套装不填）`);
+            expect(setHtml).toMatch(new RegExp(`title="${label}（套装不填）"[\\s\\S]*?<input(?=[^>]*value="")(?=[^>]*disabled="")[^>]*>`));
+        }
         const singleHtml = renderCard(intakeState());
         expect(singleHtml).toContain("高 *");
-        expect(singleHtml).not.toContain("高（选填）");
+        expect(singleHtml).toMatch(/title="高 \*"[\s\S]*?<input(?![^>]*disabled="")(?=[^>]*value="12")[^>]*>/);
+        expect(singleHtml).not.toContain("套装不填");
     });
 
     test("disables both set hand-held inputs at zero while leaving single inputs editable", () => {

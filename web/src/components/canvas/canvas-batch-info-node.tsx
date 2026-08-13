@@ -208,12 +208,12 @@ export function CanvasBatchInfoNode({
                                 {category.form.dimensions.fields.map((field) => (
                                     <NumberField
                                         key={field.key}
-                                        label={`${field.label}${batchType === "set" ? "（选填）" : category.form.dimensions.required.includes(field.key) ? " *" : ""}`}
-                                        value={dimensionValue(state, field.key)}
+                                        label={`${field.label}${batchType === "set" ? "（套装不填）" : category.form.dimensions.required.includes(field.key) ? " *" : ""}`}
+                                        value={batchType === "set" ? undefined : dimensionValue(state, field.key)}
                                         minimum={field.minimum}
                                         maximum={field.maximum}
                                         unit={field.unit}
-                                        disabled={!editable}
+                                        disabled={!editable || batchType === "set"}
                                         onChange={(value) => onChange(node.id, { [dimensionStateKey(field.key)]: value })}
                                     />
                                 ))}
