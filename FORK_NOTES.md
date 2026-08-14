@@ -197,6 +197,7 @@
 | 193 | `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` | ST-09 套装尺寸状态、提交门与卡面禁填 | 旧套装画布读取和切换套装都把长宽高归一为空，切回单品不复活旧值；篡改套装尺寸载荷以固定人话拒绝，合法套装 facts 三项恒为 `null`；卡面显示“套装不填”并清空置灰 | 新建批次不再收集套装整体尺寸，避免把编译链不会产出的高度字面带入末端检查；单品必填与存量运行时解析保持不变 | — |
 | 194 | `web/tests/st01-set-batch-declaration.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ST-09 离线合同、版本归纳与真人待验 | 覆盖旧画布清空、单品填值后切套装清空、切回单品仍为空、篡改拒绝、三框置灰与新文案；同步替换 ST-03b 未发布的旧“选填”说明 | 以 1 项新增测试和既有批准断言同步锁定入口规则，真人只需验证信息卡交互，自动检查保持零网络、零模型、零费用 | — |
 | 195 | `web/dist/` | ST-09 最新本机运行副本 | 按最终源码同盘隔离重建为 12 文件 / 2,789,742 字节；树 SHA-256 `20b55d1bd03d2a5993673021ecd9b7347f43d375c2c072315cdebae2552ac367`；入口引用全部存在，新尺寸拒绝文案与“套装不填”各命中主 bundle 1 次，旧“（选填）”零命中 | 源码与运行成品同窗交付，用户硬刷新即可验收套装尺寸禁填；未启动服务、未联网或触发生产费用 | — |
+| 196 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 根滚动容器 wheel 交互 | 追加 data-canvas-no-zoom 与捕获段 stopPropagation，滚轮悬停时滚动卡内内容 | 滚轮不再被画布缩放与全局默认滚动拦截抢占，照抄 prompt-select-dialog 既有模式 | — |
 
 ## 退役锚点（编号不复用）
 

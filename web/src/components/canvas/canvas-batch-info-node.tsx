@@ -81,7 +81,7 @@ export function CanvasBatchInfoNode({
     };
 
     return (
-        <div className="flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto p-4" style={{ color: theme.node.text }}>
+        <div className="flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto p-4" style={{ color: theme.node.text }} data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
             <div className="flex items-center gap-3">
                 <span className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: theme.toolbar.activeBg, color: theme.node.text }}>
                     <ClipboardList className="size-5" />
