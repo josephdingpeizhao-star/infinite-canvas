@@ -116,12 +116,12 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
             <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-baseline gap-2">
                     <div className="shrink-0 text-xs font-semibold">组装提示词</div>
-                    <div className="truncate text-[11px] opacity-55">@ 引用已连接素材，发送前按当前连接重新编号</div>
+                    <div className="truncate text-[11px] opacity-55">@ 引用已连接素材，统一使用全局编号</div>
                 </div>
                 <Button size="small" type="text" className="!h-7 !w-7 !min-w-7 !p-0" icon={<X className="size-3.5" />} onClick={onClose} />
             </div>
             <div className="relative rounded-xl border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-                {!value.trim() ? <div className="pointer-events-none absolute left-3 top-2 text-sm leading-7" style={{ color: theme.node.placeholder }}>输入提示词，按 @ 引用连接的图片或文本</div> : null}
+                {!value.trim() ? <div className="pointer-events-none absolute left-3 top-2 text-sm leading-7" style={{ color: theme.node.placeholder }}>输入提示词，按 @ 引用已连接的图片或文本</div> : null}
                 <div
                     ref={editorRef}
                     contentEditable
@@ -358,6 +358,7 @@ function parseComposerTokens(value: string): Token[] {
 }
 
 function resourceLabel(input: NodeGenerationInput, inputs: NodeGenerationInput[]) {
+    if (input.label) return input.label;
     const sameTypeInputs = inputs.filter((item) => item.type === input.type);
     const index = Math.max(0, sameTypeInputs.findIndex((item) => item.nodeId === input.nodeId));
     if (input.type === "image") return `图片${index + 1}`;

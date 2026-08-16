@@ -3,6 +3,7 @@ export type ReferenceVideo = {
     name: string;
     type: string;
     url: string;
+    label?: string;
     storageKey?: string;
     bytes?: number;
     width?: number;
@@ -15,6 +16,7 @@ export type ReferenceAudio = {
     name: string;
     type: string;
     url: string;
+    label?: string;
     storageKey?: string;
     durationMs?: number;
 };

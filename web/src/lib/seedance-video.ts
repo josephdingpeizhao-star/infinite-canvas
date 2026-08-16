@@ -135,9 +135,9 @@ export function seedanceReferenceLabel(kind: "image" | "video" | "audio", index:
 
 export function buildSeedancePromptText(prompt: string, images: ReferenceImage[], videos: ReferenceVideo[], audios: ReferenceAudio[]) {
     const labels = [
-        ...images.map((_, index) => seedanceReferenceLabel("image", index)),
-        ...videos.map((_, index) => seedanceReferenceLabel("video", index)),
-        ...audios.map((_, index) => seedanceReferenceLabel("audio", index)),
+        ...images.map((image, index) => image.label ?? seedanceReferenceLabel("image", index)),
+        ...videos.map((video, index) => video.label ?? seedanceReferenceLabel("video", index)),
+        ...audios.map((audio, index) => audio.label ?? seedanceReferenceLabel("audio", index)),
     ];
     const text = prompt.trim();
     if (!labels.length) return text;

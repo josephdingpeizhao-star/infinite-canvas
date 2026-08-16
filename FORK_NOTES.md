@@ -198,6 +198,10 @@
 | 194 | `web/tests/st01-set-batch-declaration.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | ST-09 离线合同、版本归纳与真人待验 | 覆盖旧画布清空、单品填值后切套装清空、切回单品仍为空、篡改拒绝、三框置灰与新文案；同步替换 ST-03b 未发布的旧“选填”说明 | 以 1 项新增测试和既有批准断言同步锁定入口规则，真人只需验证信息卡交互，自动检查保持零网络、零模型、零费用 | — |
 | 195 | `web/dist/` | ST-09 最新本机运行副本 | 按最终源码同盘隔离重建为 12 文件 / 2,789,742 字节；树 SHA-256 `20b55d1bd03d2a5993673021ecd9b7347f43d375c2c072315cdebae2552ac367`；入口引用全部存在，新尺寸拒绝文案与“套装不填”各命中主 bundle 1 次，旧“（选填）”零命中 | 源码与运行成品同窗交付，用户硬刷新即可验收套装尺寸禁填；未启动服务、未联网或触发生产费用 | — |
 | 196 | `web/src/components/canvas/canvas-batch-info-node.tsx` | 根滚动容器 wheel 交互 | 追加 data-canvas-no-zoom 与捕获段 stopPropagation，滚轮悬停时滚动卡内内容 | 滚轮不再被画布缩放与全局默认滚动拦截抢占，照抄 prompt-select-dialog 既有模式 | — |
+| 197 | `web/src/components/canvas/canvas-node.tsx` + `web/src/pages/canvas/project.tsx` + `web/src/lib/canvas/canvas-resource-references.ts` | 资源编号角标双轨显示 | 全局灰编号常驻左上、激活蓝编号保持右上，新增全局编号独立数据源 | 灰编号不再被激活编号覆盖，左上/右上各司其职，@ 与生成行为零变化 | — |
+| 198 | `web/src/lib/canvas/canvas-resource-references.ts` + `web/src/components/canvas/canvas-node-generation.ts` + `web/src/components/canvas/canvas-node.tsx` + `web/src/components/canvas/canvas-config-composer.tsx` + `web/src/pages/canvas/project.tsx` + `web/src/lib/image-reference-prompt.ts` + `web/src/lib/seedance-video.ts` + `web/src/types/image.ts` + `web/src/types/media.ts` | 资源编号单轨化 | 全局编号成为唯一编号语言：角标单枚左上激活变色，@ 候选与配置节点胶囊统一全局编号（候选仍限已连线素材），Config 连线图默认全送，图片自身生成自身置前并入连线图，注入编号带 label 回落 | 消除双编号并存的杂乱、@ 所见即所得；免连线引用经真实试用后撤除，独立图片/视频页与批次链路零变化 | — |
+| 199 | `web/src/components/canvas/canvas-resource-mention-textarea.tsx` | mention 输入框光标与 @ 触发 | textarea 提升为定位元素使光标不再被高亮层遮挡；@ 触发正则去掉行首/空白前置，与配置节点一致 | 有连线素材的输入框光标可见；已有文字后输入 @ 也能弹出引用菜单 | — |
+| 200 | `web/src/components/canvas/canvas-resource-mention-textarea.tsx` | mention 高亮胶囊文字度量 | 胶囊去掉水平内边距与字重变化，高亮只用背景/颜色/圆角/描边 | 高亮层与 textarea 逐像素对齐，插入引用后光标、点击定位与换行不再错位 | — |
 
 ## 退役锚点（编号不复用）
 

@@ -15,15 +15,25 @@ export type CanvasResourceReference = {
     active: boolean;
 };
 
+export function buildGlobalResourceReferences(nodes: CanvasNodeData[]) {
+    return labelResourceNodes(nodes.filter(isResourceNode), false);
+}
+
 export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connections: CanvasConnection[], contextNodeId?: string | null) {
     const contextNodes = contextNodeId ? getMentionResourceNodes(contextNodeId, nodes, connections) : [];
-    const globalReferences = labelResourceNodes(nodes.filter(isResourceNode), false);
-    const activeByNodeId = new Map(labelResourceNodes(contextNodes, true).map((reference) => [reference.nodeId, reference]));
-    return globalReferences.map((reference) => activeByNodeId.get(reference.nodeId) || reference);
+    const contextNodeIds = new Set(contextNodes.map((node) => node.id));
+    return buildGlobalResourceReferences(nodes).map((reference) => ({ ...reference, active: contextNodeIds.has(reference.nodeId) }));
 }
 
 export function buildNodeMentionReferences(node: CanvasNodeData, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
-    return labelResourceNodes(getMentionResourceNodes(node.id, nodes, connections), true);
+    const globalReferenceByNodeId = new Map(buildGlobalResourceReferences(nodes).map((reference) => [reference.nodeId, reference]));
+    const seenNodeIds = new Set<string>();
+    return getMentionResourceNodes(node.id, nodes, connections).flatMap((contextNode): CanvasResourceReference[] => {
+        const reference = globalReferenceByNodeId.get(contextNode.id);
+        if (!reference || seenNodeIds.has(reference.nodeId)) return [];
+        seenNodeIds.add(reference.nodeId);
+        return [{ ...reference, active: true }];
+    });
 }
 
 export function getMentionResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {

@@ -55,7 +55,7 @@ import {
 import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { buildConnectionsToAdd, describeBatchConnectResult, planBatchConnections } from "@/lib/canvas/canvas-batch-connect";
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
-import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
+import { buildCanvasResourceReferences, buildGlobalResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
 import { batchSourceFilePatch, batchTypeChangePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, readBatchIntakeState, resetBatchDeclarationState, resetInterruptedBatchIntakes, setGroupSelectionPatch } from "@/lib/canvas/canvas-batch-intake";
 import { MATERIAL_UPLOAD_ACCEPT, materialFileKind, materialUploadFocus, runMaterialUploadBatch, type MaterialFileKind, type MaterialUploadMode } from "@/lib/canvas/canvas-material-upload";
@@ -2305,9 +2305,16 @@ function InfiniteCanvasPage() {
                     const isEmptyImageNode = isImageNode && !sourceNode?.metadata?.content;
                     const sourceReference =
                         isImageNode && sourceNode?.metadata?.content
-                            ? [{ id: sourceNode.id, name: `${sourceNode.title || sourceNode.id}.png`, type: sourceNode.metadata.mimeType || "image/png", dataUrl: sourceNode.metadata.content, storageKey: sourceNode.metadata.storageKey }]
-                            : [];
-                    const referenceImages = sourceReference.length ? sourceReference : generationContext.referenceImages;
+                            ? {
+                                  id: sourceNode.id,
+                                  name: `${sourceNode.title || sourceNode.id}.png`,
+                                  type: sourceNode.metadata.mimeType || "image/png",
+                                  dataUrl: sourceNode.metadata.content,
+                                  label: buildGlobalResourceReferences(nodesRef.current).find((reference) => reference.nodeId === sourceNode.id)?.label,
+                                  storageKey: sourceNode.metadata.storageKey,
+                              }
+                            : undefined;
+                    const referenceImages = [...(sourceReference ? [sourceReference] : []), ...generationContext.referenceImages.filter((reference) => reference.id !== sourceNode?.id)];
                     const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
                     const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
                     const parentConfig = NODE_DEFAULT_SIZE[isConfigNode ? CanvasNodeType.Config : isImageNode ? CanvasNodeType.Image : CanvasNodeType.Text];
