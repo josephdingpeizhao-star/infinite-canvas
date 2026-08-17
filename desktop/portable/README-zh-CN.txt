@@ -1,3 +1,5 @@
+首次部署请先阅读 FIRST-DEPLOY-CHECKLIST-zh-CN.txt。
+
 Infinite Canvas Windows 便携版 0.1.0
 
 使用方法

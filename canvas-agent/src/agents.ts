@@ -588,7 +588,7 @@ function imageExt(type = "") {
     return "jpg";
 }
 
-function codexBin() {
+export function codexBin() {
     return path.join(path.dirname(require.resolve("@openai/codex/package.json")), "bin", "codex.js");
 }
 

@@ -123,6 +123,7 @@ try {
     [void]$archive.CreateEntry("$packageName/workflow-runtime/reports/")
     [void]$archive.CreateEntry("$packageName/$batchFolderName/")
     Add-ArchiveFile -Archive $archive -SourcePath $guidePath -EntryName "$packageName/README-zh-CN.txt"
+    Add-ArchiveFile -Archive $archive -SourcePath (Join-Path $desktopRoot "portable\FIRST-DEPLOY-CHECKLIST-zh-CN.txt") -EntryName "$packageName/FIRST-DEPLOY-CHECKLIST-zh-CN.txt"
 }
 finally {
     $archive.Dispose()

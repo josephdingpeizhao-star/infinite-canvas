@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { App, Button, Input, Segmented, Tooltip } from "antd";
 import copyToClipboard from "copy-to-clipboard";
-import { Copy, FolderOpen, History, KeyRound, Link2, LoaderCircle, PlugZap, Plus, RefreshCw, RotateCcw, Square, Terminal, Trash2 } from "lucide-react";
+import { Copy, FolderOpen, History, KeyRound, Link2, LoaderCircle, LogIn, PlugZap, Plus, RefreshCw, RotateCcw, Square, Terminal, Trash2 } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import { CODEX_AUTH_POLL_INTERVAL_MS, codexAuthStatusText, normalizeCodexAuthResponse, shouldContinuePolling, type CodexAuthPhase, type CodexAuthState } from "@/lib/agent/agent-codex-auth";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAgentStore, type AgentAttachment, type AgentChatItem, type AgentEventLog, type AgentPanelTab, type AgentPendingToolCall, type AgentThreadSummary } from "@/stores/use-agent-store";
@@ -683,9 +684,86 @@ function AgentLogView({ logs, theme, context, onClear, onCopied, onCopyBlocked }
 
 function AgentConnectView({ theme, url, token, enabled, connected, activity, connectError, onUrlChange, onTokenChange, onToggleEnabled }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; url: string; token: string; enabled: boolean; connected: boolean; activity: string; connectError: string; onUrlChange: (value: string) => void; onTokenChange: (value: string) => void; onToggleEnabled: () => void }) {
     const { message } = App.useApp();
+    const endpoint = useMemo(() => url.trim().replace(/\/$/, ""), [url]);
+    const [codexAuth, setCodexAuth] = useState<CodexAuthState>({ loggedIn: false, summary: "" });
+    const [codexAuthPhase, setCodexAuthPhase] = useState<CodexAuthPhase>("idle");
+    const codexAuthRunRef = useRef(0);
+    const codexAuthTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const connectionActive = enabled && !connectError;
     const statusText = connectError ? "连接失败" : connected ? activity : enabled ? "连接中" : "未连接";
     const statusColor = connectError ? "#dc2626" : connected ? "#16a34a" : enabled ? "#d97706" : theme.node.muted;
+    const codexStatusText = codexAuthStatusText({ connected, phase: codexAuthPhase, auth: codexAuth });
+    const codexBusy = codexAuthPhase === "checking" || codexAuthPhase === "waiting";
+    const codexStatusColor = !connected ? theme.node.muted : codexAuth.loggedIn ? "#16a34a" : codexBusy ? "#d97706" : "#dc2626";
+    const stopCodexAuthWork = useCallback(() => {
+        codexAuthRunRef.current += 1;
+        if (codexAuthTimerRef.current) clearTimeout(codexAuthTimerRef.current);
+        codexAuthTimerRef.current = null;
+    }, []);
+    const readCodexAuth = useCallback(async () => normalizeCodexAuthResponse(await fetchAgentJson<unknown>(endpoint, token, "/agent/codex/auth")), [endpoint, token]);
+    const detectCodexAuth = useCallback(async () => {
+        stopCodexAuthWork();
+        if (!connected) {
+            setCodexAuth({ loggedIn: false, summary: "" });
+            setCodexAuthPhase("idle");
+            return;
+        }
+        const runId = codexAuthRunRef.current;
+        setCodexAuthPhase("checking");
+        try {
+            const auth = await readCodexAuth();
+            if (codexAuthRunRef.current !== runId) return;
+            setCodexAuth(auth);
+        } catch {
+            if (codexAuthRunRef.current !== runId) return;
+            setCodexAuth({ loggedIn: false, summary: "" });
+        }
+        if (codexAuthRunRef.current === runId) setCodexAuthPhase("ready");
+    }, [connected, readCodexAuth, stopCodexAuthWork]);
+    const beginCodexLogin = async () => {
+        stopCodexAuthWork();
+        if (!connected) return;
+        const runId = codexAuthRunRef.current;
+        try {
+            const result = await fetchAgentJson<{ started?: boolean; reason?: string }>(endpoint, token, "/agent/codex/login", { method: "POST" });
+            if (codexAuthRunRef.current !== runId) return;
+            if (result.started !== true && result.reason !== "already-running") throw new Error("官方登录未能启动，请重试");
+            setCodexAuth({ loggedIn: false, summary: "" });
+            setCodexAuthPhase("waiting");
+            let attempts = 0;
+            const poll = async () => {
+                if (codexAuthRunRef.current !== runId) return;
+                let auth = { loggedIn: false, summary: "" };
+                try {
+                    auth = await readCodexAuth();
+                    if (codexAuthRunRef.current !== runId) return;
+                    setCodexAuth(auth);
+                } catch {
+                    if (codexAuthRunRef.current !== runId) return;
+                }
+                attempts += 1;
+                if (auth.loggedIn) {
+                    setCodexAuthPhase("ready");
+                    message.success("Codex 已登录");
+                    return;
+                }
+                if (!shouldContinuePolling({ attempts, loggedIn: auth.loggedIn })) {
+                    setCodexAuthPhase("timed-out");
+                    return;
+                }
+                codexAuthTimerRef.current = setTimeout(() => void poll(), CODEX_AUTH_POLL_INTERVAL_MS);
+            };
+            codexAuthTimerRef.current = setTimeout(() => void poll(), CODEX_AUTH_POLL_INTERVAL_MS);
+        } catch (error) {
+            if (codexAuthRunRef.current !== runId) return;
+            setCodexAuthPhase("ready");
+            message.error(error instanceof Error ? error.message : "官方登录未能启动，请重试");
+        }
+    };
+    useEffect(() => {
+        void detectCodexAuth();
+        return stopCodexAuthWork;
+    }, [detectCodexAuth, stopCodexAuthWork]);
     const copyCommand = (command: string) => {
         copyToClipboard(command);
         message.success("命令已复制");
@@ -776,6 +854,33 @@ function AgentConnectView({ theme, url, token, enabled, connected, activity, con
                             <div className="rounded-md border px-2.5 py-2 text-xs leading-5" style={{ borderColor: "rgba(220,38,38,.35)", color: "#dc2626" }}>
                                 {connectError}
                             </div>
+                        ) : null}
+                    </div>
+                </div>
+                <div className="rounded-lg border p-3" style={{ borderColor: theme.node.stroke }}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                                <span className="shrink-0 text-sm font-medium leading-5">Codex 账号</span>
+                                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: connected ? codexStatusColor : theme.node.stroke, color: codexStatusColor }}>
+                                    <span className="size-1.5 shrink-0 rounded-full" style={{ background: codexStatusColor }} />
+                                    <span className="truncate">{codexStatusText}</span>
+                                </span>
+                            </div>
+                            <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                                {!connected ? "连接成功后会自动检测本机账号状态。" : codexAuthPhase === "waiting" ? "请在系统浏览器完成官方授权，然后回到这里等待自动确认。" : codexAuthPhase === "timed-out" ? "五分钟内未检测到授权结果，可重新发起官方登录。" : codexAuth.loggedIn ? "Codex 功能将使用本机已授权的官方账号。" : "首次使用时需要在系统浏览器完成一次官方授权。"}
+                            </div>
+                        </div>
+                        {connected ? (
+                            <Button
+                                className="!h-8 !px-3"
+                                type={codexAuth.loggedIn ? "default" : "primary"}
+                                icon={codexBusy ? <LoaderCircle className="size-4 animate-spin" /> : codexAuth.loggedIn ? <RefreshCw className="size-4" /> : <LogIn className="size-4" />}
+                                disabled={codexBusy}
+                                onClick={codexAuth.loggedIn ? () => void detectCodexAuth() : () => void beginCodexLogin()}
+                            >
+                                {codexAuthPhase === "checking" ? "检测中" : codexAuthPhase === "waiting" ? "等待授权" : codexAuth.loggedIn ? "重新检测" : codexAuthPhase === "timed-out" ? "再试一次" : "去官方登录"}
+                            </Button>
                         ) : null}
                     </div>
                 </div>

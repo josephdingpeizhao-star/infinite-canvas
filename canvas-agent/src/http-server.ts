@@ -3,6 +3,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { DEFAULT_PORT, ensureSiteWorkspace, loadConfig, saveConfig, updateSiteWorkspace, type CanvasAgentConfig } from "./config.js";
 import { CanvasSession } from "./canvas-session.js";
 import { archiveCodexThread, codexReasoningEffort, interruptCodexTurn, listCodexThreads, readCodexThread, resumeCodexThread, runClaudeTurn, runCodexTurn, startCodexThread, summarizeCodexThread, verifyCodexThreadWorkspace, withAgentPrompt } from "./agents.js";
+import { runLoginStatus, startLogin } from "./codex-auth.js";
 import type { AgentAttachment } from "./types.js";
 
 export function startupBannerLines(config: Pick<CanvasAgentConfig, "url" | "token">, interactive: boolean) {
@@ -50,6 +51,8 @@ export function startHttpServer() {
         res.json({ ok: true });
     });
     app.post("/api/tools", route(async (req, res) => res.json({ ok: true, result: await session.callTool(req.body?.name, req.body?.input || {}) })));
+    app.get("/agent/codex/auth", route(async (_req, res) => res.json({ ok: true, ...(await runLoginStatus()) })));
+    app.post("/agent/codex/login", (_req, res) => res.json(startLogin(emit)));
     app.get("/agent/codex/workspace", (_req, res) => {
         const workspace = ensureSiteWorkspace(config);
         res.json({ ok: true, workspace });

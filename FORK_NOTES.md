@@ -212,6 +212,11 @@
 | 208 | `desktop/shortcuts.cjs` + `desktop/shortcuts.test.cjs` + `desktop/main.cjs` + `desktop/package.json` + `desktop/scripts/package-portable.ps1` | CONN-01 桌面刷新与便携归档卫生 | 在菜单保持关闭的前提下支持五种普通/强制刷新键位；桌面测试 9 项通过（既有 6 + 新增 3）；便携归档仅按文件名过滤 `*.test.*` 文件，不改目录或其他打包行为 | 桌面断线后可直接刷新自救，交付包不携带测试文件，且不新增依赖 | — |
 | 209 | `web/dist/` + `canvas-agent/dist/` + `desktop/runtime/` + `desktop/release/` | CONN-01 最终运行副本与便携 ZIP | `web/dist` 12 个文件、2,793,049 字节，树 SHA-256 `9ddaa078f5b1bbd44d45dcf4b82fe856bbc18f6c6cea076ec3a99deb3e53f002`；Agent dist/runtime 24 个文件、139,139 字节；`InfiniteCanvas-Portable-0.1.0-x64.zip` 270,569,806 字节，SHA-256 `04FDBDDC9D494BFFB248536E51D06BCDD3665B5416D48075159F1A68BE5A105C` | ZIP 内 `*.test.*`、`render-credentials.json`、`*.bat` 均为 0，`shortcuts.cjs` 与新 Agent dist 均存在；全程零联网、零费用 | — |
 | 210 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CONN-01 版本归纳与真人待测清单 | 归纳多客户端路由、断线自愈、桌面刷新和便携归档卫生，并登记四项真人验收 | 自动测试、构建与冒烟已通过；功能仍需用户按清单终验 | — |
+| 211 | `canvas-agent/src/codex-auth.ts` + `canvas-agent/src/codex-auth.test.ts` + `canvas-agent/src/agents.ts` + `canvas-agent/src/http-server.ts` | DESKTOP-03 Codex 官方登录状态与授权入口 | 复用内置 Codex CLI 提供失败关闭的登录状态查询、单例浏览器授权进程及两条令牌保护端点；真实未登录测试只使用预建空临时 `CODEX_HOME` | 不读取或迁移账号凭据，不提供 API Key 登录，不改变既有回合错误映射和测试正文 | — |
+| 212 | `web/src/lib/agent/agent-codex-auth.ts` + `web/tests/agent-codex-auth.test.ts` + `web/src/components/canvas/canvas-local-agent-panel.tsx` | DESKTOP-03 Agent 面板 Codex 账号卡片 | 连接后自动检测账号；未登录可发起官方浏览器授权并按 3 秒、最多 100 次轮询自动翻转，断开或卸载立即清理 | 状态只留在组件内，原连接、对话、历史、日志和错误归因保持不变 | — |
+| 213 | `desktop/portable/FIRST-DEPLOY-CHECKLIST-zh-CN.txt` + `desktop/portable/README-zh-CN.txt` + `desktop/scripts/package-portable.ps1` | DESKTOP-03 首次部署检查单 | 便携包新增中文完整解压、可选渲染凭据、Codex 授权、SmartScreen、旧批次迁移与部署自检步骤；README 开头指向检查单并沿用单文件归档 | 不携带任何登录状态、渲染凭据、图片渠道 Key 或历史批次，不改 NSIS | — |
+| 214 | `web/dist/` + `canvas-agent/dist/` + `desktop/runtime/` + `desktop/release/` | DESKTOP-03 最终运行副本与便携 ZIP | Web dist/runtime 均为 12 文件、2,797,216 字节；Agent dist/runtime 均为 28 文件、149,676 字节；`InfiniteCanvas-Portable-0.1.0-x64.zip` 270,574,080 字节，SHA-256 `50C62FFE738AE4890F99AE5AD0BD9172A51244A4DE28CDBD01F77889D5F43A43` | ZIP 内检查单和 `codex-auth.js` 各 1，`*.test.*`、`render-credentials.json`、`*.bat` 均为 0；Electron 缓存失效后 electron-builder 从官方源重新取得并解压 43.4.0 分发包 | — |
+| 215 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | DESKTOP-03 版本归纳与真人待测清单 | 归纳官方登录入口与首次部署检查单，并登记本机已登录态和美工机未登录全流程真人验收 | 自动检查不替代干净 Windows 目标电脑上的浏览器授权与部署自检 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -223,6 +228,11 @@
 
 ## 新增文件
 
+- `canvas-agent/src/codex-auth.ts`：独立封装 Codex CLI 登录状态查询、十秒超时和单例官方浏览器授权进程。
+- `canvas-agent/src/codex-auth.test.ts`：覆盖状态解析、隔离未登录实测、授权防抖及令牌保护端点响应形状。
+- `web/src/lib/agent/agent-codex-auth.ts`：提供账号响应规整、轮询边界与状态文案纯函数。
+- `web/tests/agent-codex-auth.test.ts`：覆盖三秒间隔、百次上限、成功即停、响应失败关闭与全部状态文案。
+- `desktop/portable/FIRST-DEPLOY-CHECKLIST-zh-CN.txt`：随便携包交付的新电脑首次部署、授权、迁移与自检中文检查单。
 - `desktop/package.json`：Windows x64 Electron/NSIS 构建配置，生产包内置 Canvas Agent 依赖和 Codex Windows 程序。
 - `desktop/package-lock.json`：锁定桌面构建与生产依赖版本，保证后续机器使用同一套打包环境。
 - `desktop/.gitignore`：排除桌面依赖、运行副本和安装包输出，避免把本机大文件误纳入源码。
