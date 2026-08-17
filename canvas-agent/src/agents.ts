@@ -2,10 +2,10 @@ import { spawn, type ChildProcess, type StdioOptions } from "node:child_process"
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createRequire } from "node:module";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 
+import { resolveCodexCommand } from "./codex-command.js";
 import { AGENT_PROMPT, VERSION } from "./config.js";
 import type { AgentAttachment, AgentEmit } from "./types.js";
 
@@ -24,7 +24,6 @@ let codexQueue: Promise<unknown> = Promise.resolve();
 let codexApp: CodexAppClient | null = null;
 let codexThreadId = "";
 const canvasAgentMcp = canvasAgentMcpCommand();
-const require = createRequire(import.meta.url);
 
 export function withAgentPrompt(prompt: string) {
     return prompt.trim() ? `${AGENT_PROMPT}\n\n用户请求：${prompt}` : "";
@@ -157,7 +156,9 @@ class CodexAppClient {
     private constructor(private child: ChildProcess, private emit: AgentEmit) {}
 
     static async start(emit: AgentEmit) {
-        const child = spawn(process.execPath, [codexBin(), "app-server", "--stdio"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+        const codex = resolveCodexCommand();
+        if (codex.fallback) emit("agent_log", { text: codex.fallback.reason });
+        const child = spawn(codex.command, [...codex.baseArgs, "app-server", "--stdio"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, ...(codex.env ? { env: codex.env } : {}) });
         const client = new CodexAppClient(child, emit);
         const stdoutDecoder = createUtf8StreamDecoder((text) => client.read(text));
         child.stdout?.on("data", stdoutDecoder.write);
@@ -586,10 +587,6 @@ function imageExt(type = "") {
     if (type.includes("png")) return "png";
     if (type.includes("webp")) return "webp";
     return "jpg";
-}
-
-export function codexBin() {
-    return path.join(path.dirname(require.resolve("@openai/codex/package.json")), "bin", "codex.js");
 }
 
 function pipeJsonLines(child: ReturnType<typeof spawn>, emit: AgentEmit, agent: string) {

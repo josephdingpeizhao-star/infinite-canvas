@@ -1,12 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 
-import { codexBin } from "./agents.js";
+import { resolveCodexCommand } from "./codex-command.js";
 import type { AgentEmit } from "./types.js";
 
 export type CodexLoginStatus = { loggedIn: boolean; summary: string };
 export type CodexLoginStart = { started: true } | { started: false; reason: "already-running" | "start-failed" };
-type SpawnLoginProcess = (command: string, args: string[], options: { stdio: ["ignore", "pipe", "pipe"]; windowsHide: true }) => ChildProcess;
+type SpawnLoginProcess = (command: string, args: string[], options: { stdio: ["ignore", "pipe", "pipe"]; windowsHide: true; env?: NodeJS.ProcessEnv }) => ChildProcess;
 
 const LOGIN_STATUS_TIMEOUT_MS = 10_000;
 let loginProcess: ChildProcess | null = null;
@@ -30,7 +30,8 @@ export function runLoginStatus(): Promise<CodexLoginStatus> {
         };
 
         try {
-            child = spawn(process.execPath, [codexBin(), "login", "status"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+            const codex = resolveCodexCommand();
+            child = spawn(codex.command, [...codex.baseArgs, "login", "status"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, ...(codex.env ? { env: codex.env } : {}) });
         } catch (error) {
             resolve(parseLoginStatus(errorMessage(error), null));
             return;
@@ -55,7 +56,9 @@ export function startLogin(emit: AgentEmit, spawnLogin: SpawnLoginProcess = spaw
 
     let child: ChildProcess;
     try {
-        child = spawnLogin(process.execPath, [codexBin(), "login"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+        const codex = resolveCodexCommand();
+        if (codex.fallback) emit("agent_log", { text: codex.fallback.reason });
+        child = spawnLogin(codex.command, [...codex.baseArgs, "login"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, ...(codex.env ? { env: codex.env } : {}) });
     } catch (error) {
         emit("agent_error", { message: errorMessage(error) });
         return { started: false, reason: "start-failed" };
