@@ -1,0 +1,67 @@
+{
+  "name": "infinite-canvas-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Infinite Canvas Windows desktop shell",
+  "main": "main.cjs",
+  "author": "Infinite Canvas",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "test": "node --test credentials.test.cjs",
+    "build:agent": "npm --prefix ../canvas-agent run build",
+    "build:web": "npm --prefix ../web run build",
+    "sync:runtime": "node scripts/sync-runtime.mjs",
+    "prepare:python": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-python-runtime.ps1",
+    "prepare:runtime": "npm run build:agent && npm run sync:runtime && npm run prepare:python",
+    "dev": "npm run prepare:runtime && electron .",
+    "smoke": "npm run prepare:runtime && electron . --smoke-test",
+    "dist:dir": "npm run prepare:runtime && electron-builder --dir --win --x64",
+    "dist:win": "npm run prepare:runtime && electron-builder --win nsis --x64",
+    "dist:zip": "npm run dist:dir && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable.ps1"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@openai/codex": "0.139.0",
+    "express": "5.2.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "electron": "43.4.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.basketikun.infinitecanvas",
+    "productName": "Infinite Canvas",
+    "asar": false,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "credentials.cjs",
+      "preload.cjs",
+      "runtime/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "InfiniteCanvas-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Infinite Canvas"
+    }
+  }
+}

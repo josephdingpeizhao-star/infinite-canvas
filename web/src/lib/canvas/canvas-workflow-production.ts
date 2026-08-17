@@ -316,7 +316,7 @@ export function buildProductionCommand(
           ? "run: next"
           : quote?.remainingCount === 0
             ? "run: next"
-            : state.producedCount > 0 || state.status === "paused"
+            : state.producedCount > 0
               ? "retry: renders"
               : "run: next";
     if (!readExpectedImageSet(state.totalCount, state.expectedConfigIds)) throw new Error(WORKFLOW_COUNT_DATA_MISSING_MESSAGE);

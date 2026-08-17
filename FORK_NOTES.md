@@ -202,6 +202,11 @@
 | 198 | `web/src/lib/canvas/canvas-resource-references.ts` + `web/src/components/canvas/canvas-node-generation.ts` + `web/src/components/canvas/canvas-node.tsx` + `web/src/components/canvas/canvas-config-composer.tsx` + `web/src/pages/canvas/project.tsx` + `web/src/lib/image-reference-prompt.ts` + `web/src/lib/seedance-video.ts` + `web/src/types/image.ts` + `web/src/types/media.ts` | 资源编号单轨化 | 全局编号成为唯一编号语言：角标单枚左上激活变色，@ 候选与配置节点胶囊统一全局编号（候选仍限已连线素材），Config 连线图默认全送，图片自身生成自身置前并入连线图，注入编号带 label 回落 | 消除双编号并存的杂乱、@ 所见即所得；免连线引用经真实试用后撤除，独立图片/视频页与批次链路零变化 | — |
 | 199 | `web/src/components/canvas/canvas-resource-mention-textarea.tsx` | mention 输入框光标与 @ 触发 | textarea 提升为定位元素使光标不再被高亮层遮挡；@ 触发正则去掉行首/空白前置，与配置节点一致 | 有连线素材的输入框光标可见；已有文字后输入 @ 也能弹出引用菜单 | — |
 | 200 | `web/src/components/canvas/canvas-resource-mention-textarea.tsx` | mention 高亮胶囊文字度量 | 胶囊去掉水平内边距与字重变化，高亮只用背景/颜色/圆角/描边 | 高亮层与 textarea 逐像素对齐，插入引用后光标、点击定位与换行不再错位 | — |
+| 201 | `desktop/` | Electron 主进程、预加载、运行副本同步与 Windows x64 NSIS 配置 | 新增独立桌面壳；固定本机画布端口，启动或复用 Canvas Agent，注入既有连接信息，退出时只回收自身进程；安装包携带生产依赖和 Codex Windows 程序 | 不改网页业务与 Agent 接口，让无开发环境的 Windows 电脑可安装运行，并为后续官方 Codex 登录界面留出边界 | — |
+| 202 | `README.md` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | 桌面版入口、版本归纳与真人待测清单 | 增加桌面构建入口、用户可感知说明，以及无开发环境安装、服务回收、存储和登录边界验收项 | 自动构建与冒烟不替代干净 Windows 电脑上的真人安装验收 | — |
+| 203 | `desktop/package.json` + `desktop/scripts/package-portable.ps1` + `desktop/portable/README-zh-CN.txt` + 桌面说明 | Windows x64 免安装便携 ZIP | 从已构建的 `win-unpacked` 生成带单一顶层目录的 ZIP，并附完整解压、启动和账号安全说明 | 另一台电脑无需开发环境即可启动；不打包个人 Codex 凭据，官方账号授权边界不变 | — |
+| 204 | `desktop/main.cjs` + `desktop/scripts/prepare-python-runtime.ps1` + `desktop/scripts/package-portable.ps1` + `desktop/package.json` + 便携/桌面说明 | 完整便携工作台与品类解锁 | 画布端口对齐 3000；自动启停 17372/17373；ZIP 加入 Python 3.12、Pillow、jsonschema、工作台运行文件、完整 `.agents/skills`、`categories` 与空白批次目录；冒烟真实读取 3 类品类 | 信息卡草稿恢复“单品/套装”可选，旧批次放入解压目录 `杯类`；不携带历史批次、Codex 凭据或图片渠道 API Key，网页版源码与 `web/dist` 不改 | — |
+| 205 | `desktop/credentials.cjs` + `desktop/credentials.test.cjs` + `desktop/main.cjs` + `desktop/package.json` + `desktop/.gitignore` + `desktop/README.md` + `desktop/portable/README-zh-CN.txt` + `web/src/lib/canvas/canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` + `web/dist/` + 变更说明 | DESKTOP-02 便携版真实出图与渲染闸门续跑 | 从 EXE 同目录的同构凭据文件失败关闭地加载三项渲染环境变量，外部环境保留优先级；未出图的暂停/失败状态发送 `run: next`，已出图仍发送 `retry: renders`；补离线测试、说明与运行副本 | 制作机无需外部脚本即可在界面内通过费用确认进入真实渲染；无凭据电脑保持渲染锁定，既有工作流和费用确认不变 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -213,6 +218,18 @@
 
 ## 新增文件
 
+- `desktop/package.json`：Windows x64 Electron/NSIS 构建配置，生产包内置 Canvas Agent 依赖和 Codex Windows 程序。
+- `desktop/package-lock.json`：锁定桌面构建与生产依赖版本，保证后续机器使用同一套打包环境。
+- `desktop/.gitignore`：排除桌面依赖、运行副本和安装包输出，避免把本机大文件误纳入源码。
+- `desktop/main.cjs`：桌面窗口、固定本机静态站点、Agent 启停/复用、外链隔离与单实例生命周期。
+- `desktop/credentials.cjs`：从调用方指定的 JSON 文件失败关闭地加载真实渲染环境变量，不依赖 Electron 或全局路径。
+- `desktop/credentials.test.cjs`：使用 Node 内置测试运行器覆盖合法、缺失、损坏和字段校验等凭据加载边界。
+- `desktop/preload.cjs`：只把既有本机 Agent 地址和连接令牌写入桌面页面原有本地连接键，不暴露 Node API。
+- `desktop/scripts/sync-runtime.mjs`：在严格校验的 `desktop/runtime` 范围内同步最新 `web/dist` 与 `canvas-agent/dist`，供开发冒烟和安装包共用。
+- `desktop/scripts/prepare-python-runtime.ps1`：从 Python 官方地址准备固定 3.12.10 x64 便携环境，并装入工作台所需的 Pillow 与 jsonschema 依赖。
+- `desktop/scripts/package-portable.ps1`：读取已构建的 `win-unpacked`、独立 Python 和主仓只读运行切片，在已校验的 `desktop/release` 范围内生成单目录完整便携 ZIP。
+- `desktop/portable/README-zh-CN.txt`：随便携 ZIP 交付的中文解压、启动、环境与账号安全说明；使用 ASCII 文件名兼容旧版 Windows 解压工具。
+- `desktop/README.md`：桌面版构建、安装包位置、固定端口、登录阶段与未签名提示。
 - `canvas-agent/src/agents.test.ts`：覆盖可选模型/档位 thread 参数、档位白名单与脱敏拒绝、异常重建保留、completed / failed / interrupted 状态、非空助手答复要求及错误通知脱敏；只测试通用 canvas-agent 边界，不含工作流语义。
 - `web/src/lib/canvas/canvas-workflow-demo.ts`：M1-a 演示合同与既有回归保留；M1-b 新增唯一命令、排队确认和后台停顿超时合同，浏览器本地绘图序列不再由页面控制器调用。
 - `web/src/components/canvas/canvas-workflow-node.tsx`：工作流机器卡、排队/制作/完成/失败等人话状态及只读演示信息面板。

@@ -155,6 +155,26 @@ describe("canvas workflow production", () => {
         expect(buildProductionCommand(partial, "cup", "request-002", 2_000).content).toContain("retry: renders");
     });
 
+    test("continues a paused render gate that has not produced an image", () => {
+        const paused = readProductionState({ workflowProduction: productionMetadata("paused", 0, 3, 2) });
+        expect(buildProductionCommand(paused, "cup", "request-paused-empty", 2_100).content.split("\n").at(-1)).toBe("run: next");
+    });
+
+    test("continues a failed run that has not produced an image", () => {
+        const failed = readProductionState({ workflowProduction: productionMetadata("failed", 0, 3, 2) });
+        expect(buildProductionCommand(failed, "cup", "request-failed-empty", 2_200).content.split("\n").at(-1)).toBe("run: next");
+    });
+
+    test("keeps render retry semantics after a paused run has produced an image", () => {
+        const paused = readProductionState({ workflowProduction: productionMetadata("paused", 1, 3, 2) });
+        expect(buildProductionCommand(paused, "cup", "request-paused-produced", 2_300).content.split("\n").at(-1)).toBe("retry: renders");
+    });
+
+    test("keeps zero-remaining quote priority for an empty paused run", () => {
+        const paused = readProductionState({ workflowProduction: productionMetadata("paused", 0, 3, 2) });
+        expect(buildProductionCommand(paused, "cup", "request-paused-complete", 2_400, undefined, { remainingCount: 0 }).content.split("\n").at(-1)).toBe("run: next");
+    });
+
     test("allows independent repeated commands from the same terminal machine state and batch", () => {
         const failed = readProductionState({ workflowProduction: productionMetadata("failed", 0, 3, 2) });
         const first = buildProductionCommand(failed, "cup", "request-first", 1_000);
