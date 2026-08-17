@@ -37,6 +37,9 @@ function Add-ArchiveTree {
     $resolvedRoot = [System.IO.Path]::GetFullPath($TreeRoot)
     $sourcePrefix = $resolvedRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
     foreach ($file in Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File -Force | Sort-Object FullName) {
+        if ($file.Name -like "*.test.*") {
+            continue
+        }
         if (-not $file.FullName.StartsWith($sourcePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Refusing to package a file outside its declared source tree: $($file.FullName)"
         }

@@ -8,6 +8,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAgentStore, type AgentAttachment, type AgentChatItem, type AgentEventLog, type AgentPanelTab, type AgentPendingToolCall, type AgentThreadSummary } from "@/stores/use-agent-store";
+import { nextRetryDelayMs, shouldKeepRetrying } from "@/lib/canvas/agent-connection";
 import { summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { isSiteTool, runSiteTool, SITE_TOOL_LABELS } from "@/lib/agent/agent-site-tools";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
@@ -45,6 +46,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
     const { message, modal } = App.useApp();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const [connectionRun, setConnectionRun] = useState(0);
     const { width, url, token, connected, enabled, prompt, attachments, sending, waiting, messages, eventLogs, threads, activeThreadId, workspacePath, loadingThreads, activeTab, confirmTools, activity, connectError, pendingTool, canvasContext, setAgentState, addMessage: pushMessage, addEventLog: pushEventLog, clearEventLogs } = useAgentStore();
     const listRef = useRef<HTMLDivElement>(null);
     const canvasContextRef = useRef(canvasContext);
@@ -52,6 +54,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
     const pendingToolRef = useRef<AgentPendingToolCall | null>(null);
     const autoConnectRef = useRef(false);
     const connectedRef = useRef(false);
+    const everConnectedRef = useRef(false);
     const errorLoggedRef = useRef(false);
     const attachmentUrlsRef = useRef(new Set<string>());
     const clientIdRef = useRef(typeof crypto === "undefined" ? `${Date.now()}` : crypto.randomUUID());
@@ -99,56 +102,104 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
         localStorage.setItem("canvas-agent-url", endpoint);
         localStorage.setItem("canvas-agent-token", token);
         const clientId = clientIdRef.current;
-        const source = new EventSource(`${endpoint}/events?token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(clientId)}`);
-        source.addEventListener("hello", () => {
-            errorLoggedRef.current = false;
-            connectedRef.current = true;
-            setAgentState({ connected: true, activity: "已连接", connectError: "", messages: useAgentStore.getState().messages.filter((item) => !isConnectionErrorMessage(item)) });
-            if (!headless) message.success("本地 Agent 已连接");
-            void postState(endpoint, token, clientId, canvasContextRef.current?.snapshot || null);
-        });
-        source.addEventListener("tool_call", (event) => {
-            const data = parseEventData<AgentPendingToolCall>(event);
-            if (data) void handleToolCall(endpoint, token, data);
-        });
-        source.addEventListener("agent_event", (event) => {
-            const data = parseEventData<AgentEventPayload>(event);
-            if (data) handleAgentEvent(data);
-        });
-        source.addEventListener("agent_log", (event) => {
-            const text = parseEventData<{ text?: unknown }>(event)?.text;
-            addEventLog("日志", text, text);
-        });
-        source.addEventListener("agent_error", (event) => {
-            const message = parseEventData<{ message?: unknown }>(event)?.message;
-            setAgentState({ activity: "出错", waiting: false });
-            addMessage({ role: "error", title: "错误", text: normalizeText(message) });
-            addEventLog("错误", message, message);
-        });
-        source.addEventListener("agent_done", () => {
-            setAgentState({ activity: "完成", waiting: false, sending: false });
-            void loadThreads();
-        });
-        source.onerror = () => {
-            const wasConnected = connectedRef.current;
-            const text = wasConnected ? "本地 Agent 连接失败或已断开" : "连接失败，请检查地址和 token";
-            if (!errorLoggedRef.current || wasConnected) {
-                addEventLog(wasConnected ? "连接断开" : "连接失败", { endpoint, error: text });
-                if (!headless) message.error(text);
-            }
-            errorLoggedRef.current = true;
-            connectedRef.current = false;
-            clearAgentSession({ activity: wasConnected ? "连接断开" : "连接失败", connected: false, connectError: text });
-            if (!wasConnected) {
-                source.close();
-                setAgentState({ enabled: false });
-            }
+        let source: EventSource | null = null;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
+        let retryAttempt = 0;
+        let disposed = false;
+
+        const clearRetryTimer = () => {
+            if (retryTimer) clearTimeout(retryTimer);
+            retryTimer = null;
         };
+        const connect = () => {
+            if (disposed || !useAgentStore.getState().enabled) return;
+            clearRetryTimer();
+            source?.close();
+            setAgentState({ connected: false, activity: "连接中", connectError: "" });
+            const nextSource = new EventSource(`${endpoint}/events?token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(clientId)}`);
+            source = nextSource;
+            const isCurrentSource = () => !disposed && source === nextSource;
+            const canHandleEvents = () => isCurrentSource() && useAgentStore.getState().enabled;
+            nextSource.addEventListener("hello", () => {
+                if (!canHandleEvents()) return;
+                clearRetryTimer();
+                retryAttempt = 0;
+                everConnectedRef.current = true;
+                errorLoggedRef.current = false;
+                connectedRef.current = true;
+                setAgentState({ connected: true, activity: "已连接", connectError: "", messages: useAgentStore.getState().messages.filter((item) => !isConnectionErrorMessage(item)) });
+                if (!headless) message.success("本地 Agent 已连接");
+                void postState(endpoint, token, clientId, canvasContextRef.current?.snapshot || null);
+            });
+            nextSource.addEventListener("tool_call", (event) => {
+                if (!canHandleEvents()) return;
+                const data = parseEventData<AgentPendingToolCall>(event);
+                if (data) void handleToolCall(endpoint, token, data);
+            });
+            nextSource.addEventListener("agent_event", (event) => {
+                if (!canHandleEvents()) return;
+                const data = parseEventData<AgentEventPayload>(event);
+                if (data) handleAgentEvent(data);
+            });
+            nextSource.addEventListener("agent_log", (event) => {
+                if (!canHandleEvents()) return;
+                const text = parseEventData<{ text?: unknown }>(event)?.text;
+                addEventLog("日志", text, text);
+            });
+            nextSource.addEventListener("agent_error", (event) => {
+                if (!canHandleEvents()) return;
+                const error = parseEventData<{ message?: unknown }>(event)?.message;
+                setAgentState({ activity: "出错", waiting: false });
+                addMessage({ role: "error", title: "错误", text: normalizeText(error) });
+                addEventLog("错误", error, error);
+            });
+            nextSource.addEventListener("agent_done", () => {
+                if (!canHandleEvents()) return;
+                setAgentState({ activity: "完成", waiting: false, sending: false });
+                void loadThreads();
+            });
+            nextSource.onerror = () => {
+                if (!isCurrentSource()) return;
+                if (!useAgentStore.getState().enabled) {
+                    nextSource.close();
+                    source = null;
+                    return;
+                }
+                const everConnected = everConnectedRef.current;
+                const wasConnected = connectedRef.current;
+                const text = everConnected ? "本地 Agent 连接失败或已断开" : "连接失败，请检查地址和 token";
+                if (!errorLoggedRef.current || wasConnected) {
+                    addEventLog(everConnected ? "连接断开" : "连接失败", { endpoint, error: text });
+                    if (!headless) message.error(text);
+                }
+                errorLoggedRef.current = true;
+                connectedRef.current = false;
+                nextSource.close();
+                source = null;
+                const keepRetrying = shouldKeepRetrying({ everConnected, attempt: retryAttempt });
+                clearAgentSession({ activity: keepRetrying ? "连接中" : everConnected ? "连接断开" : "连接失败", connected: false, connectError: keepRetrying ? "" : text });
+                if (!keepRetrying) return;
+                const delay = nextRetryDelayMs(retryAttempt);
+                retryAttempt += 1;
+                retryTimer = setTimeout(connect, delay);
+            };
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible" || connectedRef.current || !useAgentStore.getState().enabled) return;
+            clearRetryTimer();
+            connect();
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        connect();
         return () => {
-            source.close();
+            disposed = true;
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            clearRetryTimer();
+            source?.close();
+            source = null;
             connectedRef.current = false;
         };
-    }, [enabled, endpoint, loadThreads, message, setAgentState, token]);
+    }, [connectionRun, enabled, endpoint, loadThreads, message, setAgentState, token]);
 
     useEffect(() => {
         if (connected) void loadThreads();
@@ -329,6 +380,12 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
 
     const toggleAgentConnection = async () => {
         if (enabled) {
+            if (!connected && connectError) {
+                errorLoggedRef.current = false;
+                setAgentState({ connected: false, activity: "连接中", connectError: "" });
+                setConnectionRun((run) => run + 1);
+                return;
+            }
             clearAgentSession({ enabled: false, connected: false, activity: "离线", connectError: "" });
             return;
         }
@@ -626,6 +683,7 @@ function AgentLogView({ logs, theme, context, onClear, onCopied, onCopyBlocked }
 
 function AgentConnectView({ theme, url, token, enabled, connected, activity, connectError, onUrlChange, onTokenChange, onToggleEnabled }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; url: string; token: string; enabled: boolean; connected: boolean; activity: string; connectError: string; onUrlChange: (value: string) => void; onTokenChange: (value: string) => void; onToggleEnabled: () => void }) {
     const { message } = App.useApp();
+    const connectionActive = enabled && !connectError;
     const statusText = connectError ? "连接失败" : connected ? activity : enabled ? "连接中" : "未连接";
     const statusColor = connectError ? "#dc2626" : connected ? "#16a34a" : enabled ? "#d97706" : theme.node.muted;
     const copyCommand = (command: string) => {
@@ -693,8 +751,8 @@ function AgentConnectView({ theme, url, token, enabled, connected, activity, con
                                 默认自动读取 Local URL 和 Connect token，失败时再手动填写。
                             </div>
                         </div>
-                        <Button className="!h-8 !px-3" type={enabled ? "default" : "primary"} icon={<PlugZap className="size-4" />} onClick={onToggleEnabled}>
-                            {enabled ? "断开" : "连接"}
+                        <Button className="!h-8 !px-3" type={connectionActive ? "default" : "primary"} icon={<PlugZap className="size-4" />} onClick={onToggleEnabled}>
+                            {connectionActive ? "断开" : "连接"}
                         </Button>
                     </div>
                     <div className="mt-3 grid gap-2.5">

@@ -207,6 +207,11 @@
 | 203 | `desktop/package.json` + `desktop/scripts/package-portable.ps1` + `desktop/portable/README-zh-CN.txt` + 桌面说明 | Windows x64 免安装便携 ZIP | 从已构建的 `win-unpacked` 生成带单一顶层目录的 ZIP，并附完整解压、启动和账号安全说明 | 另一台电脑无需开发环境即可启动；不打包个人 Codex 凭据，官方账号授权边界不变 | — |
 | 204 | `desktop/main.cjs` + `desktop/scripts/prepare-python-runtime.ps1` + `desktop/scripts/package-portable.ps1` + `desktop/package.json` + 便携/桌面说明 | 完整便携工作台与品类解锁 | 画布端口对齐 3000；自动启停 17372/17373；ZIP 加入 Python 3.12、Pillow、jsonschema、工作台运行文件、完整 `.agents/skills`、`categories` 与空白批次目录；冒烟真实读取 3 类品类 | 信息卡草稿恢复“单品/套装”可选，旧批次放入解压目录 `杯类`；不携带历史批次、Codex 凭据或图片渠道 API Key，网页版源码与 `web/dist` 不改 | — |
 | 205 | `desktop/credentials.cjs` + `desktop/credentials.test.cjs` + `desktop/main.cjs` + `desktop/package.json` + `desktop/.gitignore` + `desktop/README.md` + `desktop/portable/README-zh-CN.txt` + `web/src/lib/canvas/canvas-workflow-production.ts` + `web/tests/canvas-workflow-production.test.ts` + `web/dist/` + 变更说明 | DESKTOP-02 便携版真实出图与渲染闸门续跑 | 从 EXE 同目录的同构凭据文件失败关闭地加载三项渲染环境变量，外部环境保留优先级；未出图的暂停/失败状态发送 `run: next`，已出图仍发送 `retry: renders`；补离线测试、说明与运行副本 | 制作机无需外部脚本即可在界面内通过费用确认进入真实渲染；无凭据电脑保持渲染锁定，既有工作流和费用确认不变 | — |
+| 206 | `canvas-agent/src/canvas-session.ts` + `canvas-agent/src/canvas-session.test.ts` | CONN-01 多客户端会话与活跃画布路由 | 以每客户端 session 隔离状态；只在推过 state 的连接中选择最近活跃者，排除纯监听连接，并覆盖同 ID 重连和活跃连接断开转移；Canvas Agent 23 项通过（既有 14 + 新增 9） | 多客户端不再互相覆盖或随机回落，单客户端链路与原错误文案保持不变 | — |
+| 207 | `web/src/lib/canvas/agent-connection.ts` + `web/src/components/canvas/canvas-local-agent-panel.tsx` + `web/tests/agent-connection.test.ts` | CONN-01 断线自愈 | 连接失败按 1 / 2 / 4 / 8 / 15 秒退避；有成功史时无限重试、冷启动最多 3 次，页面恢复可见时立即补连，hello 后重推画布状态，并以连接实例与生命周期双门拦截迟到事件；Web 240 项 / 1120 次断言通过（既有 236 / 1110 + 新增 4 / 10） | 用户未显式断开时可持续自愈，配置错误仍快速反馈，既有画布状态推送语义不变 | — |
+| 208 | `desktop/shortcuts.cjs` + `desktop/shortcuts.test.cjs` + `desktop/main.cjs` + `desktop/package.json` + `desktop/scripts/package-portable.ps1` | CONN-01 桌面刷新与便携归档卫生 | 在菜单保持关闭的前提下支持五种普通/强制刷新键位；桌面测试 9 项通过（既有 6 + 新增 3）；便携归档仅按文件名过滤 `*.test.*` 文件，不改目录或其他打包行为 | 桌面断线后可直接刷新自救，交付包不携带测试文件，且不新增依赖 | — |
+| 209 | `web/dist/` + `canvas-agent/dist/` + `desktop/runtime/` + `desktop/release/` | CONN-01 最终运行副本与便携 ZIP | `web/dist` 12 个文件、2,793,049 字节，树 SHA-256 `9ddaa078f5b1bbd44d45dcf4b82fe856bbc18f6c6cea076ec3a99deb3e53f002`；Agent dist/runtime 24 个文件、139,139 字节；`InfiniteCanvas-Portable-0.1.0-x64.zip` 270,569,806 字节，SHA-256 `04FDBDDC9D494BFFB248536E51D06BCDD3665B5416D48075159F1A68BE5A105C` | ZIP 内 `*.test.*`、`render-credentials.json`、`*.bat` 均为 0，`shortcuts.cjs` 与新 Agent dist 均存在；全程零联网、零费用 | — |
+| 210 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | CONN-01 版本归纳与真人待测清单 | 归纳多客户端路由、断线自愈、桌面刷新和便携归档卫生，并登记四项真人验收 | 自动测试、构建与冒烟已通过；功能仍需用户按清单终验 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -276,6 +281,11 @@
 - `web/src/lib/canvas/canvas-project-delete.ts`：DL-01 项目删除计划、批次号收集、幸存项目共享引用拦截、17373 严格预检/执行合同、确认文字与结果归类纯函数。
 - `web/src/hooks/use-canvas-project-delete.ts`：DL-01 四入口共用状态机；只在后端全成功后等待前端项目落盘并清理素材，停步后不自动重试。
 - `web/tests/canvas-project-delete.test.ts`：覆盖信息卡收集边界、共享批次 fail-closed、固定请求合同、两段确认、删除全部、空画布、失败停步、持久化顺序和回收按钮移除。
+- `canvas-agent/src/canvas-session.test.ts`：覆盖多客户端状态隔离、活跃者路由与转移、纯监听排除、同 ID 重连和单客户端完整回执链路。
+- `web/src/lib/canvas/agent-connection.ts`：提供无依赖的重连退避与继续重试纯函数，不感知组件或画布状态。
+- `web/tests/agent-connection.test.ts`：锁定 1 / 2 / 4 / 8 / 15 秒退避、成功史无限重试和冷启动 3 次边界。
+- `desktop/shortcuts.cjs`：把桌面普通刷新与强制刷新键位判定收敛为无 Electron 依赖的纯函数。
+- `desktop/shortcuts.test.cjs`：覆盖五个刷新键位及 Alt、keyUp 和其他按键的负例矩阵。
 
 ## 上游同步纪律
 

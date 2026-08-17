@@ -4,6 +4,7 @@ const http = require("node:http");
 const path = require("node:path");
 const { app, BrowserWindow, dialog, Menu, shell } = require("electron");
 const { loadRenderCredentialEnv } = require("./credentials.cjs");
+const { resolveReloadAction } = require("./shortcuts.cjs");
 
 const WEB_HOST = "127.0.0.1";
 const WEB_PORT = 3000;
@@ -160,6 +161,17 @@ function createWindow() {
         },
     });
 
+    window.webContents.on("before-input-event", (event, input) => {
+        const action = resolveReloadAction(input);
+        if (!action) return;
+
+        event.preventDefault();
+        if (action === "force-reload") {
+            window.webContents.reloadIgnoringCache();
+            return;
+        }
+        window.webContents.reload();
+    });
     window.webContents.setWindowOpenHandler(({ url }) => {
         if (isExternalUrl(url)) void shell.openExternal(url);
         return { action: "deny" };
