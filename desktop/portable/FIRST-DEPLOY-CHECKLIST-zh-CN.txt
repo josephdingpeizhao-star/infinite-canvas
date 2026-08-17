@@ -2,7 +2,7 @@ Infinite Canvas Windows 便携版首次部署检查单
 
 一、首次部署（三步）
 1. 右键 ZIP 压缩包，选择“全部解压”，再打开解压后的完整文件夹。不要直接在压缩包中运行，也不要只复制 Infinite Canvas.exe。
-2. 如需真实出图，可把现有 render-credentials.json 放到 Infinite Canvas.exe 同一目录；不放或文件无效时，真实渲染保持锁定，画布、批次登记和 Codex 等其他功能仍可使用。
+2. 压缩包已内置出图凭据，完整解压后即可真实出图，无需另放文件；如需更换或停用，替换或删除 Infinite Canvas.exe 同目录的 render-credentials.json 后重启程序。
 3. 双击“Infinite Canvas.exe”。首次运行若 Windows SmartScreen 显示“已保护你的电脑”，请先确认压缩包来源和校验值，再点“更多信息”→“仍要运行”。
 
 二、首次 Codex 授权
@@ -11,7 +11,7 @@ Infinite Canvas Windows 便携版首次部署检查单
 3. 在系统浏览器中完成官方账号授权。
 4. 回到 Agent 面板，等待状态自动变为“已登录”；若浏览器没有自动打开，可到面板“日志”页查看官方授权地址。
 
-为保护账号安全，便携包不会携带其他电脑的 Codex 登录状态，也不要复制任何账号凭据文件、Cookie 或浏览器用户数据。
+为保护账号安全，便携包不会携带其他电脑的 Codex 登录状态，也不要复制 Codex 的 auth.json、Cookie 或浏览器用户数据。
 
 三、旧批次迁移
 1. 把旧电脑“杯类\<批次目录>”完整复制到本程序目录的“杯类\”中，不要改变批次目录名。

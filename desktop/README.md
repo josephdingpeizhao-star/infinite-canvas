@@ -30,11 +30,11 @@ npm install
 npm run dist:zip
 ```
 
-便携包输出到 `desktop/release/InfiniteCanvas-Portable-0.1.0-x64.zip`。发送到另一台 Windows x64 电脑后，必须先完整解压，再双击其中的 `Infinite Canvas.exe`；不需要另外安装 Node、Python、Bun、npm 或 Codex CLI。ZIP 不包含制作电脑的 Codex 登录凭据、图片渠道 API Key 或历史批次。
+便携包输出到 `desktop/release/InfiniteCanvas-Portable-0.1.0-x64.zip`。发送到另一台 Windows x64 电脑后，必须先完整解压，再双击其中的 `Infinite Canvas.exe`；不需要另外安装 Node、Python、Bun、npm 或 Codex CLI。ZIP 不包含制作电脑的 Codex 登录凭据或历史批次；出图凭据按下节规则内置。
 
 ## 真实出图配置
 
-需要真实出图时，把现有的 `render-credentials.json` 复制到 `Infinite Canvas.exe` 同一目录，再启动桌面版。文件不存在或内容无效时，真实渲染保持锁定，其他功能照常启动。该凭据文件不会进入便携 ZIP，也已排除在 Git 之外。
+打包时由 `package-portable.ps1` 从 `desktop/render-credentials.json` 注入便携 ZIP，压缩包完整解压后即可真实出图；源文件缺失、JSON 无法解析、`api_key` 为空或 `base_url` 不是 HTTP(S) 地址时，打包会直接失败。运行时文件不存在或内容无效时，真实渲染仍保持锁定，其他功能照常启动；如需更换或停用，请替换或删除 `Infinite Canvas.exe` 同目录的该文件后重启程序。该文件经 `.gitignore` 排除，永不进入 Git。
 
 完整便携版使用固定本机地址 `http://127.0.0.1:3000` 承载画布，启动 `http://127.0.0.1:17371` 的内置 Canvas Agent，并自动启动 17372/17373 工作台服务。若 17371 已有可用 Agent，桌面版会复用它且退出时不会关闭它；否则退出桌面版时会一并结束自己启动的 Agent。自己启动的工作台服务也会随桌面版退出。
 

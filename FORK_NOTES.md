@@ -217,6 +217,9 @@
 | 213 | `desktop/portable/FIRST-DEPLOY-CHECKLIST-zh-CN.txt` + `desktop/portable/README-zh-CN.txt` + `desktop/scripts/package-portable.ps1` | DESKTOP-03 首次部署检查单 | 便携包新增中文完整解压、可选渲染凭据、Codex 授权、SmartScreen、旧批次迁移与部署自检步骤；README 开头指向检查单并沿用单文件归档 | 不携带任何登录状态、渲染凭据、图片渠道 Key 或历史批次，不改 NSIS | — |
 | 214 | `web/dist/` + `canvas-agent/dist/` + `desktop/runtime/` + `desktop/release/` | DESKTOP-03 最终运行副本与便携 ZIP | Web dist/runtime 均为 12 文件、2,797,216 字节；Agent dist/runtime 均为 28 文件、149,676 字节；`InfiniteCanvas-Portable-0.1.0-x64.zip` 270,574,080 字节，SHA-256 `50C62FFE738AE4890F99AE5AD0BD9172A51244A4DE28CDBD01F77889D5F43A43` | ZIP 内检查单和 `codex-auth.js` 各 1，`*.test.*`、`render-credentials.json`、`*.bat` 均为 0；Electron 缓存失效后 electron-builder 从官方源重新取得并解压 43.4.0 分发包 | — |
 | 215 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | DESKTOP-03 版本归纳与真人待测清单 | 归纳官方登录入口与首次部署检查单，并登记本机已登录态和美工机未登录全流程真人验收 | 自动检查不替代干净 Windows 目标电脑上的浏览器授权与部署自检 | — |
+| 216 | `desktop/scripts/package-portable.ps1` + 三份桌面说明 | DESKTOP-04 便携 ZIP 内置渲染凭据 | 打包前失败关闭地校验本机忽略文件的存在性、JSON、非空 `api_key` 与 HTTP(S) `base_url`，仅由便携脚本注入 ZIP 根；说明同步为完整解压即出图及替换/删除后重启 | 杜绝产出无法真实出图的便携包；不改 `build.files`、运行时凭据路径、Codex 账号边界或 Git 排除规则 | — |
+| 217 | `docs/content/docs/progress/pending-test.mdx` | DESKTOP-04 真人待测清单 | 登记新 ZIP 在干净目录完整解压、不另放文件并经费用卡批准后完成一次真实出图闭环 | 自动离线校验不产生费用，真实扣费闭环必须由用户明确批准并验收 | — |
+| 218 | `desktop/release/` | DESKTOP-04 最终便携 ZIP | 重建 `win-unpacked` 并生成 270,574,411 字节、2,922 条目（文件 2,920＋目录 2）的 `InfiniteCanvas-Portable-0.1.0-x64.zip`，SHA-256 `14BDF9BE8136A709DE902DD4A2452E94082524CEF66890B5555237ADF5D6B37F`（顾问终验以带写入断言的三发变异复验后重新打包，内容与执行方产物等价，仅凭据条目时间戳致哈希不同） | ZIP 根内渲染凭据恰 1 条且与本机忽略源文件逐字节一致；`*.test.*`、`*.bat`、`auth.json` 均为 0；Electron 43.4.0 由构建链从官方源取得 | — |
 
 ## 退役锚点（编号不复用）
 

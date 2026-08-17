@@ -7,6 +7,7 @@ $desktopRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $releaseRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot "release"))
 $sourceRoot = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "win-unpacked"))
 $guidePath = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot "portable\README-zh-CN.txt"))
+$credentialPath = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot "render-credentials.json"))
 $pythonRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot "vendor\python-runtime"))
 $workspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot "..\.."))
 $packageName = "InfiniteCanvas-Portable-0.1.0-x64"
@@ -69,6 +70,25 @@ if (-not $zipPath.StartsWith($releasePrefix, [System.StringComparison]::OrdinalI
 if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot "Infinite Canvas.exe") -PathType Leaf)) {
     throw "Portable source is incomplete: Infinite Canvas.exe is missing"
 }
+if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
+    throw "Portable render credentials are missing: $credentialPath"
+}
+try {
+    $renderCredentials = Get-Content -LiteralPath $credentialPath -Raw | ConvertFrom-Json -ErrorAction Stop
+}
+catch {
+    throw "Portable render credentials are invalid: JSON parsing failed"
+}
+if (-not ($renderCredentials.api_key -is [string]) -or [string]::IsNullOrWhiteSpace($renderCredentials.api_key)) {
+    throw "Portable render credentials are invalid: api_key must be a non-empty string"
+}
+if (-not ($renderCredentials.base_url -is [string]) -or -not [System.Text.RegularExpressions.Regex]::IsMatch(
+        $renderCredentials.base_url,
+        "^https?://",
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )) {
+    throw "Portable render credentials are invalid: base_url must start with http:// or https://"
+}
 if (-not (Test-Path -LiteralPath $guidePath -PathType Leaf)) {
     throw "Portable guide is missing: $guidePath"
 }
@@ -122,6 +142,7 @@ try {
     }
     [void]$archive.CreateEntry("$packageName/workflow-runtime/reports/")
     [void]$archive.CreateEntry("$packageName/$batchFolderName/")
+    Add-ArchiveFile -Archive $archive -SourcePath $credentialPath -EntryName "$packageName/render-credentials.json"
     Add-ArchiveFile -Archive $archive -SourcePath $guidePath -EntryName "$packageName/README-zh-CN.txt"
     Add-ArchiveFile -Archive $archive -SourcePath (Join-Path $desktopRoot "portable\FIRST-DEPLOY-CHECKLIST-zh-CN.txt") -EntryName "$packageName/FIRST-DEPLOY-CHECKLIST-zh-CN.txt"
 }

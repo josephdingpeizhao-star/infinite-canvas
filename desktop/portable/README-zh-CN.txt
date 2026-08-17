@@ -17,13 +17,13 @@ Infinite Canvas Windows 便携版 0.1.0
 - 启动后会自动运行本机工作台。信息卡读取到 3 个品类后，“单品/套装”即可正常选择。
 
 真实出图配置
-- 需要真实出图时，把现有的 render-credentials.json 复制到 Infinite Canvas.exe 同一目录，再启动本程序。
+- 压缩包已内置 render-credentials.json，完整解压后即可真实出图，无需另放凭据文件。
 - 文件不存在或内容无效时，真实渲染保持锁定，其他功能照常启动。
-- render-credentials.json 不会进入便携 ZIP，也不会进入 Git。
+- 如需更换或停用出图凭据，请替换或删除 Infinite Canvas.exe 同目录的 render-credentials.json 后重启程序；该文件已排除在 Git 之外。
 
 账号说明
 - 为保护账号安全，压缩包不会携带制作电脑上的 Codex 登录凭据。
 - 新电脑首次使用 Codex 功能时，需要使用该电脑自己的官方 Codex 账号完成授权。
-- 图片渠道的 API Key 也不会随包复制；需要生图时，请在新电脑上自行配置对应渠道。
+- 出图凭据随便携 ZIP 一并交付；除更换或停用外，无需在新电脑上另行配置图片渠道 API Key。
 
 Windows 若提示“已保护你的电脑”，请先确认压缩包来源和文件校验值，再选择“更多信息”继续运行。本版本尚未购买代码签名证书。
