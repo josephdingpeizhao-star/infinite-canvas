@@ -4,6 +4,7 @@ import { DEFAULT_PORT, ensureSiteWorkspace, loadConfig, saveConfig, updateSiteWo
 import { CanvasSession } from "./canvas-session.js";
 import { archiveCodexThread, codexReasoningEffort, interruptCodexTurn, listCodexThreads, readCodexThread, resumeCodexThread, runClaudeTurn, runCodexTurn, startCodexThread, summarizeCodexThread, verifyCodexThreadWorkspace, withAgentPrompt } from "./agents.js";
 import { runLoginStatus, startLogin } from "./codex-auth.js";
+import { isolatedCodexContinueRoute, isolatedCodexTurnRoute } from "./codex-isolated.js";
 import type { AgentAttachment } from "./types.js";
 
 export function startupBannerLines(config: Pick<CanvasAgentConfig, "url" | "token">, interactive: boolean) {
@@ -95,6 +96,14 @@ export function startHttpServer() {
         await archiveCodexThread(emit, threadId, workspace.workspacePath);
         if (workspace.activeThreadId === threadId) updateSiteWorkspace(config, { activeThreadId: undefined });
         res.json({ ok: true });
+    }));
+    app.post("/agent/codex/isolated/turn", route(async (req, res) => {
+        const result = await isolatedCodexTurnRoute(req.body, ensureSiteWorkspace(config).workspacePath, emit);
+        res.status(result.status).json(result.body);
+    }));
+    app.post("/agent/codex/isolated/continue", route(async (req, res) => {
+        const result = await isolatedCodexContinueRoute(req.body, ensureSiteWorkspace(config).workspacePath, emit);
+        res.status(result.status).json(result.body);
     }));
     app.post("/agent/codex/turn", route(async (req, res) => {
         const attachments = Array.isArray(req.body?.attachments) ? (req.body.attachments as AgentAttachment[]) : [];

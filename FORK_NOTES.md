@@ -224,6 +224,10 @@
 | 220 | `canvas-agent/src/agents.ts` + `canvas-agent/src/codex-auth.ts` | Codex app-server 常驻会话与 login / login status 三处 spawn 实参 | 三处统一改为 `resolveCodexCommand()` 三元形态（各自 stdio 与 `windowsHide: true` 原样不动，env 仅原生直连时传入），app-server 与一键登录两处回退时经既有 agent_log 登记原因；`codexBin` 定义与 `createRequire` 一并移出 agents.ts，codex-auth 改从新模块 import 并为注入式 spawn 类型补可选 env | 黑窗主源是 app-server 常驻进程；三处统一形态保证行为一致，login status 入口无 emit 通道故回退不落日志（行为仍与现状等价） | — |
 | 221 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | DESKTOP-05 版本归纳与真人待测清单 | 归纳黑窗消除、直连原生程序与自动回退，并登记黑窗肉眼消失、助手/建批链路、账号检测与一键登录四项真人验收 | 自动测试只锚定命令形态与调用点合同，窗口可见性必须真人在桌面验收 | — |
 | 222 | `canvas-agent/dist/` + `desktop/runtime/` + `desktop/release/` | DESKTOP-05 最终运行副本与便携 ZIP | Agent dist/runtime 均为 32 文件、158,329 字节（新增 codex-command 4 产物）；Web dist/runtime 保持 12 文件、2,797,216 字节零改动；重建 `win-unpacked` 并生成 270,575,804 字节、2,923 条目（文件 2,921＋目录 2）的 `InfiniteCanvas-Portable-0.1.0-x64.zip`，SHA-256 `F8C5A0E804F46139FE7F8C419980B1455DD65FA7F2987C07DB76A479A41AA73F`；包内 runtime dist 口径＝electron-builder 默认剥 `*.d.ts`、打包脚本剥 `*.test.*`，故相对旧包净增 `codex-command.js` 1 条 | ZIP 根内渲染凭据恰 1 条且与本机忽略源文件逐字节一致；`*.test.*`、`*.bat`、`auth.json` 均为 0；正向新增判据通过＝包内 `@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe` 存在；包内 runtime dist 11 个非测试 .js 与本仓新 dist 逐一哈希一致；零费用冒烟＝包内 EXE 三次 login status 全 ok，codex.exe 存活期 504 次采样 MainWindowHandle 全为 0；Electron 43.4.0 由构建链从官方源取得 | — |
+| 223 | `canvas-agent/src/codex-isolated.ts` | P2-b 独立 Codex app-server 会话与最小协议客户端 | 新建或续接回合时各自启动独立原生 Codex 进程，完成后即回收；只实现 initialize、thread start/resume、turn start 与通知解析，限制最多 4 个并发会话并在超限时失败关闭，所有事件附 `threadId`，完成事件附本轮 `assistantText`，正常、失败和 660 秒硬超时均进入进程清理 | 拆除真实制作上游受全局队列和无归属广播限制的两道并发闸门，同时不改 `agents.ts` 单例或既有画布助手会话 | — |
+| 224 | `canvas-agent/src/http-server.ts` | `POST /agent/codex/isolated/turn` 与 `/agent/codex/isolated/continue` | 在既有 token 中间件之后注册隔离新建与续接入口，立即返回 `{ok, threadId}`；并发上限返回明确 503，其他错误按隔离模块的固定响应映射，旧 `/agent/codex/*` 路由原样保留 | 给主仓 transport 提供可按线程归属等待的 fire-and-forget 接口，不静默回退全局串行路径 | — |
+| 225 | `canvas-agent/src/codex-isolated.test.ts` | P2-b 隔离会话与路由离线回归 | 通过注入式 fake 进程和路由调用覆盖带线程归属及助手文本的完成事件、第 5 个并发请求拒绝且前 4 个不受影响、正常/失败/硬超时三路进程回收、两条新路由存在及旧路由保持可用 | 在零真实网络、零真实 Codex 进程下锁定并发上限、事件归属、资源回收与向后兼容边界 | — |
+| 226 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | P2-b 版本归纳与待联调清单 | Unreleased 归纳隔离会话、4 路上限、线程归属、进程清理、新入口与离线回归；待测试页登记真实 main/detail 并发、事件串扰、容量上限、660 秒清理和既有画布助手兼容验证 | 离线用例不替代真实 Codex、主仓工作台与长超时现场联调，文档不提前宣称联调通过 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -235,6 +239,8 @@
 
 ## 新增文件
 
+- `canvas-agent/src/codex-isolated.ts`：P2-b 独立 Codex app-server 会话模块；每回合独立进程、4 路失败关闭上限、按线程归属事件、本轮助手文本和三路进程清理均封装在此，不改既有画布助手单例。
+- `canvas-agent/src/codex-isolated.test.ts`：使用注入式 fake 进程与路由覆盖 P2-b 事件、并发上限、完成/失败/硬超时清理和新旧路由兼容边界，不启动真实 Codex 或联网。
 - `canvas-agent/src/codex-auth.ts`：独立封装 Codex CLI 登录状态查询、十秒超时和单例官方浏览器授权进程。
 - `canvas-agent/src/codex-auth.test.ts`：覆盖状态解析、隔离未登录实测、授权防抖及令牌保护端点响应形状。
 - `web/src/lib/agent/agent-codex-auth.ts`：提供账号响应规整、轮询边界与状态文案纯函数。
