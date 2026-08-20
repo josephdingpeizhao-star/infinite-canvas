@@ -658,6 +658,7 @@ describe("isolated Codex sessions", () => {
             prompt: "remain pending",
             attachments: [{ name: "pixel.png", type: "image/png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" }],
         }, emit);
+        assert.equal(ISOLATED_SESSION_TIMEOUT_MS, 1_260_000);
         assert.equal(fixture.timers[0]?.milliseconds, ISOLATED_SESSION_TIMEOUT_MS);
         await waitFor(() => fixture.children[0]?.requests.some((request) => request.method === "turn/start") === true);
         fixture.timers[0]?.callback();

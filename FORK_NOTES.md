@@ -228,6 +228,7 @@
 | 224 | `canvas-agent/src/http-server.ts` | `POST /agent/codex/isolated/turn` 与 `/agent/codex/isolated/continue` | 在既有 token 中间件之后注册隔离新建与续接入口，立即返回 `{ok, threadId}`；并发上限返回明确 503，其他错误按隔离模块的固定响应映射，旧 `/agent/codex/*` 路由原样保留 | 给主仓 transport 提供可按线程归属等待的 fire-and-forget 接口，不静默回退全局串行路径 | — |
 | 225 | `canvas-agent/src/codex-isolated.test.ts` | P2-b 隔离会话与路由离线回归 | 通过注入式 fake 进程和路由调用覆盖带线程归属及助手文本的完成事件、第 5 个并发请求拒绝且前 4 个不受影响、正常/失败/硬超时三路进程回收、两条新路由存在及旧路由保持可用 | 在零真实网络、零真实 Codex 进程下锁定并发上限、事件归属、资源回收与向后兼容边界 | — |
 | 226 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | P2-b 版本归纳与待联调清单 | Unreleased 归纳隔离会话、4 路上限、线程归属、进程清理、新入口与离线回归；待测试页登记真实 main/detail 并发、事件串扰、容量上限、660 秒清理和既有画布助手兼容验证 | 离线用例不替代真实 Codex、主仓工作台与长超时现场联调，文档不提前宣称联调通过 | — |
+| 227 | `canvas-agent/src/codex-isolated.ts` + `canvas-agent/src/codex-isolated.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | P2-c `final_prompts` 墙钟 rider | 隔离会话硬超时由 `660_000` 延长为 `1_260_000` 毫秒，新增 `1_260_000` 字面锚并继续用生产常量驱动离线硬超时清理；版本记录与待测试清单同步登记 1200/1260 秒联动 | 给主仓仅 `final_prompts` 的 1200 秒回合保留 60 秒清理余量；4 路上限、其他步骤 600 秒墙钟及既有画布助手路径不变，编译运行副本留待 v12 重打包 | — |
 
 ## 退役锚点（编号不复用）
 

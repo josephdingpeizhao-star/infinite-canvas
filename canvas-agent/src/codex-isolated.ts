@@ -33,7 +33,7 @@ type AttachmentFileHandle = {
 };
 
 export const MAX_ISOLATED_SESSIONS = 4;
-export const ISOLATED_SESSION_TIMEOUT_MS = 660_000;
+export const ISOLATED_SESSION_TIMEOUT_MS = 1_260_000;
 export const ISOLATED_PROCESS_EXIT_GRACE_MS = 1_000;
 export const ISOLATED_PROCESS_FORCE_EXIT_MS = 1_000;
 
