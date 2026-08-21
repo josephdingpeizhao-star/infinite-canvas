@@ -60,7 +60,20 @@ import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/
 import { batchSourceFilePatch, batchTypeChangePatch, connectedBatchOriginalFileNames, connectedBatchOriginalImageIds, createBatchSourceFile, readBatchIntakeState, resetBatchDeclarationState, resetInterruptedBatchIntakes, setGroupSelectionPatch } from "@/lib/canvas/canvas-batch-intake";
 import { MATERIAL_UPLOAD_ACCEPT, materialFileKind, materialUploadFocus, runMaterialUploadBatch, type MaterialFileKind, type MaterialUploadMode } from "@/lib/canvas/canvas-material-upload";
 import { buildWorkflowImageDownloadPlan, executeWorkflowImageDownloadPlan, type WorkflowImageDownloadMethod, type WorkflowImageDownloadPlan, type WorkflowImageDownloadScope } from "@/lib/canvas/canvas-workflow-image-export";
-import { connectedProductionSummary, resetInterruptedProductions, resolveProductionSelection } from "@/lib/canvas/canvas-workflow-production";
+import {
+    applyProductionStatusSummary,
+    connectedProductionSummary,
+    failProductionStatusReconciliation,
+    fetchProductionStatus,
+    isProductionStartBlocked,
+    isSameProductionTarget,
+    markProductionStatusReconciliationStarted,
+    productionStatusReconcileThrottleKey,
+    readProductionState,
+    resetInterruptedProductions,
+    resolveProductionSelection,
+    shouldReconcileProductionStatus,
+} from "@/lib/canvas/canvas-workflow-production";
 import { connectedStyleReferenceFileNames, connectedStyleReferenceImageIds, resetInterruptedStyleReferenceIntakes } from "@/lib/canvas/canvas-style-reference-intake";
 import { useCanvasBatchIntake } from "./use-canvas-batch-intake";
 import { useCanvasStyleReferenceIntake } from "./use-canvas-style-reference-intake";
@@ -353,6 +366,9 @@ function InfiniteCanvasPage() {
     const selectionBoxRef = useRef(selectionBox);
     const pendingConnectionCreateRef = useRef(pendingConnectionCreate);
     const generationRequestsRef = useRef(new Map<string, CanvasGenerationRequest>());
+    const productionStatusRequestedAtRef = useRef(new Map<string, number>());
+    const previousLocalAgentConnectedRef = useRef(localAgentConnected);
+    const restoredProjectIdRef = useRef<string | null>(null);
     const warnWorkflow = useCallback((text: string) => void message.warning(text), [message]);
     const workflowDemo = useCanvasWorkflowDemo({
         nodes,
@@ -378,6 +394,57 @@ function InfiniteCanvasPage() {
         setNodes,
         warn: warnWorkflow,
     });
+    const reconcileWorkflowProductions = useCallback(() => {
+        const requestedAt = Date.now();
+        const token = useAgentStore.getState().token;
+        const candidates = nodesRef.current.flatMap((node) => {
+            if (node.type !== CanvasNodeType.Workflow) return [];
+            const state = readProductionState(node.metadata);
+            if (!isProductionStartBlocked(state) || !state.batchId) return [];
+            const selection = resolveProductionSelection(node.id, nodesRef.current, connectionsRef.current);
+            if (selection.mode !== "production" || selection.batchId !== state.batchId) return [];
+            const throttleKey = productionStatusReconcileThrottleKey(projectId, node.id, selection.cardId, selection.batchId);
+            if (!shouldReconcileProductionStatus(productionStatusRequestedAtRef.current.get(throttleKey), requestedAt)) return [];
+            productionStatusRequestedAtRef.current.set(throttleKey, requestedAt);
+            return [{ nodeId: node.id, selection }];
+        });
+
+        candidates.forEach((candidate) => {
+            let reconciliationState: ReturnType<typeof markProductionStatusReconciliationStarted> | undefined;
+            setNodes((currentNodes) =>
+                currentNodes.map((node) => {
+                    if (node.id !== candidate.nodeId) return node;
+                    const state = readProductionState(node.metadata);
+                    const selection = resolveProductionSelection(node.id, currentNodes, connectionsRef.current);
+                    if (!isProductionStartBlocked(state) || state.batchId !== candidate.selection.batchId || !isSameProductionTarget(candidate.selection, selection)) return node;
+                    reconciliationState = markProductionStatusReconciliationStarted(state, requestedAt);
+                    return { ...node, metadata: { ...node.metadata, workflowProduction: reconciliationState } };
+                }),
+            );
+
+            const finishReconciliation = (summary?: Awaited<ReturnType<typeof fetchProductionStatus>>) => {
+                const completedAt = Date.now();
+                setNodes((currentNodes) =>
+                    currentNodes.map((node) => {
+                        if (node.id !== candidate.nodeId || !reconciliationState || node.metadata?.workflowProduction !== reconciliationState) return node;
+                        const state = readProductionState(node.metadata);
+                        const selection = resolveProductionSelection(node.id, currentNodes, connectionsRef.current);
+                        if (!isProductionStartBlocked(state) || !isSameProductionTarget(candidate.selection, selection)) return node;
+                        const nextState = summary ? applyProductionStatusSummary(state, summary, completedAt) : undefined;
+                        return {
+                            ...node,
+                            metadata: {
+                                ...node.metadata,
+                                workflowProduction: nextState ?? failProductionStatusReconciliation(state, completedAt),
+                            },
+                        };
+                    }),
+                );
+            };
+
+            void fetchProductionStatus(candidate.selection.batchId, token).then(finishReconciliation).catch(() => finishReconciliation());
+        });
+    }, [projectId]);
     const workflowOutputImport = useCanvasWorkflowOutputImport({ nodes, setNodes });
     useCanvasIntakeRoleVisibility({ nodes, connections, setNodes });
     useCanvasWorkflowQcBadges({ nodes, setNodes, warn: warnWorkflow });
@@ -544,6 +611,7 @@ function InfiniteCanvasPage() {
     useEffect(() => {
         if (!hydrated) return;
         setProjectLoaded(false);
+        restoredProjectIdRef.current = null;
         const project = openProject(projectId);
         if (!project) {
             navigate("/canvas", { replace: true });
@@ -580,10 +648,23 @@ function InfiniteCanvasPage() {
                 showImageInfo: project.showImageInfo || false,
             };
             setHistoryState({ canUndo: false, canRedo: false });
+            restoredProjectIdRef.current = projectId;
             setProjectLoaded(true);
         };
         void restore();
     }, [hydrated, navigate, openProject, projectId]);
+
+    useEffect(() => {
+        if (!projectLoaded || restoredProjectIdRef.current !== projectId) return;
+        reconcileWorkflowProductions();
+    }, [projectId, projectLoaded, reconcileWorkflowProductions]);
+
+    useEffect(() => {
+        const wasConnected = previousLocalAgentConnectedRef.current;
+        previousLocalAgentConnectedRef.current = localAgentConnected;
+        if (!projectLoaded || restoredProjectIdRef.current !== projectId || wasConnected || !localAgentConnected) return;
+        reconcileWorkflowProductions();
+    }, [localAgentConnected, projectId, projectLoaded, reconcileWorkflowProductions]);
 
     useEffect(() => {
         if (!projectLoaded || !["new", "recent", "choose"].includes(searchParams.get("mode") || "")) return;

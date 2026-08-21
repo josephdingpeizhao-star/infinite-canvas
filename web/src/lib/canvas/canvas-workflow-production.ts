@@ -7,10 +7,14 @@ import {
 export const WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS = 8_000;
 export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 12 * 60_000;
 export const WORKFLOW_PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
+// 调整须另行立项：同一张真实制作卡的状态回补固定节流 30 秒。
+export const WORKFLOW_PRODUCTION_RECONCILE_THROTTLE_MS = 30_000;
 export const COMPLETED_PRODUCTION_ACTION_LABEL = "继续";
 export const REBIND_RECOMPUTE_ACTION_LABEL = "剔除缺失图并重新分配";
 export const IMAGE_SERVICE_FAILURE_ACTION_LABEL = "再次尝试";
 export const WORKFLOW_COUNT_DATA_MISSING_MESSAGE = "本批次张数或编号信息不完整，请重启工作台 + 刷新画布后再试。";
+export const WORKFLOW_PRODUCTION_CONNECTION_INTERRUPTED_MESSAGE = "与本机工作台的连接已中断，正在自动重连；制作可能仍在后台进行，成果都会保留。";
+export const WORKFLOW_PRODUCTION_RECONCILE_FAILURE_MESSAGE = "页面重新打开后暂时无法确认制作状态，请稍后刷新重试；后台制作（若在进行）不受影响。";
 
 const PRODUCTION_FAILURE_FALLBACK_TEXT = "这一步没做好，机器已停下。已经完成的成果都保留了。";
 const IMAGE_SERVICE_FAILURE_SOURCE_TEXT = "本次异常来自图片服务，不是工作流的问题。";
@@ -21,6 +25,10 @@ const CONFIG_ID_PATTERN = /^(main|detail)_(0[1-9]|[12][0-9]|30)$/;
 const RECOVERY_FILE_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} ._()（）-]{0,79}$/u;
 const RECOVERY_FILE_DENY_PATTERN = /(authorization|password|bearer|token|api[ _-]?key|secret|sk-|令牌|密钥|凭据)/iu;
 const TERMINAL_REBIND_ERRORS = new Set(["missing_files_restored", "render_outputs_exist", "inputs_unavailable"]);
+const RECONCILED_PRODUCTION_STATUSES = new Set(["queued", "running", "paused", "completed", "failed"]);
+const IMAGE_SERVICE_FAILURE_CODES = new Set(["render_http_error", "render_response_invalid", "render_timeout", "render_network_error", "render_image_download_failed"]);
+const STATUS_STAGE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+const STATUS_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 
 export type WorkflowProductionQuote = {
     batchId: string;
@@ -31,6 +39,21 @@ export type WorkflowProductionQuote = {
     estimatedUnitUsd: number;
     estimatedTotalUsd: number;
     estimatedMinutes: number;
+};
+
+export type WorkflowProductionStatusSummary = {
+    ok: true;
+    batchId: string;
+    status: "queued" | "running" | "paused" | "completed" | "failed";
+    currentStage: string | null;
+    stageStartedAt: string | null;
+    stageEndedAt: string | null;
+    renders: {
+        completedCount: number;
+        plannedCount: number | null;
+    };
+    failureCode?: string;
+    message?: string;
 };
 
 export type WorkflowProductionSelection =
@@ -175,6 +198,74 @@ export function buildProductionQuoteUrl(baseUrl: string, batchId: string) {
 export function buildProductionRebindUrl(baseUrl: string, batchId: string) {
     const quoteUrl = buildProductionQuoteUrl(baseUrl, batchId);
     return quoteUrl ? quoteUrl.replace(/\/quote$/, "/rebind-recompute") : null;
+}
+
+export function buildProductionStatusUrl(baseUrl: string, batchId: string) {
+    const quoteUrl = buildProductionQuoteUrl(baseUrl, batchId);
+    return quoteUrl ? quoteUrl.replace(/\/quote$/, "/status") : null;
+}
+
+export function parseProductionStatusSummary(payload: unknown, batchId: string): WorkflowProductionStatusSummary | undefined {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+    const record = payload as Record<string, unknown>;
+    const status = record.status;
+    const currentStage = record.currentStage;
+    const stageStartedAt = record.stageStartedAt;
+    const stageEndedAt = record.stageEndedAt;
+    const renders = record.renders;
+    const failureCode = record.failureCode;
+    const message = record.message;
+    if (
+        record.ok !== true ||
+        record.batchId !== batchId ||
+        typeof status !== "string" ||
+        !RECONCILED_PRODUCTION_STATUSES.has(status) ||
+        !validStatusStage(currentStage) ||
+        !validStatusTimestamp(stageStartedAt) ||
+        !validStatusTimestamp(stageEndedAt) ||
+        !renders ||
+        typeof renders !== "object" ||
+        Array.isArray(renders) ||
+        !validStatusCount((renders as Record<string, unknown>).completedCount) ||
+        !validNullableStatusCount((renders as Record<string, unknown>).plannedCount) ||
+        ((renders as Record<string, unknown>).plannedCount !== null &&
+            Number((renders as Record<string, unknown>).completedCount) > Number((renders as Record<string, unknown>).plannedCount)) ||
+        (failureCode !== undefined && (typeof failureCode !== "string" || !failureCode)) ||
+        (message !== undefined && !validStatusMessage(message)) ||
+        (status === "failed" && !validStatusMessage(message))
+    ) {
+        return undefined;
+    }
+    const renderRecord = renders as Record<string, unknown>;
+    return {
+        ok: true,
+        batchId,
+        status: status as WorkflowProductionStatusSummary["status"],
+        currentStage: currentStage as string | null,
+        stageStartedAt: stageStartedAt as string | null,
+        stageEndedAt: stageEndedAt as string | null,
+        renders: {
+            completedCount: renderRecord.completedCount as number,
+            plannedCount: renderRecord.plannedCount as number | null,
+        },
+        failureCode: failureCode as string | undefined,
+        message: message as string | undefined,
+    };
+}
+
+export async function fetchProductionStatus(batchId: string, token: string, fetcher: typeof fetch = globalThis.fetch): Promise<WorkflowProductionStatusSummary> {
+    const url = buildProductionStatusUrl(WORKFLOW_PRODUCTION_ORIGIN, batchId);
+    if (!url || !token.trim()) throw new Error(WORKFLOW_PRODUCTION_RECONCILE_FAILURE_MESSAGE);
+    const response = await fetcher(url, { method: "GET", headers: { "X-Canvas-Agent-Token": token.trim() } });
+    let payload: unknown;
+    try {
+        payload = await response.json();
+    } catch {
+        payload = undefined;
+    }
+    const summary = response.ok ? parseProductionStatusSummary(payload, batchId) : undefined;
+    if (!summary) throw new Error(WORKFLOW_PRODUCTION_RECONCILE_FAILURE_MESSAGE);
+    return summary;
 }
 
 export async function fetchProductionRebind(batchId: string, token: string, fetcher: typeof fetch = globalThis.fetch): Promise<WorkflowProductionRebindResult> {
@@ -348,6 +439,70 @@ export function applyProductionQuote(
     };
 }
 
+export function shouldReconcileProductionStatus(lastRequestedAt: number | undefined, now: number) {
+    return lastRequestedAt === undefined || now - lastRequestedAt >= WORKFLOW_PRODUCTION_RECONCILE_THROTTLE_MS;
+}
+
+export function productionStatusReconcileThrottleKey(projectId: string, machineId: string, cardId: string, batchId: string) {
+    return JSON.stringify([projectId, machineId, cardId, batchId]);
+}
+
+export function markProductionStatusReconciliationStarted(state: CanvasWorkflowProductionMetadata, now: number): CanvasWorkflowProductionMetadata {
+    if (!isProductionStartBlocked(state)) return state;
+    return {
+        ...state,
+        requestedAt: state.status === "queued" ? undefined : state.requestedAt,
+        updatedAt: now,
+    };
+}
+
+export function applyProductionStatusSummary(
+    state: CanvasWorkflowProductionMetadata,
+    summary: WorkflowProductionStatusSummary,
+    now: number,
+): CanvasWorkflowProductionMetadata | undefined {
+    const countInfo = readExpectedImageSet(state.totalCount, state.expectedConfigIds);
+    if (
+        !countInfo ||
+        !state.batchId ||
+        summary.batchId !== state.batchId ||
+        (summary.renders.plannedCount !== null && summary.renders.plannedCount !== countInfo.totalCount) ||
+        summary.renders.completedCount > countInfo.totalCount ||
+        (summary.status === "completed" && summary.renders.completedCount !== countInfo.totalCount)
+    ) {
+        return undefined;
+    }
+    const failed = summary.status === "failed";
+    return {
+        ...state,
+        status: summary.status,
+        producedCount: summary.renders.completedCount,
+        totalCount: countInfo.totalCount,
+        expectedConfigIds: countInfo.expectedConfigIds,
+        requestedAt: undefined,
+        updatedAt: now,
+        step: summary.currentStage ?? undefined,
+        message: undefined,
+        errorMessage: failed ? summary.message : undefined,
+        failureSource: failed && summary.failureCode && IMAGE_SERVICE_FAILURE_CODES.has(summary.failureCode) ? "image_service" : undefined,
+        recovery: undefined,
+    };
+}
+
+export function failProductionStatusReconciliation(state: CanvasWorkflowProductionMetadata, now: number): CanvasWorkflowProductionMetadata {
+    if (!isProductionStartBlocked(state)) return state;
+    return {
+        ...state,
+        status: "failed",
+        requestedAt: undefined,
+        updatedAt: now,
+        message: undefined,
+        errorMessage: WORKFLOW_PRODUCTION_RECONCILE_FAILURE_MESSAGE,
+        failureSource: undefined,
+        recovery: undefined,
+    };
+}
+
 export function isProductionStartBlocked(state: CanvasWorkflowProductionMetadata) {
     return state.status === "queued" || state.status === "running";
 }
@@ -356,10 +511,17 @@ export function completedProductionStatusText(message: string | undefined, total
     return message || (totalCount === undefined ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : `${totalCount} 张真实图片已上桌。点击继续后，机器会按当前批次状态处理下一步。`);
 }
 
-export function expireProductionState(state: CanvasWorkflowProductionMetadata, now: number): CanvasWorkflowProductionMetadata {
+export function expireProductionState(state: CanvasWorkflowProductionMetadata, now: number, connected?: boolean): CanvasWorkflowProductionMetadata {
     const ackExpired = state.status === "queued" && state.requestedAt !== undefined && now - state.requestedAt >= WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS;
     const progressExpired = state.status === "running" && state.updatedAt !== undefined && now - state.updatedAt >= WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS;
     if (!ackExpired && !progressExpired) return state;
+    if (progressExpired && connected === false) {
+        return {
+            ...state,
+            updatedAt: now,
+            message: WORKFLOW_PRODUCTION_CONNECTION_INTERRUPTED_MESSAGE,
+        };
+    }
     return {
         ...state,
         status: "failed",
@@ -369,12 +531,7 @@ export function expireProductionState(state: CanvasWorkflowProductionMetadata, n
 }
 
 export function resetInterruptedProductions(nodes: CanvasNodeData[]) {
-    return nodes.map((node) => {
-        if (node.type !== CanvasNodeType.Workflow) return node;
-        const state = readProductionState(node.metadata);
-        if (state.status !== "running") return node;
-        return { ...node, metadata: { ...node.metadata, workflowProduction: { ...state, status: "failed" as const, errorMessage: "页面刷新后真实制作状态已中断，已经完成的成果都保留了。" } } };
-    });
+    return nodes;
 }
 
 function stringValue(value: unknown) {
@@ -412,6 +569,26 @@ function validMoney(value: unknown) {
 
 function validMinutes(value: unknown) {
     return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function validStatusStage(value: unknown): value is string | null {
+    return value === null || (typeof value === "string" && STATUS_STAGE_PATTERN.test(value));
+}
+
+function validStatusTimestamp(value: unknown): value is string | null {
+    return value === null || (typeof value === "string" && STATUS_TIMESTAMP_PATTERN.test(value));
+}
+
+function validStatusCount(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 9_999;
+}
+
+function validNullableStatusCount(value: unknown): value is number | null {
+    return value === null || validStatusCount(value);
+}
+
+function validStatusMessage(value: unknown): value is string {
+    return typeof value === "string" && value.length >= 1;
 }
 
 export function readExpectedImageSet(totalCountValue: unknown, expectedConfigIdsValue: unknown) {

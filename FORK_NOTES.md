@@ -229,6 +229,10 @@
 | 225 | `canvas-agent/src/codex-isolated.test.ts` | P2-b 隔离会话与路由离线回归 | 通过注入式 fake 进程和路由调用覆盖带线程归属及助手文本的完成事件、第 5 个并发请求拒绝且前 4 个不受影响、正常/失败/硬超时三路进程回收、两条新路由存在及旧路由保持可用 | 在零真实网络、零真实 Codex 进程下锁定并发上限、事件归属、资源回收与向后兼容边界 | — |
 | 226 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | P2-b 版本归纳与待联调清单 | Unreleased 归纳隔离会话、4 路上限、线程归属、进程清理、新入口与离线回归；待测试页登记真实 main/detail 并发、事件串扰、容量上限、660 秒清理和既有画布助手兼容验证 | 离线用例不替代真实 Codex、主仓工作台与长超时现场联调，文档不提前宣称联调通过 | — |
 | 227 | `canvas-agent/src/codex-isolated.ts` + `canvas-agent/src/codex-isolated.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | P2-c `final_prompts` 墙钟 rider | 隔离会话硬超时由 `660_000` 延长为 `1_260_000` 毫秒，新增 `1_260_000` 字面锚并继续用生产常量驱动离线硬超时清理；版本记录与待测试清单同步登记 1200/1260 秒联动 | 给主仓仅 `final_prompts` 的 1200 秒回合保留 60 秒清理余量；4 路上限、其他步骤 600 秒墙钟及既有画布助手路径不变，编译运行副本留待 v12 重打包 | — |
+| 228 | `web/src/lib/canvas/agent-connection.ts` + `web/src/components/canvas/canvas-local-agent-panel.tsx` + `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/tests/dc01-agent-reconnect-watchdog.test.ts` | DC-01 W0/W1/W3 断链取证、SSE 死链检测与看门狗真话化 | W0 只读取证未坐实依赖抖动，画布快照约 10.1 KB 且无 `data:` 图片，断链触发原因仍未定位；W1 以 45 秒字面锚消费 ping 与业务事件，静默超时复用既有退避重连；W3 仅在明确断链时保持过期 running 卡锁定并显示自动重连真话，连接态缺席、连接正常和 8 秒接单超时保持原行为 | 半开 EventSource 不触发 `onerror` 时也能自愈，且不把“页面听不见”误报为后台制作死亡；Canvas Agent 服务端与既有阈值不改 | — |
+| 229 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/project.tsx` + `web/tests/dc01-workflow-production-reconcile.test.ts` | DC-01 W2 真实制作状态回补 | 新增 17373 状态摘要严格读取与 metadata 纯映射；仅在页面加载和 SSE 由断开转为连接时，对真实 queued/running 卡按 project、machine、card、batch 四维键执行 30 秒节流回补；请求失败使用批准文案失败关闭，并以对象身份和当前目标复核拒绝迟到响应 | 页面刷新或断链期间丢失推送后可恢复后台真实进度/终态；不重放事件、不装离线队列、不改变制作命令与费用门禁 | — |
+| 230 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | DC-01 版本归纳与真人待测清单 | Unreleased 归纳半开死链自动重连、在途状态回补和断链真话文案；待测试页登记半开静默、在途刷新/重连、卡片锁定及回补失败现场验收 | 离线测试不替代真实浏览器半开连接与在途批次现场验证；验收不得点击费用确认或“重新开始” | — |
+| 231 | `web/dist/` | DC-01 最新随仓运行副本 | 按最终源码与更新后的 CHANGELOG 离线重建；入口与主 bundle 使用同次构建产物并随仓交付 | 用户硬刷新即可加载死链检测、状态回补与真话文案；不改 Canvas Agent、桌面 runtime 或便携 ZIP | — |
 
 ## 退役锚点（编号不复用）
 
@@ -240,6 +244,8 @@
 
 ## 新增文件
 
+- `web/tests/dc01-agent-reconnect-watchdog.test.ts`：覆盖 45 秒死链字面锚、ping/业务事件接线、断链与连接正常两类进度超时文案、8 秒接单超时零回归及非响应式连接态读取。
+- `web/tests/dc01-workflow-production-reconcile.test.ts`：覆盖状态端点/token/失败关闭、五态 metadata 映射、30 秒四维节流键、queued 回补与普通接单超时分离、刷新保持及页面两触发/迟到响应守卫。
 - `canvas-agent/src/codex-isolated.ts`：P2-b 独立 Codex app-server 会话模块；每回合独立进程、4 路失败关闭上限、按线程归属事件、本轮助手文本和三路进程清理均封装在此，不改既有画布助手单例。
 - `canvas-agent/src/codex-isolated.test.ts`：使用注入式 fake 进程与路由覆盖 P2-b 事件、并发上限、完成/失败/硬超时清理和新旧路由兼容边界，不启动真实 Codex 或联网。
 - `canvas-agent/src/codex-auth.ts`：独立封装 Codex CLI 登录状态查询、十秒超时和单例官方浏览器授权进程。

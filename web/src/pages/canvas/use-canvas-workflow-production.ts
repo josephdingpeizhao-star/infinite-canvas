@@ -155,7 +155,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
                 items.map((node) => {
                     if (node.type !== CanvasNodeType.Workflow) return node;
                     const state = readProductionState(node.metadata);
-                    const expired = expireProductionState(state, now);
+                    const expired = expireProductionState(state, now, useAgentStore.getState().connected);
                     return expired === state ? node : { ...node, metadata: { ...node.metadata, workflowProduction: expired } };
                 }),
             );

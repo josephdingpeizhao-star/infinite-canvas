@@ -9,7 +9,7 @@ import { CODEX_AUTH_POLL_INTERVAL_MS, codexAuthStatusText, normalizeCodexAuthRes
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAgentStore, type AgentAttachment, type AgentChatItem, type AgentEventLog, type AgentPanelTab, type AgentPendingToolCall, type AgentThreadSummary } from "@/stores/use-agent-store";
-import { nextRetryDelayMs, shouldKeepRetrying } from "@/lib/canvas/agent-connection";
+import { isAgentSseDead, nextRetryDelayMs, shouldKeepRetrying } from "@/lib/canvas/agent-connection";
 import { summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { isSiteTool, runSiteTool, SITE_TOOL_LABELS } from "@/lib/agent/agent-site-tools";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
@@ -105,6 +105,8 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
         const clientId = clientIdRef.current;
         let source: EventSource | null = null;
         let retryTimer: ReturnType<typeof setTimeout> | null = null;
+        let deadCheckTimer: ReturnType<typeof setInterval> | null = null;
+        let lastEventAt = Date.now();
         let retryAttempt = 0;
         let disposed = false;
 
@@ -112,17 +114,27 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
             if (retryTimer) clearTimeout(retryTimer);
             retryTimer = null;
         };
+        const clearDeadCheckTimer = () => {
+            if (deadCheckTimer) clearInterval(deadCheckTimer);
+            deadCheckTimer = null;
+        };
         const connect = () => {
             if (disposed || !useAgentStore.getState().enabled) return;
             clearRetryTimer();
+            clearDeadCheckTimer();
             source?.close();
             setAgentState({ connected: false, activity: "连接中", connectError: "" });
             const nextSource = new EventSource(`${endpoint}/events?token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(clientId)}`);
             source = nextSource;
+            lastEventAt = Date.now();
             const isCurrentSource = () => !disposed && source === nextSource;
             const canHandleEvents = () => isCurrentSource() && useAgentStore.getState().enabled;
+            const recordEvent = () => {
+                lastEventAt = Date.now();
+            };
             nextSource.addEventListener("hello", () => {
                 if (!canHandleEvents()) return;
+                recordEvent();
                 clearRetryTimer();
                 retryAttempt = 0;
                 everConnectedRef.current = true;
@@ -134,21 +146,25 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
             });
             nextSource.addEventListener("tool_call", (event) => {
                 if (!canHandleEvents()) return;
+                recordEvent();
                 const data = parseEventData<AgentPendingToolCall>(event);
                 if (data) void handleToolCall(endpoint, token, data);
             });
             nextSource.addEventListener("agent_event", (event) => {
                 if (!canHandleEvents()) return;
+                recordEvent();
                 const data = parseEventData<AgentEventPayload>(event);
                 if (data) handleAgentEvent(data);
             });
             nextSource.addEventListener("agent_log", (event) => {
                 if (!canHandleEvents()) return;
+                recordEvent();
                 const text = parseEventData<{ text?: unknown }>(event)?.text;
                 addEventLog("日志", text, text);
             });
             nextSource.addEventListener("agent_error", (event) => {
                 if (!canHandleEvents()) return;
+                recordEvent();
                 const error = parseEventData<{ message?: unknown }>(event)?.message;
                 setAgentState({ activity: "出错", waiting: false });
                 addMessage({ role: "error", title: "错误", text: normalizeText(error) });
@@ -156,16 +172,23 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
             });
             nextSource.addEventListener("agent_done", () => {
                 if (!canHandleEvents()) return;
+                recordEvent();
                 setAgentState({ activity: "完成", waiting: false, sending: false });
                 void loadThreads();
             });
-            nextSource.onerror = () => {
+            nextSource.addEventListener("ping", () => {
+                if (!canHandleEvents()) { return; }
+                recordEvent();
+            });
+            const reconnectAfterLoss = () => {
                 if (!isCurrentSource()) return;
                 if (!useAgentStore.getState().enabled) {
+                    clearDeadCheckTimer();
                     nextSource.close();
                     source = null;
                     return;
                 }
+                clearDeadCheckTimer();
                 const everConnected = everConnectedRef.current;
                 const wasConnected = connectedRef.current;
                 const text = everConnected ? "本地 Agent 连接失败或已断开" : "连接失败，请检查地址和 token";
@@ -184,6 +207,11 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
                 retryAttempt += 1;
                 retryTimer = setTimeout(connect, delay);
             };
+            nextSource.onerror = reconnectAfterLoss;
+            deadCheckTimer = setInterval(() => {
+                if (!isCurrentSource() || !isAgentSseDead(lastEventAt, Date.now())) return;
+                reconnectAfterLoss();
+            }, 1_000);
         };
         const handleVisibilityChange = () => {
             if (document.visibilityState !== "visible" || connectedRef.current || !useAgentStore.getState().enabled) return;
@@ -196,6 +224,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
             disposed = true;
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             clearRetryTimer();
+            clearDeadCheckTimer();
             source?.close();
             source = null;
             connectedRef.current = false;
