@@ -38,6 +38,6 @@ npm run dist:zip
 
 完整便携版使用固定本机地址 `http://127.0.0.1:3000` 承载画布，启动 `http://127.0.0.1:17371` 的内置 Canvas Agent，并自动启动 17372/17373 工作台服务。若 17371 已有可用 Agent，桌面版会复用它且退出时不会关闭它；否则退出桌面版时会一并结束自己启动的 Agent。自己启动的工作台服务也会随桌面版退出。
 
-品类规则位于解压目录的 `workflow-runtime/categories`，保留 `_shared`、杯类、盘子、碗原目录结构。新批次和从旧电脑迁移来的批次放在同一解压目录的 `杯类` 文件夹；更新程序时请保留这个数据文件夹。
+品类规则位于解压目录的 `workflow-runtime/categories`，保留 `_shared`、杯类、盘子、碗原目录结构。批次工作区、账本和报告固定保存在当前 Windows 用户的 `文档\无限画布工作流`：批次工作区位于 `杯类`，账本和报告分别位于 `workflow-runtime/manifests` 与 `workflow-runtime/reports`。首次启动会自动创建这些目录；更新时可完整删除旧程序目录后重新解压，用户数据不受影响。
 
 当前 Electron 外壳沿用网页里的 Codex 会话逻辑，尚未新增独立的 Codex 登录界面。Windows 安装包未做代码签名，首次运行时可能出现 SmartScreen 提示。

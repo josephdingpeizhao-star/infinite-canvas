@@ -12,7 +12,7 @@ description: 当前版本已实现但仍需人工验证的变更项
 - 退出：完全退出桌面程序后，由它启动的 3000 画布服务、17371 Agent、17372 上传服务和 17373 工作台应一并停止；若启动前已有可用 Agent，桌面程序退出时不得关闭该外部 Agent。
 - 数据边界：网页版现有画布和设置保持不变；桌面版使用自己的浏览器存储空间，不自动搬运 Chrome/Edge 中已有的本地画布。
 - 登录边界：本阶段沿用现有 Codex 会话逻辑，尚未增加独立的 Codex 登录界面；未签名安装包首次运行可能出现 Windows SmartScreen 提示。
-- 便携版：不得要求安装 Node、Python、Bun、npm 或 Codex CLI，也不得携带制作电脑的 Codex 登录状态或历史批次；出图凭据按 DESKTOP-04 决策内置；`workflow-runtime/categories` 应包含 `_shared`、杯类、盘子、碗，旧批次复制到解压目录的 `杯类` 后应可继续识别。
+- 便携版：不得要求安装 Node、Python、Bun、npm 或 Codex CLI，也不得携带制作电脑的 Codex 登录状态或历史批次；出图凭据按 DESKTOP-04 决策内置；`workflow-runtime/categories` 应包含 `_shared`、杯类、盘子、碗；批次工作区、账本和报告应位于当前用户的“文档\无限画布工作流”，程序目录不得包含“杯类”工作区或用户账本。
 - 真实出图：旧“手工复制凭据/凭据不得进入 ZIP”规则已由 DESKTOP-04 替代；新 ZIP 完整解压后应能用现存批次跑通“点击 → 费用卡 → 渲染出图”，全程不依赖外部脚本。
 - 失败关闭：另用一份删除 `render-credentials.json` 的新解压目录启动，真实渲染应保持锁定，其余行为与 0.1.0 一致；源凭据 `desktop/render-credentials.json` 不得进入 Git。
 
@@ -21,7 +21,7 @@ description: 当前版本已实现但仍需人工验证的变更项
 - 状态：登录状态查询、官方授权入口、限时轮询、部署检查单与便携 ZIP 已完成离线自动检查；干净 Windows 真机部署仍需用户携带新 ZIP 按检查单执行。
 - 本机已登录态：连接本机 Agent 后，设置页“Codex 账号”应自动显示“已登录（Logged in using ChatGPT）”；“重新检测”应保持同一状态。
 - 美工机未登录全流程：初始应显示“未登录”→点击“去官方登录”→系统浏览器完成官方授权→约 3 秒轮询并自动翻转为“已登录”；浏览器未自动打开时，可在面板“日志”页使用官方授权地址，5 分钟未完成时可再试一次。
-- 部署检查单：按 `FIRST-DEPLOY-CHECKLIST-zh-CN.txt` 依次验证完整解压、内置渲染凭据、SmartScreen、旧批次与账本迁移、三品类、单品/套装、2 张原图登记回执及退出后四端口回收。
+- 部署检查单：按 `FIRST-DEPLOY-CHECKLIST-zh-CN.txt` 依次验证完整解压、内置渲染凭据、SmartScreen、Documents 数据目录首次布局创建及升级后数据保留、三品类、单品/套装、2 张原图登记回执及退出后四端口回收。
 - 安全边界：便携包不得携带制作电脑的 Codex 登录状态、Codex `auth.json`、Cookie 或浏览器数据；渲染凭据按 DESKTOP-04 决策内置，本功能仍不提供 Codex API Key 登录、退出或多账号切换。
 
 ## DESKTOP-04 便携 ZIP 内置渲染凭据
@@ -34,6 +34,16 @@ description: 当前版本已实现但仍需人工验证的变更项
 - 黑窗消失：双击便携版 EXE 正常进入画布，任务栏与屏幕上不再出现黑色控制台窗口。
 - 助手链路：画布 AI 助手与建批教学链路正常。
 - 账号入口：设置页「Codex 账号」检测与一键登录正常（login / login status 均已改走新启动形态）。
+
+## DATA-01 用户数据外置到“文档”
+
+- 状态：桌面启动器、便携打包清单与使用说明已调整，离线自动回归完成后仍须在真实 Windows Known Folder 环境验收；不得使用现有生产批次构造测试现场。
+- 完全裸机首启：在未创建品牌数据目录的新 Windows 用户下完整解压并首次启动，确认该用户的“文档\无限画布工作流”自动创建 `workflow-runtime\manifests`、`workflow-runtime\reports` 和“杯类”三个目录；解压后的程序目录不得出现空 `reports`、空“杯类”或用户批次账本。
+- Known Folder 重定向：分别在默认“文档”和已重定向到 OneDrive 或其他盘符的“文档”环境启动，数据根都应跟随系统实际 Documents 位置，不得依赖用户名、C 盘或程序所在路径。
+- 指针与健康信息：启动后核对 `~\.infinite-canvas\data-root.json` 的 `dataRoot`、`repositoryRoot`、`workspaceParent`、`source`、`resolvedAt`，并确认工作台健康响应的 `dataRoot` 与实际“文档\无限画布工作流”一致。
+- 建批落点：使用一次性测试信息卡建批，确认 BatchCreator 选择 `<DataRoot>\杯类` 作为工作区，批次账本写入 `<DataRoot>\workflow-runtime\manifests`，报告写入同级 `reports`；程序侧 `workflow-runtime\manifests` 只保留随包模板，`categories`、`scripts`、`schemas` 等程序资产仍从程序目录读取。
+- 升级保留：完全退出程序，记录一次性批次工作区、账本和报告的哈希或时间戳，完整删除旧程序目录，解压新版 ZIP 后再次启动；上述数据应原样存在且批次可继续使用，无需搬运。
+- 同事独立性：把同一 ZIP 交给另一 Windows 用户或电脑，首次启动应只在对方自己的“文档\无限画布工作流”创建空数据布局，不得携带或发现发送者的批次数据。
 
 ## DC-01 画布断链自动重连与批次状态回补
 

@@ -7,14 +7,19 @@ Infinite Canvas Windows 便携版 0.1.0
 2. 打开解压后的 InfiniteCanvas-Portable-0.1.0-x64 文件夹。
 3. 双击“Infinite Canvas.exe”。
 
-请勿直接在压缩包预览窗口中运行程序，也不要只复制其中一个 exe；程序必须和 resources、python-runtime、workflow-runtime、杯类等文件夹放在一起。
+请勿直接在压缩包预览窗口中运行程序，也不要只复制其中一个 exe；程序必须和 resources、python-runtime、workflow-runtime 等程序文件夹放在一起。
 
 本便携版已包含画布、Canvas Agent、工作台服务、Python 3.12 运行环境、品类规则和 Windows x64 Codex CLI，无需另外安装 Node、Python、Bun、npm 或 Codex CLI。
 
 品类与数据位置
 - 品类规则在 workflow-runtime\categories，已包含 _shared、杯类、盘子、碗；请保持原目录结构，不要只移动其中单个文件。
-- 新建批次和原有批次数据放在本程序目录内的“杯类”文件夹。换电脑时，如需继续使用旧批次，请把原“杯类”文件夹中的各批次目录复制到这里。
+- 用户数据固定保存在当前 Windows 用户的“文档\无限画布工作流”中，其中 workflow-runtime\manifests 保存批次账本、workflow-runtime\reports 保存报告，“杯类”保存所有品类共用的批次工作区。
+- 首次启动会自动创建上述数据目录。程序目录不会保存批次账本、报告或批次工作区。
 - 启动后会自动运行本机工作台。信息卡读取到 3 个品类后，“单品/套装”即可正常选择。
+
+升级与转交
+- 更新时可以完整删除旧程序目录，再解压新版 ZIP 并双击启动；“文档\无限画布工作流”中的数据不受影响，无需随程序迁移。
+- 把 ZIP 发给同事后，同事首次启动会在他自己的“文档\无限画布工作流”中创建独立数据目录，不会使用发送者的数据。
 
 真实出图配置
 - 压缩包已内置 render-credentials.json，完整解压后即可真实出图，无需另放凭据文件。

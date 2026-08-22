@@ -54,7 +54,6 @@ async function startDesktop() {
     assertFile(agentEntry, "桌面 Canvas Agent 资源不完整");
     if (workflowRoot && pythonExe) {
         assertWorkflowRuntime(workflowRoot, pythonExe);
-        ensureBatchWorkspace(workflowRoot);
     }
 
     staticServer = await startStaticServer(webRoot);
@@ -93,6 +92,10 @@ function resolveWorkflowRoot() {
     return match;
 }
 
+function resolveDataRoot() {
+    return path.join(app.getPath("documents"), "无限画布工作流");
+}
+
 function resolvePythonExecutable() {
     const root = app.isPackaged ? path.dirname(process.execPath) : path.join(__dirname, "vendor");
     return path.join(root, "python-runtime", "python.exe");
@@ -111,11 +114,6 @@ function assertWorkflowRuntime(workflowRoot, pythonExe) {
     assertFile(path.join(workflowRoot, "scripts", "build_batch_manifest.py"), "批次创建工具不完整");
 }
 
-function ensureBatchWorkspace(workflowRoot) {
-    const batchRoot = path.join(path.dirname(workflowRoot), "杯类");
-    fs.mkdirSync(batchRoot, { recursive: true });
-}
-
 function pythonScriptArgs(script, moduleRoot, args = []) {
     return ["-c", PYTHON_SCRIPT_BOOTSTRAP, script, moduleRoot, ...args];
 }
@@ -132,7 +130,12 @@ function ensureDemoWorkspace(pythonExe, workflowRoot) {
         {
             cwd: workflowRoot,
             encoding: "utf8",
-            env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+            env: {
+                ...process.env,
+                INFINITE_CANVAS_DATA_ROOT: resolveDataRoot(),
+                PYTHONIOENCODING: "utf-8",
+                PYTHONUTF8: "1",
+            },
             timeout: 15000,
             windowsHide: true,
         },
@@ -239,6 +242,7 @@ async function ensureWorkbench(pythonExe, workflowRoot, demoManifest) {
         ...credentialEnv,
         ...process.env,
         CODEX_DEV_ALLOW_REAL_EXECUTION: "1",
+        INFINITE_CANVAS_DATA_ROOT: resolveDataRoot(),
         PYTHONIOENCODING: "utf-8",
         PYTHONUTF8: "1",
     };

@@ -13,7 +13,6 @@ $workspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot "..\.."))
 $packageName = "InfiniteCanvas-Portable-0.1.0-x64"
 $zipPath = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "$packageName.zip"))
 $releasePrefix = $releaseRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-$batchFolderName = ([string][char]0x676F) + ([string][char]0x7C7B)
 
 function Add-ArchiveFile {
     param(
@@ -140,8 +139,6 @@ try {
             -SourcePath (Join-Path $workflowSource "manifests\$name") `
             -EntryName "$packageName/workflow-runtime/manifests/$name"
     }
-    [void]$archive.CreateEntry("$packageName/workflow-runtime/reports/")
-    [void]$archive.CreateEntry("$packageName/$batchFolderName/")
     Add-ArchiveFile -Archive $archive -SourcePath $credentialPath -EntryName "$packageName/render-credentials.json"
     Add-ArchiveFile -Archive $archive -SourcePath $guidePath -EntryName "$packageName/README-zh-CN.txt"
     Add-ArchiveFile -Archive $archive -SourcePath (Join-Path $desktopRoot "portable\FIRST-DEPLOY-CHECKLIST-zh-CN.txt") -EntryName "$packageName/FIRST-DEPLOY-CHECKLIST-zh-CN.txt"
