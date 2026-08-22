@@ -70,7 +70,6 @@ import {
     markProductionStatusReconciliationStarted,
     productionStatusReconcileThrottleKey,
     readProductionState,
-    resetInterruptedProductions,
     resolveProductionSelection,
     shouldReconcileProductionStatus,
 } from "@/lib/canvas/canvas-workflow-production";
@@ -622,7 +621,7 @@ function InfiniteCanvasPage() {
             const restoredNodes = await hydrateCanvasImages(
                 resetInterruptedStyleReferenceIntakes(
                     resetInterruptedBatchIntakes(
-                        resetInterruptedProductions(resetInterruptedWorkflowDemos(resetInterruptedGeneration(project.nodes))),
+                        resetInterruptedWorkflowDemos(resetInterruptedGeneration(project.nodes)),
                     ),
                 ),
             );

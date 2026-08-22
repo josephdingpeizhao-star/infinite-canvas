@@ -10,14 +10,13 @@ import {
     markProductionStatusReconciliationStarted,
     parseProductionStatusSummary,
     productionStatusReconcileThrottleKey,
-    resetInterruptedProductions,
     shouldReconcileProductionStatus,
     WORKFLOW_PRODUCTION_ORIGIN,
     WORKFLOW_PRODUCTION_RECONCILE_FAILURE_MESSAGE,
     WORKFLOW_PRODUCTION_RECONCILE_THROTTLE_MS,
     type WorkflowProductionStatusSummary,
 } from "../src/lib/canvas/canvas-workflow-production";
-import { CanvasNodeType, type CanvasNodeData, type CanvasWorkflowProductionMetadata } from "../src/types/canvas";
+import type { CanvasWorkflowProductionMetadata } from "../src/types/canvas";
 
 const batchId = "杯子_20260821_112812";
 const expectedConfigIds = ["main_01", "main_02", "detail_01"];
@@ -155,19 +154,7 @@ describe("DC-01 workflow-production metadata reconciliation", () => {
 
     test("refresh keeps running and only an active reconciliation failure unlocks the card", () => {
         const state = productionState("running");
-        const node: CanvasNodeData = {
-            id: "machine",
-            type: CanvasNodeType.Workflow,
-            title: "真实制作",
-            position: { x: 0, y: 0 },
-            width: 420,
-            height: 300,
-            metadata: { workflowProduction: state },
-        };
-        const nodes = [node];
 
-        expect(resetInterruptedProductions(nodes)).toBe(nodes);
-        expect(resetInterruptedProductions(nodes)[0]?.metadata?.workflowProduction).toBe(state);
         expect(markProductionStatusReconciliationStarted(state, 800)).toEqual({ ...state, updatedAt: 800 });
         const markedQueued = markProductionStatusReconciliationStarted({ ...state, status: "queued" }, 800);
         expect(markedQueued).toEqual({ ...state, status: "queued", requestedAt: undefined, updatedAt: 800 });
@@ -191,6 +178,9 @@ describe("DC-01 project reconciliation wiring", () => {
         expect(source).toContain("const wasConnected = previousLocalAgentConnectedRef.current;");
         expect(source).toContain("previousLocalAgentConnectedRef.current = localAgentConnected;");
         expect(source).toContain("wasConnected || !localAgentConnected");
+        expect(source).toContain(
+            "resetInterruptedBatchIntakes(\n                        resetInterruptedWorkflowDemos(resetInterruptedGeneration(project.nodes)),\n                    )",
+        );
     });
 
     test("filters real queued/running targets, records throttle before GET, and guards stale responses", () => {

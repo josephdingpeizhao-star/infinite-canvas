@@ -13,6 +13,7 @@ import {
     readProductionState,
     resolveProductionSelection,
     WORKFLOW_COUNT_DATA_MISSING_MESSAGE,
+    WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS,
 } from "../src/lib/canvas/canvas-workflow-production";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
@@ -222,8 +223,9 @@ describe("canvas workflow production", () => {
         expect(expireProductionState(queued, 8_999)).toEqual(queued);
         expect(expireProductionState(queued, 9_000)).toMatchObject({ status: "failed", producedCount: 0 });
         const running = readProductionState({ workflowProduction: { ...productionMetadata("running", 5, 3, 2), updatedAt: 1_000 } });
-        expect(expireProductionState(running, 720_999)).toEqual(running);
-        expect(expireProductionState(running, 721_000)).toMatchObject({ status: "failed", producedCount: 5 });
+        expect(WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS).toBe(22 * 60_000);
+        expect(expireProductionState(running, 1_000 + 21 * 60_000)).toEqual(running);
+        expect(expireProductionState(running, 1_000 + 22 * 60_000)).toMatchObject({ status: "failed", producedCount: 5 });
     });
 
     test("allows resubmission after an unacknowledged queued command times out", () => {

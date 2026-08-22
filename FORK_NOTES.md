@@ -234,6 +234,7 @@
 | 230 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | DC-01 版本归纳与真人待测清单 | Unreleased 归纳半开死链自动重连、在途状态回补和断链真话文案；待测试页登记半开静默、在途刷新/重连、卡片锁定及回补失败现场验收 | 离线测试不替代真实浏览器半开连接与在途批次现场验证；验收不得点击费用确认或“重新开始” | — |
 | 231 | `web/dist/` | DC-01 最新随仓运行副本 | 按最终源码与更新后的 CHANGELOG 离线重建；入口与主 bundle 使用同次构建产物并随仓交付 | 用户硬刷新即可加载死链检测、状态回补与真话文案；不改 Canvas Agent、桌面 runtime 或便携 ZIP | — |
 | 232 | `desktop/main.cjs` + `desktop/data-root.test.cjs` + `desktop/package.json` + `desktop/scripts/package-portable.ps1` + `desktop/portable/README-zh-CN.txt` + `desktop/portable/FIRST-DEPLOY-CHECKLIST-zh-CN.txt` + `desktop/README.md` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | DATA-01 程序根与用户数据根分离 | 桌面启动的工作台与演示初始化统一注入当前系统 Documents 下的品牌数据根，删除程序旁“杯类”创建逻辑；新增离线回归覆盖 Documents 拼接、两类 Python 子进程环境保留与注入、程序侧“杯类”零创建；便携 ZIP 不再携带空 `reports` 或空“杯类”，说明与真人验收清单同步记录数据位置、首启、重定向 Documents 和升级保留 | 程序目录可整体替换而不迁移批次数据；同一 ZIP 在不同电脑使用各自的 Documents 数据根，同时保留程序资产、凭据、静态服务和 demo userData 既有位置 | — |
+| 233 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/project.tsx` + `web/tests/canvas-workflow-production.test.ts` + `web/tests/dc01-agent-reconnect-watchdog.test.ts` + `web/tests/dc01-workflow-production-reconcile.test.ts` + `web/dist/` | OR-01 前端超时阈值对齐与恒等清理 | 真实制作进度静默阈值由 12 分钟调整为 22 分钟，覆盖 final_prompts 1200 秒回合、VD-01 回合结束心跳和传输余量；保留精确 `>=` 到期边界，并删除恢复链中已退化的恒等包装 | 合法长回合不再被 12 分钟旧阈值误判；进程重启孤儿由主仓启动回补接管，本阈值仅作进程存活但长期无声时的最终兜底 | — |
 
 ## 退役锚点（编号不复用）
 

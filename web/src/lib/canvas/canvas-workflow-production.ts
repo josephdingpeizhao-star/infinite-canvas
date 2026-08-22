@@ -5,7 +5,7 @@ import {
 } from "@/lib/canvas/canvas-command-assistant";
 
 export const WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS = 8_000;
-export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 12 * 60_000;
+export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 22 * 60_000; // final_prompts 回合墙钟为 1200 秒，VD-01 每回合结束才发一次心跳；另留传输余量，后端墙钟调整须联动本值。
 export const WORKFLOW_PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
 // 调整须另行立项：同一张真实制作卡的状态回补固定节流 30 秒。
 export const WORKFLOW_PRODUCTION_RECONCILE_THROTTLE_MS = 30_000;
@@ -528,10 +528,6 @@ export function expireProductionState(state: CanvasWorkflowProductionMetadata, n
         updatedAt: now,
         errorMessage: ackExpired ? "本机工作台没有及时接单，本次没有开始。" : "本机真实制作服务已中断，已经完成的成果都保留了。",
     };
-}
-
-export function resetInterruptedProductions(nodes: CanvasNodeData[]) {
-    return nodes;
 }
 
 function stringValue(value: unknown) {

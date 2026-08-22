@@ -36,11 +36,11 @@ describe("DC-01 production watchdog truthfulness", () => {
     };
 
     test("keeps an expired running card locked while the page is disconnected", () => {
-        const result = expireProductionState(running, 721_000, false);
+        const result = expireProductionState(running, 1_321_000, false);
 
         expect(result).toEqual({
             ...running,
-            updatedAt: 721_000,
+            updatedAt: 1_321_000,
             message: WORKFLOW_PRODUCTION_CONNECTION_INTERRUPTED_MESSAGE,
         });
         expect(result.message).toBe("与本机工作台的连接已中断，正在自动重连；制作可能仍在后台进行，成果都会保留。");
@@ -51,12 +51,12 @@ describe("DC-01 production watchdog truthfulness", () => {
         const expected = {
             ...running,
             status: "failed",
-            updatedAt: 721_000,
+            updatedAt: 1_321_000,
             errorMessage: "本机真实制作服务已中断，已经完成的成果都保留了。",
         };
 
-        expect(expireProductionState(running, 721_000, true)).toEqual(expected);
-        expect(expireProductionState(running, 721_000)).toEqual(expected);
+        expect(expireProductionState(running, 1_321_000, true)).toEqual(expected);
+        expect(expireProductionState(running, 1_321_000)).toEqual(expected);
     });
 
     test("does not change the eight-second acknowledgement timeout when disconnected", () => {
