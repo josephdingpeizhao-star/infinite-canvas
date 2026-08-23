@@ -85,6 +85,7 @@ import { useCanvasWorkflowRepairedProjection } from "./use-canvas-workflow-repai
 import { useCanvasWorkflowReceiving } from "./use-canvas-workflow-receiving";
 import { receivingSelections, snapNodesIntoReceivingBox } from "@/lib/canvas/canvas-workflow-receiving";
 import { useCanvasWorkflowProduction } from "./use-canvas-workflow-production";
+import { useCanvasWorkflowProductionStatusPolling } from "./use-canvas-workflow-production-status-polling";
 import {
     CanvasNodeType,
     type CanvasAssistantImage,
@@ -393,6 +394,7 @@ function InfiniteCanvasPage() {
         setNodes,
         warn: warnWorkflow,
     });
+    useCanvasWorkflowProductionStatusPolling({ nodesRef, setNodes });
     const reconcileWorkflowProductions = useCallback(() => {
         const requestedAt = Date.now();
         const token = useAgentStore.getState().token;

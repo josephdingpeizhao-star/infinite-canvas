@@ -9,6 +9,7 @@ export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 22 * 60_000; // final_pro
 export const WORKFLOW_PRODUCTION_ORIGIN = "http://127.0.0.1:17373";
 // 调整须另行立项：同一张真实制作卡的状态回补固定节流 30 秒。
 export const WORKFLOW_PRODUCTION_RECONCILE_THROTTLE_MS = 30_000;
+export const WORKFLOW_PRODUCTION_STATUS_POLL_INTERVAL_MS = 30_000;
 export const COMPLETED_PRODUCTION_ACTION_LABEL = "继续";
 export const REBIND_RECOMPUTE_ACTION_LABEL = "剔除缺失图并重新分配";
 export const IMAGE_SERVICE_FAILURE_ACTION_LABEL = "再次尝试";
@@ -487,6 +488,24 @@ export function applyProductionStatusSummary(
         failureSource: failed && summary.failureCode && IMAGE_SERVICE_FAILURE_CODES.has(summary.failureCode) ? "image_service" : undefined,
         recovery: undefined,
     };
+}
+
+export function shouldPollProductionStatus(state: CanvasWorkflowProductionMetadata) {
+    return state.status === "running" && Boolean(state.batchId);
+}
+
+export function applyPolledProductionStatusSummary(
+    state: CanvasWorkflowProductionMetadata,
+    summary: WorkflowProductionStatusSummary,
+    now: number,
+    polledRequestId: string | undefined,
+): CanvasWorkflowProductionMetadata | undefined {
+    if (state.status !== "running") return undefined;
+    if (summary.status === "queued") return undefined;
+    if (state.requestId !== polledRequestId) return undefined;
+    const next = applyProductionStatusSummary(state, summary, now);
+    if (!next) return undefined;
+    return next.status === "running" ? { ...next, message: state.message } : next;
 }
 
 export function failProductionStatusReconciliation(state: CanvasWorkflowProductionMetadata, now: number): CanvasWorkflowProductionMetadata {
