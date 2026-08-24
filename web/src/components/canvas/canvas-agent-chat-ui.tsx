@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Button, Tooltip } from "antd";
 import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, Square, UserRound, Wrench, X, XCircle } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { isPlainEnterKey } from "@/lib/keyboard-event";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { clampDetailJson, clampText, LONG_TEXT_THRESHOLD, type ClampedText } from "@/lib/agent/agent-chat-view";
 import type { LocalUser } from "@/stores/use-user-store";
 
 export type CanvasAgentChatAttachment = { id: string; name: string; url: string };
@@ -22,9 +23,12 @@ export type CanvasAgentChatMessage = {
 
 const WORKING_TEXT = "working...";
 
-export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveTool }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void }) {
+export const AgentChatMessage = memo(function AgentChatMessage({ item, theme, user, onRejectTool, onApproveTool }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void }) {
+    const [expanded, setExpanded] = useState(false);
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
+    const messageText = clampText(item.text, expanded || item.role !== "assistant");
+    const canToggleText = item.role === "assistant" && messageText.totalChars > LONG_TEXT_THRESHOLD;
     const color = item.role === "error" ? "#dc2626" : item.role === "tool" ? "#2563eb" : theme.node.text;
     if (isSystem) {
         return (
@@ -51,23 +55,27 @@ export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveToo
             <div className={`min-w-0 max-w-[82%] text-sm leading-6 ${isUser ? "text-right" : "text-left"}`} style={{ color }}>
                 {isUser ? (
                     <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>
+                ) : messageText.truncated ? (
+                    <div className="whitespace-pre-wrap break-words text-left">{messageText.text}</div>
                 ) : (
                     <Streamdown animated isAnimating={!!item.streamId}>{item.text}</Streamdown>
                 )}
+                {canToggleText ? <AgentTextToggle expanded={expanded} totalChars={messageText.totalChars} theme={theme} onToggle={() => setExpanded((value) => !value)} /> : null}
                 {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
                 {item.meta ? <div className="mt-1 text-[11px] opacity-45">{item.meta}</div> : null}
             </div>
             {isUser ? <AgentUserAvatar user={user} theme={theme} /> : null}
         </div>
     );
-}
+});
 
 export function AgentPendingToolCard({ summary, detail, theme, onReject, onApprove }: { summary: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onReject?: () => void; onApprove?: () => void }) {
+    const [detailExpanded, setDetailExpanded] = useState(false);
     return (
         <div className="flex items-start gap-3">
             <AgentAvatar theme={theme} />
             <div className="min-w-0 flex-1 rounded-xl border p-4" style={{ borderColor: theme.node.stroke, background: "transparent", color: theme.node.text }}>
-                <details>
+                <details onToggle={(event) => setDetailExpanded(event.currentTarget.open)}>
                     <summary className="cursor-pointer list-none">
                         <div className="flex items-start gap-3">
                             <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border" style={{ borderColor: "rgba(217,119,6,.24)", color: "#d97706", background: "rgba(217,119,6,.04)" }}>
@@ -82,12 +90,12 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                                     {detail ? <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>详情</span> : null}
                                 </div>
                                 <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>
-                                    {summary}
+                                    <AgentClampedPlainText text={summary} theme={theme} stopDetailsToggle />
                                 </div>
                             </div>
                         </div>
                     </summary>
-                    {detail ? <AgentDetailBlock detail={detail} theme={theme} /> : null}
+                    {detail ? <AgentDetailBlock detail={detail} expanded={detailExpanded} theme={theme} /> : null}
                 </details>
                 {onReject || onApprove ? (
                     <div className="mt-4 grid grid-cols-2 gap-2">
@@ -105,9 +113,10 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
 }
 
 export function AgentToolCard({ title, text, detail, theme }: { title: string; text: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    const [detailExpanded, setDetailExpanded] = useState(false);
     const state = toolCardState(title, text, detail);
     return (
-        <details className="min-w-0 flex-1 rounded-xl border px-4 py-3.5 text-left" style={{ borderColor: theme.node.stroke, background: "transparent", color: theme.node.text }}>
+        <details className="min-w-0 flex-1 rounded-xl border px-4 py-3.5 text-left" style={{ borderColor: theme.node.stroke, background: "transparent", color: theme.node.text }} onToggle={(event) => setDetailExpanded(event.currentTarget.open)}>
             <summary className="cursor-pointer list-none">
                 <div className="flex items-start gap-3">
                     <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border" style={{ borderColor: state.softBorder, color: state.color, background: state.softBg }}>
@@ -122,12 +131,12 @@ export function AgentToolCard({ title, text, detail, theme }: { title: string; t
                             {detail ? <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>详情</span> : null}
                         </div>
                         <div className="mt-2 text-sm leading-6" style={{ color: state.isError ? state.color : theme.node.muted }}>
-                            {text}
+                            <AgentClampedPlainText text={text} theme={theme} stopDetailsToggle />
                         </div>
                     </div>
                 </div>
             </summary>
-            {detail ? <AgentDetailBlock detail={detail} theme={theme} /> : null}
+            {detail ? <AgentDetailBlock detail={detail} expanded={detailExpanded} theme={theme} /> : null}
         </details>
     );
 }
@@ -261,11 +270,50 @@ export function AgentPanelTabs<T extends string>({ value, items, theme, right, o
     );
 }
 
-function AgentDetailBlock({ detail, theme }: { detail: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+function AgentTextToggle({ expanded, totalChars, theme, stopDetailsToggle, onToggle }: { expanded: boolean; totalChars: number; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; stopDetailsToggle?: boolean; onToggle: () => void }) {
+    const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+        if (stopDetailsToggle) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        onToggle();
+    };
     return (
-        <pre className="thin-scrollbar mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.muted }}>
-            {JSON.stringify(detail, null, 2)}
-        </pre>
+        <button type="button" className="mt-1 block text-xs underline-offset-2 hover:underline" style={{ color: theme.node.muted }} onClick={handleClick}>
+            {expanded ? "收起全文" : `展开全文（共 ${totalChars} 字）`}
+        </button>
+    );
+}
+
+function AgentClampedPlainText({ text, theme, stopDetailsToggle }: { text: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; stopDetailsToggle?: boolean }) {
+    const [expanded, setExpanded] = useState(false);
+    const clamped = clampText(text, expanded);
+    if (clamped.totalChars <= LONG_TEXT_THRESHOLD) return <>{text}</>;
+    return (
+        <>
+            <div className="whitespace-pre-wrap break-words">{clamped.text}</div>
+            <AgentTextToggle expanded={expanded} totalChars={clamped.totalChars} theme={theme} stopDetailsToggle={stopDetailsToggle} onToggle={() => setExpanded((value) => !value)} />
+        </>
+    );
+}
+
+function AgentDetailBlock({ detail, expanded, theme }: { detail: unknown; expanded: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    const cachedDetailRef = useRef<{ detail: unknown } | null>(null);
+    const [cached, setCached] = useState<ClampedText | null>(null);
+    useEffect(() => {
+        if (!expanded || cachedDetailRef.current?.detail === detail) return;
+        const json = JSON.stringify(detail, null, 2) ?? "";
+        cachedDetailRef.current = { detail };
+        setCached(clampDetailJson(json, false));
+    }, [detail, expanded]);
+    if (!expanded || !cached) return null;
+    return (
+        <div className="mt-3">
+            <pre className="thin-scrollbar max-h-64 overflow-auto rounded-lg border p-3 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.muted }}>
+                {cached.text}
+            </pre>
+            {cached.truncated ? <div className="mt-1 text-[11px]" style={{ color: theme.node.muted }}>已截断，共 {cached.totalChars} 字符</div> : null}
+        </div>
     );
 }
 

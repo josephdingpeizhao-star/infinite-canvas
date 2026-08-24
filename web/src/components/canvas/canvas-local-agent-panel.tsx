@@ -6,13 +6,14 @@ import { Copy, FolderOpen, History, KeyRound, Link2, LoaderCircle, LogIn, PlugZa
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CODEX_AUTH_POLL_INTERVAL_MS, codexAuthStatusText, normalizeCodexAuthResponse, shouldContinuePolling, type CodexAuthPhase, type CodexAuthState } from "@/lib/agent/agent-codex-auth";
+import { windowMessages } from "@/lib/agent/agent-chat-view";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAgentStore, type AgentAttachment, type AgentChatItem, type AgentEventLog, type AgentPanelTab, type AgentPendingToolCall, type AgentThreadSummary } from "@/stores/use-agent-store";
 import { isAgentSseDead, nextRetryDelayMs, shouldKeepRetrying } from "@/lib/canvas/agent-connection";
 import { summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { isSiteTool, runSiteTool, SITE_TOOL_LABELS } from "@/lib/agent/agent-site-tools";
-import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
+import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment, type CanvasAgentChatMessage } from "./canvas-agent-chat-ui";
 
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_PAYLOAD_BYTES = 28 * 1024 * 1024;
@@ -48,6 +49,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [connectionRun, setConnectionRun] = useState(0);
+    const [showAllMessages, setShowAllMessages] = useState(false);
     const { width, url, token, connected, enabled, prompt, attachments, sending, waiting, messages, eventLogs, threads, activeThreadId, workspacePath, loadingThreads, activeTab, confirmTools, activity, connectError, pendingTool, canvasContext, setAgentState, addMessage: pushMessage, addEventLog: pushEventLog, clearEventLogs } = useAgentStore();
     const listRef = useRef<HTMLDivElement>(null);
     const canvasContextRef = useRef(canvasContext);
@@ -60,9 +62,11 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
     const attachmentUrlsRef = useRef(new Set<string>());
     const clientIdRef = useRef(typeof crypto === "undefined" ? `${Date.now()}` : crypto.randomUUID());
     const endpoint = useMemo(() => url.trim().replace(/\/$/, ""), [url]);
+    const messageWindow = useMemo(() => windowMessages(messages, showAllMessages), [messages, showAllMessages]);
     const urlAgentAutoConnect = searchParams.has("agentUrl") && searchParams.has("agentToken");
     const loadThreads = useCallback(async () => {
         if (!connectedRef.current && !useAgentStore.getState().connected) return;
+        setShowAllMessages(false);
         setAgentState({ loadingThreads: true });
         try {
             const data = await fetchAgentJson<AgentThreadsResponse>(endpoint, token, `/agent/codex/threads`);
@@ -462,6 +466,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
     }, [autoConnect, connected, enabled]);
 
     function clearAgentSession(patch: Parameters<typeof setAgentState>[0] = {}) {
+        setShowAllMessages(false);
         setAgentState({
             messages: [],
             threads: [],
@@ -478,6 +483,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
 
     const startNewThread = async () => {
         if (!connected) return;
+        setShowAllMessages(false);
         setAgentState({ loadingThreads: true });
         try {
             const data = await fetchAgentJson<AgentThreadResponse>(endpoint, token, "/agent/codex/threads/new", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
@@ -493,6 +499,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
 
     const resumeThread = async (threadId: string) => {
         if (!connected || !threadId) return;
+        setShowAllMessages(false);
         setAgentState({ loadingThreads: true });
         try {
             const data = await fetchAgentJson<AgentThreadResponse>(endpoint, token, `/agent/codex/threads/${encodeURIComponent(threadId)}/resume`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
@@ -512,6 +519,7 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
         try {
             await fetchAgentJson(endpoint, token, `/agent/codex/threads/${encodeURIComponent(threadId)}/delete`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
             const current = useAgentStore.getState();
+            if (current.activeThreadId === threadId) setShowAllMessages(false);
             setAgentState({
                 threads: current.threads.filter((thread) => thread.id !== threadId),
                 activeThreadId: current.activeThreadId === threadId ? "" : current.activeThreadId,
@@ -640,7 +648,12 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
             ) : (
                 <>
                     <div ref={listRef} className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-                        {messages.map((item) => (
+                        {messageWindow.hiddenCount > 0 ? (
+                            <button type="button" className="mx-auto block text-xs underline-offset-2 hover:underline" style={{ color: theme.node.muted }} onClick={() => setShowAllMessages(true)}>
+                                显示更早 {messageWindow.hiddenCount} 条消息
+                            </button>
+                        ) : null}
+                        {messageWindow.visible.map((item) => (
                             <AgentChatMessage key={item.id} item={agentMessageToChatMessage(item)} theme={theme} user={user} />
                         ))}
                         {pendingTool ? <AgentPendingToolCard summary={summarizeCanvasAgentOps(pendingTool.input?.ops || []) || toolName(pendingTool.name)} detail={{ requestId: pendingTool.requestId, name: pendingTool.name, input: pendingTool.input }} theme={theme} onReject={rejectPendingTool} onApprove={approvePendingTool} /> : null}
@@ -987,8 +1000,15 @@ async function postToolResult(endpoint: string, token: string, clientId: string,
     await fetch(`${endpoint}/canvas/result?token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(clientId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 }
 
-function agentMessageToChatMessage(item: AgentChatItem) {
-    return { ...item, attachments: item.attachments?.map(agentAttachmentToChatAttachment) };
+const agentChatMessageCache = new WeakMap<AgentChatItem, CanvasAgentChatMessage>();
+
+function agentMessageToChatMessage(item: AgentChatItem): CanvasAgentChatMessage {
+    if (!item.attachments?.length) return item;
+    const cached = agentChatMessageCache.get(item);
+    if (cached) return cached;
+    const converted = { ...item, attachments: item.attachments.map(agentAttachmentToChatAttachment) };
+    agentChatMessageCache.set(item, converted);
+    return converted;
 }
 
 function agentAttachmentToChatAttachment(item: AgentAttachment): CanvasAgentChatAttachment {
