@@ -2,7 +2,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { app, BrowserWindow, dialog, Menu, shell } = require("electron");
+const { app, BrowserWindow, dialog, Menu, powerSaveBlocker, shell } = require("electron");
 const { loadRenderCredentialEnv } = require("./credentials.cjs");
 const { resolveReloadAction } = require("./shortcuts.cjs");
 
@@ -29,10 +29,15 @@ let staticServer = null;
 let ownedAgent = null;
 let ownedWorkbench = null;
 let quitting = false;
+let backgroundPolicy = null;
 
 if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
+    const { appendBackgroundSwitches, createPowerManagement } = require("./background-policy.cjs");
+    backgroundPolicy = createPowerManagement(powerSaveBlocker, (message) => console.warn(message));
+    appendBackgroundSwitches(app.commandLine);
+
     app.on("second-instance", () => {
         if (!mainWindow) return;
         if (mainWindow.isMinimized()) mainWindow.restore();
@@ -43,6 +48,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function startDesktop() {
+    backgroundPolicy?.start();
     app.setAppUserModelId("com.basketikun.infinitecanvas");
     Menu.setApplicationMenu(null);
 
@@ -161,6 +167,7 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: false,
+            backgroundThrottling: false,
         },
     });
 
@@ -463,6 +470,7 @@ function stopOwnedProcess(child) {
 
 app.on("before-quit", () => {
     quitting = true;
+    backgroundPolicy?.stop();
     staticServer?.close();
     staticServer = null;
     const workbench = ownedWorkbench;

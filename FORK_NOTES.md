@@ -239,6 +239,8 @@
 | 235 | `web/src/lib/agent/agent-chat-view.ts` + `web/src/components/canvas/canvas-agent-chat-ui.tsx` + `web/src/components/canvas/canvas-local-agent-panel.tsx` + `web/tests/agent-chat-view.test.ts` + `web/dist/` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | P1 Agent 对话面板长消息渲染治理 | 集中定义 4000 字符折叠阈值、1500 字符预览、最近 30 条窗口和 20000 字符详情上限；消息组件 memo 化，附件转换按原消息引用缓存，长回复与工具正文按需展开，详情首次展开才序列化；新增 15 项纯函数与源码接线离线回归并重建运行副本 | 避免含 2–9 万字符生产消息的历史线程反复执行全量 Markdown 与详情渲染而拖死 UI 线程；消息全文、顺序、流式、工具卡、附件、store、事件协议、回填与轮询语义均不改 | — |
 | 236 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/lib/canvas/canvas-workflow-production-observations.ts` + `web/src/components/canvas/canvas-workflow-node.tsx` + `web/tests/canvas-workflow-production.test.ts` + `web/tests/dc01-workflow-production-reconcile.test.ts` + `web/tests/dc04-workflow-production-status-polling.test.ts` + `web/tests/an01-workflow-production-observations.test.ts` + `CHANGELOG.md` | AN-01 入库结果与绑定分布非阻断告知 | 严格解析 17373 status 的可选角度入库摘要与绑定分布，纯函数派生被拒图片、单源生产和完成态分布人话；真实 production 卡最小接线并为多条提示保留限高滚动，新增纯函数与源码调用/渲染锚定回归 | 用户无需翻账本即可知道哪些上传图未进入生产、是否退化为单源及最终绑定分布；历史批次字段缺省时不显示，费用卡、30 秒轮询节奏、流程停点和 React 测试基础设施均不改 | — |
 | 237 | `web/dist/` | AN-01 最新随仓运行副本 | 按 #236 的最终源码与 CHANGELOG 离线重建，入口与哈希资源使用同次构建产物 | 用户硬刷新即可加载非阻断入库结果提示；不改 Canvas Agent、desktop runtime、费用卡或便携 ZIP | — |
+| 238 | `desktop/background-policy.cjs` + `desktop/background-policy.test.cjs` + `desktop/main.cjs` + `desktop/package.json` | BG-01 Electron 后台保活策略、生命周期接线与离线回归 | 独立无 Electron 依赖的模块集中三条 Chromium 后台开关和 `prevent-app-suspension` 幂等状态机；主实例在 ready 前追加开关，窗口禁用后台节流，应用启动即阻止挂起、退出即安全停止；源码锚定测试钉住四处接线并把模块加入桌面测试与打包清单 | 画布在最小化、被遮挡或系统锁屏时继续处理后端指令，显示器仍可正常息屏；不改 web、Canvas Agent、工作台后端、窗口安全项或便携运行副本 | — |
+| 239 | `desktop/background-policy.cjs` + `desktop/background-policy.test.cjs` + `desktop/main.cjs` | BG-01 保活启动失败安全降级 | 保留 blocker ID、非负整数与 `isStarted` 三重校验；Electron 启动或校验失败时由注入的 `console.warn` 记录原因并返回未启动状态，主启动流程继续执行；start/stop 统一为空值安全调用并新增降级与接线回归 | 电源策略、RDP 或虚拟机环境不支持 blocker 时仍可正常打开画布，仅退回无系统挂起保护的旧行为；stop 幂等语义和既有后台开关不变 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -322,6 +324,8 @@
 - `web/tests/agent-connection.test.ts`：锁定 1 / 2 / 4 / 8 / 15 秒退避、成功史无限重试和冷启动 3 次边界。
 - `desktop/shortcuts.cjs`：把桌面普通刷新与强制刷新键位判定收敛为无 Electron 依赖的纯函数。
 - `desktop/shortcuts.test.cjs`：覆盖五个刷新键位及 Alt、keyUp 和其他按键的负例矩阵。
+- `desktop/background-policy.cjs`：集中声明三条 Chromium 后台开关与 `prevent-app-suspension` 的幂等启停状态机；Electron 对象由主进程注入。
+- `desktop/background-policy.test.cjs`：覆盖开关、blocker 类型、启停全部分支、主进程接线顺序与桌面打包清单。
 
 ## 上游同步纪律
 
