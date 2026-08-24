@@ -32,18 +32,13 @@ let quitting = false;
 let backgroundPolicy = null;
 let workbenchOutputLogging = null;
 
+// 单实例锁仅用于防止端口冲突双开；重复启动一律静默，主窗口绝不自行还原或夺焦。
 if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
     const { appendBackgroundSwitches, createPowerManagement } = require("./background-policy.cjs");
     backgroundPolicy = createPowerManagement(powerSaveBlocker, (message) => console.warn(message));
     appendBackgroundSwitches(app.commandLine);
-
-    app.on("second-instance", () => {
-        if (!mainWindow) return;
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
-    });
 
     app.whenReady().then(startDesktop).catch(showStartupFailure);
 }

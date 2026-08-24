@@ -242,6 +242,7 @@
 | 238 | `desktop/background-policy.cjs` + `desktop/background-policy.test.cjs` + `desktop/main.cjs` + `desktop/package.json` | BG-01 Electron 后台保活策略、生命周期接线与离线回归 | 独立无 Electron 依赖的模块集中三条 Chromium 后台开关和 `prevent-app-suspension` 幂等状态机；主实例在 ready 前追加开关，窗口禁用后台节流，应用启动即阻止挂起、退出即安全停止；源码锚定测试钉住四处接线并把模块加入桌面测试与打包清单 | 画布在最小化、被遮挡或系统锁屏时继续处理后端指令，显示器仍可正常息屏；不改 web、Canvas Agent、工作台后端、窗口安全项或便携运行副本 | — |
 | 239 | `desktop/background-policy.cjs` + `desktop/background-policy.test.cjs` + `desktop/main.cjs` | BG-01 保活启动失败安全降级 | 保留 blocker ID、非负整数与 `isStarted` 三重校验；Electron 启动或校验失败时由注入的 `console.warn` 记录原因并返回未启动状态，主启动流程继续执行；start/stop 统一为空值安全调用并新增降级与接线回归 | 电源策略、RDP 或虚拟机环境不支持 blocker 时仍可正常打开画布，仅退回无系统挂起保护的旧行为；stop 幂等语义和既有后台开关不变 | — |
 | 240 | `desktop/process-output-log.cjs` + `desktop/process-output-log.test.cjs` + `desktop/main.cjs` + `desktop/package.json` | LOG-01 工作台子进程输出双流轮转落盘 | 独立无 Electron 依赖的模块把工作台 stdout/stderr 原始字节分别追加到数据根 `workflow-runtime/logs`，每流 5 MiB、保留 2 份轮转；主进程继续逐字转发原输出并安全降级，源码锚定测试钉住双流接线、数据根路径、测试脚本与打包清单 | GUI 便携版下工作台进程输出不再永久丢失；不改 Canvas Agent 输出、web、BG-01、工作台状态机或便携运行副本 | — |
+| 241 | `desktop/main.cjs` + `desktop/main-window-foreground-policy.test.cjs` + `desktop/package.json` | FG-01 重复启动静默与主窗口前台策略契约 | 删除重复启动时还原、聚焦主窗口的处理器，保留防端口冲突的单实例锁；新增无 Electron 依赖的源码负向契约并纳入桌面测试清单 | 应用运行期间再次启动只让第二实例退出，老窗口不自行还原、夺焦或闪烁；首次启动显示、后台保活、窗口安全项与运行副本均不改 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -327,6 +328,7 @@
 - `desktop/shortcuts.test.cjs`：覆盖五个刷新键位及 Alt、keyUp 和其他按键的负例矩阵。
 - `desktop/background-policy.cjs`：集中声明三条 Chromium 后台开关与 `prevent-app-suspension` 的幂等启停状态机；Electron 对象由主进程注入。
 - `desktop/background-policy.test.cjs`：覆盖开关、blocker 类型、启停全部分支、主进程接线顺序与桌面打包清单。
+- `desktop/main-window-foreground-policy.test.cjs`：以源码负向契约锁定重复启动静默、主窗口不被程序性置前，并保护单实例锁继续存在。
 - `desktop/process-output-log.cjs`：把工作台 stdout/stderr 原始字节分别写入带上限的轮转文件；只接收调用方给定的日志目录，不依赖 Electron 或自行解析数据根。
 - `desktop/process-output-log.test.cjs`：覆盖双流落盘、轮转上限、失败降级、注入调用、主进程双流接线与桌面打包清单。
 
