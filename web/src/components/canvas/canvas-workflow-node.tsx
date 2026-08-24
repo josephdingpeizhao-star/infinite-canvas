@@ -5,6 +5,7 @@ import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_C
 import { REPAIR_PROJECTION_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-delivery";
 import { isWorkflowImageDownloadDisabled } from "@/lib/canvas/canvas-workflow-image-export";
 import { completedProductionStatusText, productionActionLabel, productionFailureStatusText, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
+import { productionObservationMessages } from "@/lib/canvas/canvas-workflow-production-observations";
 import { ACCEPTANCE_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-receiving";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProductionMetadata, CanvasWorkflowProductionStatus } from "@/types/canvas";
@@ -33,6 +34,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, down
     const awaitingConfirmation = !production && demoState.status === "awaiting_confirmation";
     const statusLabel = production ? productionStatusLabel(productionState.status) : workflowStatusLabel(demoState.status);
     const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.totalCount, productionState.message, productionState.errorMessage, productionState.failureSource) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage);
+    const observationMessages = production ? productionObservationMessages(productionState) : [];
     const compactCompletedLayout = Boolean(production && productionState.status === "completed" && (REPAIR_PROJECTION_ENTRY_ENABLED || ACCEPTANCE_ENTRY_ENABLED));
     const completedActions: Array<{ key: string; label: string; disabled?: boolean; wide?: boolean; onClick: (nodeId: string) => void }> = [
         { key: "download-selected", label: "下载选中的图片", disabled: isWorkflowImageDownloadDisabled(downloadableSelectedImageCount), onClick: onDownloadSelected },
@@ -73,6 +75,14 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, down
             <div className={`${compactCompletedLayout ? "min-h-10" : "min-h-12"} rounded-xl border px-3 py-2 text-xs leading-5`} style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: state.status === "failed" ? "#f87171" : theme.node.muted }}>
                 {statusText}
             </div>
+
+            {observationMessages.length ? (
+                <div className="max-h-24 overflow-y-auto rounded-xl border px-3 py-2 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
+                    {observationMessages.map((message) => (
+                        <div key={message}>{message}</div>
+                    ))}
+                </div>
+            ) : null}
 
             {production && productionState.status === "completed" ? (
                 <div className="grid grid-cols-2 gap-2">

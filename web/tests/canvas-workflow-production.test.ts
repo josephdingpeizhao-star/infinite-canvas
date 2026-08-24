@@ -156,6 +156,34 @@ describe("canvas workflow production", () => {
         expect(buildProductionCommand(partial, "cup", "request-002", 2_000).content).toContain("retry: renders");
     });
 
+    test("reads trusted production observations for the card and drops malformed values", () => {
+        const trusted = readProductionState({
+            workflowProduction: {
+                ...productionMetadata("running", 0, 3, 2),
+                angleInventorySummary: {
+                    uploaded_count: 2,
+                    qualified: [{ source_asset_id: "img_001", file_name: "front.jpg", angle_slot: "D" }],
+                    rejected: [{ source_asset_id: "img_002", file_name: "bottom.jpg" }],
+                    missing_angle_slots: ["A", "B", "C"],
+                    single_source_production: true,
+                },
+                bindingDistribution: { bound_reference_counts: { "front.jpg": 5 } },
+            },
+        });
+        expect(trusted.angleInventorySummary?.qualified[0]?.angle_slot).toBe("D");
+        expect(trusted.bindingDistribution?.bound_reference_counts).toEqual({ "front.jpg": 5 });
+
+        const malformed = readProductionState({
+            workflowProduction: {
+                ...productionMetadata("running", 0, 3, 2),
+                angleInventorySummary: { uploaded_count: -1 },
+                bindingDistribution: { bound_reference_counts: { "front.jpg": 0 } },
+            },
+        });
+        expect(malformed.angleInventorySummary).toBeUndefined();
+        expect(malformed.bindingDistribution).toBeUndefined();
+    });
+
     test("continues a paused render gate that has not produced an image", () => {
         const paused = readProductionState({ workflowProduction: productionMetadata("paused", 0, 3, 2) });
         expect(buildProductionCommand(paused, "cup", "request-paused-empty", 2_100).content.split("\n").at(-1)).toBe("run: next");

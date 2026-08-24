@@ -90,6 +90,25 @@ describe("DC-01 workflow-production status contract", () => {
         expect(parseProductionStatusSummary({ ...summary("failed"), message: "" }, batchId)).toBeUndefined();
     });
 
+    test("parses optional observation events and keeps legacy payloads field-absent", () => {
+        const observedPayload = {
+            ...summary(),
+            angleInventorySummary: {
+                uploaded_count: 2,
+                qualified: [{ source_asset_id: "img_001", file_name: "front.jpg", angle_slot: "D" }],
+                rejected: [{ source_asset_id: "img_002", file_name: "bottom.jpg" }],
+                missing_angle_slots: ["A", "B", "C"],
+                single_source_production: true,
+            },
+            bindingDistribution: { bound_reference_counts: { "front.jpg": 3 } },
+        };
+        const parsed = parseProductionStatusSummary(observedPayload, batchId);
+
+        expect(parsed).toEqual(observedPayload);
+        expect(parseProductionStatusSummary(summary(), batchId)).not.toHaveProperty("angleInventorySummary");
+        expect(parseProductionStatusSummary({ ...observedPayload, angleInventorySummary: { ...observedPayload.angleInventorySummary, single_source_production: false } }, batchId)).toBeUndefined();
+    });
+
     test("fails closed on HTTP, JSON, token, and response-contract failures", async () => {
         const invalidJson = (async () => new Response("not json", { status: 200 })) as typeof fetch;
         const serverError = (async () => new Response(JSON.stringify({ message: "not trusted" }), { status: 404 })) as typeof fetch;
@@ -124,6 +143,27 @@ describe("DC-01 workflow-production metadata reconciliation", () => {
             });
             expect(result?.requestId).toBe("request-1");
         }
+    });
+
+    test("copies the latest optional observations into production metadata", () => {
+        const observed = parseProductionStatusSummary(
+            {
+                ...summary(),
+                angleInventorySummary: {
+                    uploaded_count: 2,
+                    qualified: [{ source_asset_id: "img_001", file_name: "front.jpg", angle_slot: "D" }],
+                    rejected: [{ source_asset_id: "img_002", file_name: "bottom.jpg" }],
+                    missing_angle_slots: ["A", "B", "C"],
+                    single_source_production: true,
+                },
+                bindingDistribution: { bound_reference_counts: { "front.jpg": 3 } },
+            },
+            batchId,
+        )!;
+        const result = applyProductionStatusSummary(productionState(), observed, 550);
+
+        expect(result?.angleInventorySummary?.qualified[0]?.angle_slot).toBe("D");
+        expect(result?.bindingDistribution?.bound_reference_counts).toEqual({ "front.jpg": 3 });
     });
 
     test("preserves total count when plannedCount is null and rejects conflicting progress", () => {

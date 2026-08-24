@@ -42,6 +42,16 @@ export type CanvasWorkflowProductionRecovery = {
     files: string[];
     recomputeEligible: boolean;
 };
+export type CanvasWorkflowAngleInventorySummary = {
+    uploaded_count: number;
+    qualified: Array<{ source_asset_id: string; file_name: string; angle_slot: "A" | "B" | "C" | "D" }>;
+    rejected: Array<{ source_asset_id: string; file_name: string }>;
+    missing_angle_slots: Array<"A" | "B" | "C" | "D">;
+    single_source_production: boolean;
+};
+export type CanvasWorkflowBindingDistribution = {
+    bound_reference_counts: Record<string, number>;
+};
 export type CanvasWorkflowProductionMetadata = {
     status: CanvasWorkflowProductionStatus;
     producedCount: number;
@@ -56,6 +66,8 @@ export type CanvasWorkflowProductionMetadata = {
     errorMessage?: string;
     failureSource?: "image_service";
     recovery?: CanvasWorkflowProductionRecovery;
+    angleInventorySummary?: CanvasWorkflowAngleInventorySummary;
+    bindingDistribution?: CanvasWorkflowBindingDistribution;
 };
 export type CanvasWorkflowProductionOutputMetadata = {
     workflowNodeId: string;

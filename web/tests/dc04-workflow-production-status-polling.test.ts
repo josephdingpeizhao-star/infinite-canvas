@@ -91,6 +91,23 @@ describe("DC-04 forward-only polled status application", () => {
         expect(result?.step).toBe("renders");
     });
 
+    test("polling carries the latest nonblocking inventory notice into the card", () => {
+        const observed: WorkflowProductionStatusSummary = {
+            ...summary("running", 2),
+            angleInventorySummary: {
+                uploaded_count: 2,
+                qualified: [{ source_asset_id: "img_001", file_name: "front.jpg", angle_slot: "D" }],
+                rejected: [{ source_asset_id: "img_002", file_name: "bottom.jpg" }],
+                missing_angle_slots: ["A", "B", "C"],
+                single_source_production: true,
+            },
+        };
+        const result = applyPolledProductionStatusSummary(productionState(), observed, 525, "request-1");
+
+        expect(result?.angleInventorySummary?.rejected).toEqual([{ source_asset_id: "img_002", file_name: "bottom.jpg" }]);
+        expect(result?.status).toBe("running");
+    });
+
     test("preserves only the local running message while applying authoritative progress", () => {
         const result = applyPolledProductionStatusSummary(productionState(), summary("running", 2), 550, "request-1");
 

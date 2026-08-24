@@ -1,8 +1,9 @@
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkflowProductionMetadata, type CanvasWorkflowProductionRecovery } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkflowAngleInventorySummary, type CanvasWorkflowBindingDistribution, type CanvasWorkflowProductionMetadata, type CanvasWorkflowProductionRecovery } from "@/types/canvas";
 import {
     requireClosedWorkflowCommand,
     type ClosedWorkflowCommand,
 } from "@/lib/canvas/canvas-command-assistant";
+import { parseAngleInventorySummary, parseBindingDistribution } from "@/lib/canvas/canvas-workflow-production-observations";
 
 export const WORKFLOW_PRODUCTION_ACK_TIMEOUT_MS = 8_000;
 export const WORKFLOW_PRODUCTION_PROGRESS_TIMEOUT_MS = 22 * 60_000; // final_prompts 回合墙钟为 1200 秒，VD-01 每回合结束才发一次心跳；另留传输余量，后端墙钟调整须联动本值。
@@ -55,6 +56,8 @@ export type WorkflowProductionStatusSummary = {
     };
     failureCode?: string;
     message?: string;
+    angleInventorySummary?: CanvasWorkflowAngleInventorySummary;
+    bindingDistribution?: CanvasWorkflowBindingDistribution;
 };
 
 export type WorkflowProductionSelection =
@@ -113,6 +116,8 @@ export function readProductionState(metadata?: CanvasNodeMetadata): CanvasWorkfl
         errorMessage: realErrorMessage ?? (missingCounts ? WORKFLOW_COUNT_DATA_MISSING_MESSAGE : undefined),
         failureSource: value?.failureSource === "image_service" ? value.failureSource : undefined,
         recovery: readProductionRecovery(value?.recovery),
+        angleInventorySummary: parseAngleInventorySummary(value?.angleInventorySummary),
+        bindingDistribution: parseBindingDistribution(value?.bindingDistribution),
     };
 }
 
@@ -216,6 +221,8 @@ export function parseProductionStatusSummary(payload: unknown, batchId: string):
     const renders = record.renders;
     const failureCode = record.failureCode;
     const message = record.message;
+    const angleInventorySummary = record.angleInventorySummary === undefined ? undefined : parseAngleInventorySummary(record.angleInventorySummary);
+    const bindingDistribution = record.bindingDistribution === undefined ? undefined : parseBindingDistribution(record.bindingDistribution);
     if (
         record.ok !== true ||
         record.batchId !== batchId ||
@@ -233,7 +240,9 @@ export function parseProductionStatusSummary(payload: unknown, batchId: string):
             Number((renders as Record<string, unknown>).completedCount) > Number((renders as Record<string, unknown>).plannedCount)) ||
         (failureCode !== undefined && (typeof failureCode !== "string" || !failureCode)) ||
         (message !== undefined && !validStatusMessage(message)) ||
-        (status === "failed" && !validStatusMessage(message))
+        (status === "failed" && !validStatusMessage(message)) ||
+        (record.angleInventorySummary !== undefined && !angleInventorySummary) ||
+        (record.bindingDistribution !== undefined && !bindingDistribution)
     ) {
         return undefined;
     }
@@ -251,6 +260,8 @@ export function parseProductionStatusSummary(payload: unknown, batchId: string):
         },
         failureCode: failureCode as string | undefined,
         message: message as string | undefined,
+        ...(angleInventorySummary ? { angleInventorySummary } : {}),
+        ...(bindingDistribution ? { bindingDistribution } : {}),
     };
 }
 
@@ -474,8 +485,11 @@ export function applyProductionStatusSummary(
         return undefined;
     }
     const failed = summary.status === "failed";
+    const baseState = { ...state };
+    delete baseState.angleInventorySummary;
+    delete baseState.bindingDistribution;
     return {
-        ...state,
+        ...baseState,
         status: summary.status,
         producedCount: summary.renders.completedCount,
         totalCount: countInfo.totalCount,
@@ -487,6 +501,8 @@ export function applyProductionStatusSummary(
         errorMessage: failed ? summary.message : undefined,
         failureSource: failed && summary.failureCode && IMAGE_SERVICE_FAILURE_CODES.has(summary.failureCode) ? "image_service" : undefined,
         recovery: undefined,
+        ...(summary.angleInventorySummary ? { angleInventorySummary: summary.angleInventorySummary } : {}),
+        ...(summary.bindingDistribution ? { bindingDistribution: summary.bindingDistribution } : {}),
     };
 }
 
