@@ -30,6 +30,7 @@ let ownedAgent = null;
 let ownedWorkbench = null;
 let quitting = false;
 let backgroundPolicy = null;
+let workbenchOutputLogging = null;
 
 if (!app.requestSingleInstanceLock()) {
     app.quit();
@@ -50,6 +51,7 @@ if (!app.requestSingleInstanceLock()) {
 async function startDesktop() {
     backgroundPolicy?.start();
     app.setAppUserModelId("com.basketikun.infinitecanvas");
+    workbenchOutputLogging = initializeWorkbenchOutputLogging();
     Menu.setApplicationMenu(null);
 
     const webRoot = path.join(__dirname, "runtime", "web");
@@ -100,6 +102,36 @@ function resolveWorkflowRoot() {
 
 function resolveDataRoot() {
     return path.join(app.getPath("documents"), "无限画布工作流");
+}
+
+function initializeWorkbenchOutputLogging() {
+    try {
+        const { createProcessOutputLog, forwardProcessOutput } = require("./process-output-log.cjs");
+        return {
+            forwardProcessOutput,
+            logger: createProcessOutputLog({
+                directory: path.join(resolveDataRoot(), "workflow-runtime", "logs"),
+            }),
+        };
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.warn(`Workbench process output logging unavailable; continuing without file logs: ${detail}`);
+        return null;
+    }
+}
+
+function forwardWorkbenchOutput(stream, chunk, destination) {
+    if (workbenchOutputLogging === null) {
+        destination.write(`[canvas-workbench] ${chunk}`);
+        return;
+    }
+    workbenchOutputLogging.forwardProcessOutput({
+        destination,
+        logger: workbenchOutputLogging.logger,
+        stream,
+        chunk,
+        prefix: "[canvas-workbench] ",
+    });
 }
 
 function resolvePythonExecutable() {
@@ -274,8 +306,8 @@ async function ensureWorkbench(pythonExe, workflowRoot, demoManifest) {
             windowsHide: true,
         },
     );
-    ownedWorkbench.stdout?.on("data", (chunk) => process.stdout.write(`[canvas-workbench] ${chunk}`));
-    ownedWorkbench.stderr?.on("data", (chunk) => process.stderr.write(`[canvas-workbench] ${chunk}`));
+    ownedWorkbench.stdout?.on("data", (chunk) => forwardWorkbenchOutput("stdout", chunk, process.stdout));
+    ownedWorkbench.stderr?.on("data", (chunk) => forwardWorkbenchOutput("stderr", chunk, process.stderr));
     ownedWorkbench.once("exit", (code) => {
         if (!quitting && code !== 0) console.error(`Canvas workbench exited before the desktop app: ${code ?? 0}`);
         ownedWorkbench = null;

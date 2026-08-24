@@ -7,7 +7,7 @@
   "author": "Infinite Canvas",
   "license": "AGPL-3.0-only",
   "scripts": {
-    "test": "node --test credentials.test.cjs shortcuts.test.cjs data-root.test.cjs background-policy.test.cjs",
+    "test": "node --test credentials.test.cjs shortcuts.test.cjs data-root.test.cjs background-policy.test.cjs process-output-log.test.cjs",
     "build:agent": "npm --prefix ../canvas-agent run build",
     "build:web": "npm --prefix ../web run build",
     "sync:runtime": "node scripts/sync-runtime.mjs",
@@ -42,6 +42,7 @@
       "background-policy.cjs",
       "credentials.cjs",
       "preload.cjs",
+      "process-output-log.cjs",
       "shortcuts.cjs",
       "runtime/**/*",
       "package.json",
