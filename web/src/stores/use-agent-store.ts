@@ -11,9 +11,13 @@ export type AgentCanvasContext = { snapshot: CanvasAgentSnapshot; applyOps: (ops
 export type AgentThreadSummary = { id: string; preview: string; name?: string | null; cwd?: string; status?: string; source?: unknown; createdAt?: number; updatedAt?: number };
 export type AgentPanelTab = "chat" | "setup" | "history" | "log";
 
-const CONNECT_TIMEOUT_MS = 6000;
-let agentSource: EventSource | null = null;
-let connectTimer: ReturnType<typeof setTimeout> | null = null;
+type AgentConnectionCommands = {
+    toggleConnection: () => Promise<void>;
+    loadThreads: () => Promise<void>;
+    approvePendingTool: () => Promise<void>;
+    rejectPendingTool: () => Promise<void>;
+    undoLastTool: () => void;
+};
 
 type AgentStore = {
     width: number;
@@ -40,13 +44,20 @@ type AgentStore = {
     activity: string;
     connectError: string;
     pendingTool: AgentPendingToolCall | null;
-    setAgentState: (patch: Partial<Omit<AgentStore, "setAgentState" | "connectAgent" | "disconnectAgent" | "addMessage" | "addEventLog" | "clearEventLogs" | "openPanel" | "closePanel" | "togglePanel" | "setCanvasContext">>) => void;
+    connectionCommands: AgentConnectionCommands | null;
+    setAgentState: (patch: Partial<Omit<AgentStore, "setAgentState" | "connectAgent" | "disconnectAgent" | "addMessage" | "addEventLog" | "clearEventLogs" | "openPanel" | "closePanel" | "togglePanel" | "setCanvasContext" | "setConnectionCommands" | "toggleAgentConnection" | "loadAgentThreads" | "approvePendingTool" | "rejectPendingTool" | "undoLastAgentTool">>) => void;
     openPanel: () => void;
     closePanel: () => void;
     togglePanel: () => void;
     setCanvasContext: (context: AgentCanvasContext | null) => void;
+    setConnectionCommands: (commands: AgentConnectionCommands | null) => void;
+    toggleAgentConnection: () => Promise<void>;
+    loadAgentThreads: () => Promise<void>;
+    approvePendingTool: () => Promise<void>;
+    rejectPendingTool: () => Promise<void>;
+    undoLastAgentTool: () => void;
     connectAgent: () => void;
-    disconnectAgent: (patch?: Partial<Omit<AgentStore, "setAgentState" | "connectAgent" | "disconnectAgent" | "addMessage" | "addEventLog" | "clearEventLogs" | "openPanel" | "closePanel" | "togglePanel" | "setCanvasContext">>) => void;
+    disconnectAgent: (patch?: Partial<Omit<AgentStore, "setAgentState" | "connectAgent" | "disconnectAgent" | "addMessage" | "addEventLog" | "clearEventLogs" | "openPanel" | "closePanel" | "togglePanel" | "setCanvasContext" | "setConnectionCommands" | "toggleAgentConnection" | "loadAgentThreads" | "approvePendingTool" | "rejectPendingTool" | "undoLastAgentTool">>) => void;
     addMessage: (item: AgentChatItem) => void;
     addEventLog: (item: AgentEventLog) => void;
     clearEventLogs: () => void;
@@ -79,6 +90,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     activity: "就绪",
     connectError: "",
     pendingTool: null,
+    connectionCommands: null,
     setAgentState: (patch) => set(patch),
     openPanel: () => set({ panelOpen: true, panelMounted: true, panelClosing: false }),
     closePanel: () => {
@@ -90,6 +102,12 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     },
     togglePanel: () => (get().panelOpen ? get().closePanel() : get().openPanel()),
     setCanvasContext: (canvasContext) => set({ canvasContext }),
+    setConnectionCommands: (connectionCommands) => set({ connectionCommands }),
+    toggleAgentConnection: () => get().connectionCommands?.toggleConnection() || Promise.resolve(),
+    loadAgentThreads: () => get().connectionCommands?.loadThreads() || Promise.resolve(),
+    approvePendingTool: () => get().connectionCommands?.approvePendingTool() || Promise.resolve(),
+    rejectPendingTool: () => get().connectionCommands?.rejectPendingTool() || Promise.resolve(),
+    undoLastAgentTool: () => get().connectionCommands?.undoLastTool(),
     connectAgent: () => {
         const endpoint = get().url.trim().replace(/\/$/, "");
         const token = get().token.trim();
@@ -102,14 +120,10 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
         }
         localStorage.setItem("canvas-agent-url", endpoint);
         localStorage.setItem("canvas-agent-token", token);
-        // 只设 enabled=true，由 CanvasLocalAgentPanel 的 useEffect 统一负责开 SSE
+        // 只设 enabled=true，由应用级 CanvasAgentConnectionHost 统一负责开 SSE
         set({ url: endpoint, token, enabled: true, activity: "连接中", connectError: "" });
     },
     disconnectAgent: (patch = {}) => {
-        agentSource?.close();
-        agentSource = null;
-        if (connectTimer) clearTimeout(connectTimer);
-        connectTimer = null;
         set({ enabled: false, connected: false, activity: "离线", ...patch });
     },
     addMessage: (item) => set((state) => ({ messages: [...state.messages.slice(-120), item] })),

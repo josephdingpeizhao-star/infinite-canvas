@@ -19,7 +19,7 @@ describe("canvas agent connection retry policy", () => {
     });
 
     test("guards late events after disconnect while preserving page-session connection history", () => {
-        const source = readFileSync(new URL("../src/components/canvas/canvas-local-agent-panel.tsx", import.meta.url), "utf8");
+        const source = readFileSync(new URL("../src/components/canvas/canvas-agent-connection-host.tsx", import.meta.url), "utf8");
         expect(source).toContain("const canHandleEvents = () => isCurrentSource() && useAgentStore.getState().enabled;");
         expect(source.match(/if \(!canHandleEvents\(\)\) return;/g)).toHaveLength(6);
         expect(source).toMatch(/if \(!isCurrentSource\(\)\) return;\r?\n\s+if \(!useAgentStore\.getState\(\)\.enabled\) \{/);

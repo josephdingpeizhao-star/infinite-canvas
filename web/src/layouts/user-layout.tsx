@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { AgentPanel } from "@/components/agent/agent-panel";
+import { CanvasAgentConnectionHost } from "@/components/canvas/canvas-agent-connection-host";
 import { AppTopNav } from "@/components/layout/app-top-nav";
 
 export default function UserLayout({ children }: { children: ReactNode }) {
@@ -10,6 +11,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
                 <AppTopNav />
                 <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
             </div>
+            <CanvasAgentConnectionHost />
             <AgentPanel />
         </div>
     );

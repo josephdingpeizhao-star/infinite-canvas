@@ -18,7 +18,7 @@ describe("DC-01 canvas agent dead-link detection", () => {
     });
 
     test("wires ping and every accepted SSE event into the existing reconnect path", () => {
-        const source = readFileSync(new URL("../src/components/canvas/canvas-local-agent-panel.tsx", import.meta.url), "utf8");
+        const source = readFileSync(new URL("../src/components/canvas/canvas-agent-connection-host.tsx", import.meta.url), "utf8");
         expect(source).toContain('nextSource.addEventListener("ping", () => {');
         expect(source.match(/recordEvent\(\);/g)).toHaveLength(7);
         expect(source).toContain("if (!isCurrentSource() || !isAgentSseDead(lastEventAt, Date.now())) return;");
