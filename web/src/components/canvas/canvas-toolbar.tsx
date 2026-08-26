@@ -1,7 +1,7 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button, Segmented, Switch } from "antd";
-import { CircleDot, ClipboardList, Eraser, FolderOpen, Grid2x2, Group, Hand, Image as ImageIcon, Info, Moon, Music2, Palette, Redo2, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video, Workflow } from "lucide-react";
+import { CircleDot, Eraser, FolderOpen, Grid2x2, Group, Hand, Image as ImageIcon, Info, Moon, Music2, Palette, Redo2, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video, Workflow } from "lucide-react";
 
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -19,7 +19,6 @@ export function CanvasToolbar({
     onAddText,
     onAddConfig,
     onAddWorkflow,
-    onAddBatchInfo,
     onAddGroup,
     onUndo,
     onRedo,
@@ -42,7 +41,6 @@ export function CanvasToolbar({
     onAddText: () => void;
     onAddConfig: () => void;
     onAddWorkflow: () => void;
-    onAddBatchInfo: () => void;
     onAddGroup: () => void;
     onUndo: () => void;
     onRedo: () => void;
@@ -96,11 +94,8 @@ export function CanvasToolbar({
                 <ToolbarButton id="tool-config" label="生成配置" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onAddConfig}>
                     <Settings2 className="size-4.5" />
                 </ToolbarButton>
-                <ToolbarButton id="tool-workflow" label="工作流" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onAddWorkflow}>
+                <ToolbarButton id="tool-workflow" label="生图工作流" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onAddWorkflow}>
                     <Workflow className="size-4.5" />
-                </ToolbarButton>
-                <ToolbarButton id="tool-batch-info" label="信息卡" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onAddBatchInfo}>
-                    <ClipboardList className="size-4.5" />
                 </ToolbarButton>
                 <ToolbarButton id="tool-group" label="组" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onAddGroup}>
                     <Group className="size-4.5" />
@@ -296,8 +291,7 @@ function toolLabel(id: string) {
     if (id === "tool-video") return "视频";
     if (id === "tool-audio") return "音频";
     if (id === "tool-config") return "生成配置";
-    if (id === "tool-workflow") return "工作流";
-    if (id === "tool-batch-info") return "信息卡";
+    if (id === "tool-workflow") return "生图工作流";
     if (id === "tool-group") return "组";
     if (id === "tool-upload") return "上传素材";
     if (id === "tool-assets") return "我的素材";

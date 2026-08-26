@@ -24,6 +24,8 @@ type CanvasNodeProps = {
     isFocusRelated: boolean;
     isConnectionTarget: boolean;
     isConnecting: boolean;
+    dockedVariant?: "top" | "bottom";
+    suppressResizeHandles?: boolean;
     editRequestNonce?: number;
     showPanel: boolean;
     showImageInfo: boolean;
@@ -85,6 +87,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     isFocusRelated,
     isConnectionTarget,
     isConnecting,
+    dockedVariant,
+    suppressResizeHandles = false,
     editRequestNonce = 0,
     showPanel,
     showImageInfo,
@@ -302,7 +306,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
-            <div className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            {!dockedVariant ? <div className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                 {isEditingTitle ? (
                     <input
                         ref={titleInputRef}
@@ -334,14 +338,15 @@ export const CanvasNode = React.memo(function CanvasNode({
                         {data.title || "未命名节点"}
                     </button>
                 )}
-            </div>
+            </div> : null}
 
             <div
-                className="relative h-full w-full overflow-visible rounded-3xl border-2"
+                className={`relative h-full w-full overflow-visible border-2 ${dockedVariant === "top" ? "rounded-t-3xl rounded-b-none" : dockedVariant === "bottom" ? "rounded-b-3xl rounded-t-none" : "rounded-3xl"}`}
                 style={{
                     background: isGroup ? `${theme.toolbar.panel}66` : hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
                     borderColor: isGroup ? (isGroupDropTarget || isActive ? selectionBlue : theme.node.stroke) : hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
                     borderStyle: isGroup ? "dashed" : "solid",
+                    borderTopWidth: dockedVariant === "bottom" ? 0 : undefined,
                     boxShadow: isGroupDropTarget ? `0 0 0 2px ${selectionBlue}66, inset 0 0 0 999px ${selectionBlue}10` : isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
@@ -403,13 +408,17 @@ export const CanvasNode = React.memo(function CanvasNode({
 
                 {!isGroup && !hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
 
-                <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="bottom-left" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
+                {!suppressResizeHandles ? (
+                    <>
+                        <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
+                        <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
+                        <ResizeHandle corner="bottom-left" onMouseDown={handleResizeMouseDown} />
+                        <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
+                    </>
+                ) : null}
             </div>
 
-            {!isGroup ? <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} /> : null}
+            {!isGroup ? <ConnectionHandleDot side="left" label={dockedVariant === "top" ? "风格参考图接入口" : dockedVariant === "bottom" ? "产品原图接入口" : undefined} visible={Boolean(dockedVariant) || hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} /> : null}
             {!isGroup ? <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} /> : null}
 
             {showPanel && !isGroup && renderPanel ? <div className="absolute left-1/2 top-full z-[70] w-[500px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
@@ -807,7 +816,7 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
     return <div className={`absolute z-50 size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
 }
 
-function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "right"; visible: boolean; onMouseDown: (event: React.MouseEvent) => void }) {
+function ConnectionHandleDot({ side, label, visible, onMouseDown }: { side: "left" | "right"; label?: string; visible: boolean; onMouseDown: (event: React.MouseEvent) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     return (
@@ -817,6 +826,7 @@ function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "r
             } ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
             onMouseDown={onMouseDown}
         >
+            {label && side === "left" ? <span className="pointer-events-none absolute right-9 whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold shadow-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.muted }}>{label}</span> : null}
             <div className="size-3 rounded-full border-2 transition-all hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.muted }} />
         </div>
     );

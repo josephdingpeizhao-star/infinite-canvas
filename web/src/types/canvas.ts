@@ -275,6 +275,7 @@ export type CanvasNodeMetadata = {
     bytes?: number;
     durationMs?: number;
     groupId?: string;
+    pairedNodeId?: string;
     workflowDemo?: CanvasWorkflowDemoMetadata;
     workflowDemoOutput?: CanvasWorkflowDemoOutputMetadata;
     workflowProduction?: CanvasWorkflowProductionMetadata;

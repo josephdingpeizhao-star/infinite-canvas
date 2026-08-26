@@ -54,6 +54,7 @@ import {
 } from "@/stores/canvas/use-canvas-workflow-command-store";
 import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { buildConnectionsToAdd, describeBatchConnectResult, planBatchConnections } from "@/lib/canvas/canvas-batch-connect";
+import { createDockedPairPlan, dockedPairVariant, remapPairedNodeId, resolvePairedCascadeIds, shouldHideDockedPairConnection, stripPairedNodeId } from "@/lib/canvas/canvas-docked-pair";
 import type { ClosedWorkflowCommand } from "@/lib/canvas/canvas-command-assistant";
 import { buildCanvasResourceReferences, buildGlobalResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { connectedWorkflowImageIds, resetInterruptedWorkflowDemos } from "@/lib/canvas/canvas-workflow-demo";
@@ -883,6 +884,7 @@ function InfiniteCanvasPage() {
     }, [collapsingBatchIds, nodes, size.height, size.width, viewport.k, viewport.x, viewport.y]);
 
     const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+    const dockedVariantByNodeId = useMemo(() => new Map(nodes.map((node) => [node.id, dockedPairVariant(node, nodes, connections)])), [connections, nodes]);
     const toolbarNode = toolbarNodeId ? nodeById.get(toolbarNodeId) || null : null;
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
@@ -1030,13 +1032,32 @@ function InfiniteCanvasPage() {
         [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter],
     );
 
+    const createDockedWorkflow = useCallback(() => {
+        const timestamp = Date.now();
+        const plan = createDockedPairPlan({
+            center: getCanvasCenter(),
+            cardId: `${CanvasNodeType.BatchInfo}-${timestamp}-${nanoid(5)}`,
+            machineId: `${CanvasNodeType.Workflow}-${timestamp}-${nanoid(5)}`,
+            connectionId: `conn-${timestamp}-${nanoid(5)}`,
+            cardSpec: getNodeSpec(CanvasNodeType.BatchInfo),
+            machineSpec: getNodeSpec(CanvasNodeType.Workflow),
+        });
+
+        setNodes((prev) => [...prev, plan.card, plan.machine]);
+        setConnections((prev) => [...prev, plan.connection]);
+        setSelectedNodeIds(new Set([plan.card.id, plan.machine.id]));
+        setSelectedConnectionId(null);
+        setDialogNodeId(null);
+    }, [getCanvasCenter]);
+
     const deleteNodes = useCallback(
         (ids: Set<string>) => {
             if (!ids.size) return;
-            const allIds = new Set(ids);
+            let allIds = new Set(ids);
             nodesRef.current.forEach((node) => {
                 if (ids.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => allIds.add(childId));
             });
+            allIds = resolvePairedCascadeIds(allIds, nodesRef.current);
             workflowDemo.cancelNodes(allIds);
             batchIntake.cancelNodes(allIds);
             workflowProduction.cancelNodes(allIds);
@@ -1130,6 +1151,7 @@ function InfiniteCanvasPage() {
             id,
             title: `${source.title} Copy`,
             position: { x: source.position.x + 36, y: source.position.y + 36 },
+            metadata: stripPairedNodeId(source.metadata),
         };
 
         setNodes((prev) => [...prev, next]);
@@ -1191,9 +1213,9 @@ function InfiniteCanvasPage() {
         });
 
         const pastedNodes = nextNodes.map((node) => {
-            const groupId = node.metadata?.groupId;
-            if (!groupId) return node;
-            return { ...node, metadata: { ...node.metadata, groupId: idMap.get(groupId) } };
+            const metadata = remapPairedNodeId(node.metadata, idMap);
+            const groupId = metadata?.groupId;
+            return { ...node, metadata: groupId ? { ...metadata, groupId: idMap.get(groupId) } : metadata };
         });
 
         const nextConnections = clipboard.connections.flatMap((connection, index) => {
@@ -1341,7 +1363,7 @@ function InfiniteCanvasPage() {
 
         setSelectedNodeIds(nextSelected);
         setToolbarNodeId(nextSelected.size === 1 && nextSelected.has(nodeId) ? nodeId : null);
-        const dragIds = new Set(nextSelected);
+        let dragIds = new Set(nextSelected);
         currentNodes.forEach((node) => {
             if (!nextSelected.has(node.id)) return;
             node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
@@ -1351,6 +1373,7 @@ function InfiniteCanvasPage() {
                 });
             }
         });
+        dragIds = resolvePairedCascadeIds(dragIds, currentNodes);
         dragRef.current = {
             isDraggingNode: true,
             hasMoved: false,
@@ -2917,7 +2940,7 @@ function InfiniteCanvasPage() {
                             .filter((connection) => {
                                 const from = nodeById.get(connection.fromNodeId);
                                 const to = nodeById.get(connection.toNodeId);
-                                return Boolean(from && to && !isHiddenBatchConnectionEndpoint(from, nodes) && !isHiddenBatchConnectionEndpoint(to, nodes));
+                                return Boolean(from && to && !isHiddenBatchConnectionEndpoint(from, nodes) && !isHiddenBatchConnectionEndpoint(to, nodes) && !shouldHideDockedPairConnection(connection, nodes, connections));
                             })
                             .map((connection) => {
                                 const from = nodeById.get(connection.fromNodeId);
@@ -2957,6 +2980,8 @@ function InfiniteCanvasPage() {
                             isFocusRelated={activeNodeId === node.id}
                             isConnectionTarget={connectionTargetNodeId === node.id}
                             isConnecting={Boolean(connectingParams)}
+                            dockedVariant={dockedVariantByNodeId.get(node.id) || undefined}
+                            suppressResizeHandles={Boolean(dockedVariantByNodeId.get(node.id))}
                             editRequestNonce={editingNodeId === node.id ? editRequestNonce : 0}
                             showPanel={dialogNodeId === node.id && !selectionBox}
                             batchCount={batchChildCountById.get(node.id) || 0}
@@ -3000,6 +3025,7 @@ function InfiniteCanvasPage() {
                                 contentNode.type === CanvasNodeType.BatchInfo ? (
                                     <CanvasBatchInfoNode
                                         node={contentNode}
+                                        docked={dockedVariantByNodeId.get(contentNode.id) === "top"}
                                         connectedOriginalCount={connectedBatchOriginalImageIds(contentNode.id, nodes, connections).length}
                                         connectedStyleReferenceCount={connectedStyleReferenceImageIds(contentNode.id, nodes, connections).length}
                                         connectedOriginalFileNames={connectedBatchOriginalFileNames(contentNode.id, nodes, connections)}
@@ -3019,6 +3045,7 @@ function InfiniteCanvasPage() {
                                 ) : contentNode.type === CanvasNodeType.Workflow ? (
                                     <CanvasWorkflowNode
                                         node={contentNode}
+                                        docked={dockedVariantByNodeId.get(contentNode.id) === "bottom"}
                                         connectedImageCount={connectedWorkflowImageIds(contentNode.id, nodes, connections).length}
                                         production={connectedProductionSummary(contentNode.id, nodes, connections)}
                                         downloadableSelectedImageCount={buildWorkflowImageDownloadPlan(contentNode, nodes, "selected", selectedNodeIds)?.items.length ?? 0}
@@ -3125,8 +3152,7 @@ function InfiniteCanvasPage() {
                     onAddAudio={() => createNode(CanvasNodeType.Audio)}
                     onAddText={() => createNode(CanvasNodeType.Text)}
                     onAddConfig={() => createNode(CanvasNodeType.Config)}
-                    onAddWorkflow={() => createNode(CanvasNodeType.Workflow)}
-                    onAddBatchInfo={() => createNode(CanvasNodeType.BatchInfo)}
+                    onAddWorkflow={createDockedWorkflow}
                     onAddGroup={() => createNode(CanvasNodeType.Group)}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}

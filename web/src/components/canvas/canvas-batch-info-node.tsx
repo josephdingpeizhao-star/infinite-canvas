@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCircle2, CircleAlert, ClipboardList, LoaderCircle, ShieldCheck, Trash2, Workflow } from "lucide-react";
 
 import { CanvasBatchAdvancedOptions } from "@/components/canvas/canvas-batch-advanced-options";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -16,6 +16,7 @@ type EditableFacts = Pick<
 
 export function CanvasBatchInfoNode({
     node,
+    docked = false,
     connectedOriginalCount,
     connectedStyleReferenceCount,
     connectedOriginalFileNames,
@@ -33,6 +34,7 @@ export function CanvasBatchInfoNode({
     onRemoveStyle,
 }: {
     node: CanvasNodeData;
+    docked?: boolean;
     connectedOriginalCount: number;
     connectedStyleReferenceCount: number;
     connectedOriginalFileNames: string[];
@@ -84,12 +86,21 @@ export function CanvasBatchInfoNode({
         <div className="flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto p-4" style={{ color: theme.node.text }} data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
             <div className="flex items-center gap-3">
                 <span className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: theme.toolbar.activeBg, color: theme.node.text }}>
-                    <ClipboardList className="size-5" />
+                    {docked ? <Workflow className="size-5" /> : <ClipboardList className="size-5" />}
                 </span>
                 <div className="min-w-0">
-                    <div className="text-sm font-semibold">批次信息卡</div>
+                    {docked ? (
+                        <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold">生图工作流</span>
+                            <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted }}>
+                                {completed ? "真实" : "演示"}
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="text-sm font-semibold">批次信息卡</div>
+                    )}
                     <div className="mt-0.5 text-[11px]" style={{ color: theme.node.muted }}>
-                        只登记批次 · 不生图 · 不收费
+                        {docked ? (completed ? `批次号 · ${batchId || "登记完成"}` : "演示模式 · 批次未登记") : "只登记批次 · 不生图 · 不收费"}
                     </div>
                 </div>
                 <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium" style={{ background: theme.node.panel, color: statusColor(state.status, theme.node.muted) }}>

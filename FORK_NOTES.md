@@ -244,6 +244,16 @@
 | 240 | `desktop/process-output-log.cjs` + `desktop/process-output-log.test.cjs` + `desktop/main.cjs` + `desktop/package.json` | LOG-01 工作台子进程输出双流轮转落盘 | 独立无 Electron 依赖的模块把工作台 stdout/stderr 原始字节分别追加到数据根 `workflow-runtime/logs`，每流 5 MiB、保留 2 份轮转；主进程继续逐字转发原输出并安全降级，源码锚定测试钉住双流接线、数据根路径、测试脚本与打包清单 | GUI 便携版下工作台进程输出不再永久丢失；不改 Canvas Agent 输出、web、BG-01、工作台状态机或便携运行副本 | — |
 | 241 | `desktop/main.cjs` + `desktop/main-window-foreground-policy.test.cjs` + `desktop/package.json` | FG-01 重复启动静默与主窗口前台策略契约 | 删除重复启动时还原、聚焦主窗口的处理器，保留防端口冲突的单实例锁；新增无 Electron 依赖的源码负向契约并纳入桌面测试清单 | 应用运行期间再次启动只让第二实例退出，老窗口不自行还原、夺焦或闪烁；首次启动显示、后台保活、窗口安全项与运行副本均不改 | — |
 | 242 | `web/src/components/canvas/canvas-agent-connection-host.tsx` + `web/src/components/canvas/canvas-local-agent-panel.tsx` + `web/src/lib/canvas/canvas-agent-client.ts` + `web/src/layouts/user-layout.tsx` + `web/src/components/layout/app-top-nav.tsx` + `web/src/stores/use-agent-store.ts` + `web/tests/agent-connection.test.ts` + `web/tests/dc01-agent-reconnect-watchdog.test.ts` + `web/tests/dc05-agent-connection-host.test.ts` + `web/dist/` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | DC-05 画布 Agent 连接会话应用级常驻 | 把唯一 SSE、死链检测、退避重连、事件/工具处理、URL 注入与已存 token 自动连接迁入 UserLayout 唯一无界面宿主；面板经现有 store 命令调用启停、失败重试、确认/拒绝与撤销，并删除未使用的 headless/autoConnect props；新增源码唯一性、挂载、URL 注入与 token 自动连接双路径和显式停用保护契约，既有连接测试与 DC-01 均只改源码锚点指向并重建运行副本 | 收起 Agent 面板、切页或最小化不再拆除画布会话，真实制作投影可持续上桌；协议、45 秒死链阈值、退避参数、30 秒工具超时、confirmTools 语义、toast 文案和 Canvas Agent/desktop/主仓均不改 | — |
+| 243 | `web/src/types/canvas.ts` | `CanvasNodeMetadata.pairedNodeId` | 仅新增可选字符串成对标识，卡与机器互指 | 未识别 metadata 键继续按既有 JSON 透传/忽略；节点类型、连线结构及后端合同均不改 | — |
+| 244 | `web/src/lib/canvas/canvas-docked-pair.ts` | MG-01 成对纯函数合同 | 集中成对创建计划、含内部线的合体判定、内部线隐藏、拖删级联、复制重映射/剥离与文案分流 | 合体渲染、内部线隐藏和缩放抑制共用 `dockedPairVariant` 四条件状态源；拖删仍只按存在的配对标识级联 | — |
+| 245 | `web/src/components/canvas/canvas-toolbar.tsx` + `web/src/pages/canvas/project.tsx` | “生图工作流”单入口与 `createDockedWorkflow()` | 合并原两个工具栏按钮，一次追加同宽相邻卡、机器及卡到机器内部线 | Agent/拖放等裸节点路径不扩权，旧形态依靠统一回退规则共存 | — |
+| 246 | `web/src/pages/canvas/project.tsx` | 合体变体映射与连线渲染过滤 | 每次从节点和完整连线集计算上下盒变体，仅对完整合体的内部线追加渲染隐藏 | 内部线数据永久保留供快照、导出和后端按原协议读取；条件破坏时连线恢复可见 | — |
+| 247 | `web/src/pages/canvas/project.tsx` | `deleteNodes`、`handleNodeMouseDown`、`pasteCopiedNodes`、`duplicateNode` | 删除/拖动把存在的 partner 纳入既有集合；成对粘贴重映射，半对粘贴和单节点复制剥离标识 | 沿用 `deleteNodes` 现有端点过滤清线与 BN-02 删除预检，不新增旁路清理 | — |
+| 248 | `web/src/components/canvas/canvas-node.tsx` | docked-top/bottom 外框、接入口装饰与 A3 手柄门 | 合体上盒只圆上角、下盒只圆下角并去掉顶边；两盒左侧显示角色接入口；仅当前四条件合体变体不渲染四角缩放手柄 | 缺内部线、几何失配或普通节点均恢复四角手柄；默认 prop 路径保持原标题、圆角和连接点行为 | — |
+| 249 | `web/src/components/canvas/canvas-batch-info-node.tsx` + `web/src/components/canvas/canvas-workflow-node.tsx` | `docked` 可选变体 | 上盒承载合体标题/模式/批次副标，下盒隐藏重复头部并启用产品原图接入口引导；登记表单、回执、按钮和生产状态主体复用原组件 | 默认不传时逐字沿用独立节点；草稿全部输入控件和登记后只读切换不分叉 | — |
+| 250 | `web/tests/canvas-docked-pair.test.ts` | MG-01/A1/A2 离线回归与变异防线 | 覆盖创建几何、四条件判定、隐藏不过度、旧画布、复制、拖删、文案、默认组件、缩放手柄和页面接线 | 零网络、零真实画布、零工作台、零费用；视觉拼缝与吸附手感仍留真人验收 | — |
+| 251 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | MG-01 版本归纳与真人待测清单 | 记录单入口合体及协议不变，并登记创建、两口吸附、整体拖删、旧画布、演示与自然真实批次验收 | 自动测试不代替真实浏览器交互和自然付费批次，文档不提前宣称真人通过 | — |
+| 252 | `web/dist/` | MG-01 最新随仓运行副本 | 按最终源码与版本记录离线重建入口和哈希资源 | 源码与运行副本同次交付；不改 Canvas Agent、desktop runtime、主仓或后端 | — |
 
 ## 退役锚点（编号不复用）
 
@@ -255,6 +265,8 @@
 
 ## 新增文件
 
+- `web/src/lib/canvas/canvas-docked-pair.ts`：MG-01 成对创建、合体/隐藏单一状态源、复制/级联/文案与缩放抑制纯函数。
+- `web/tests/canvas-docked-pair.test.ts`：MG-01、A1、A2 的纯函数、组件默认路径、旧画布及页面接线离线回归。
 - `web/tests/dc01-agent-reconnect-watchdog.test.ts`：覆盖 45 秒死链字面锚、ping/业务事件接线、断链与连接正常两类进度超时文案、8 秒接单超时零回归及非响应式连接态读取。
 - `web/tests/dc01-workflow-production-reconcile.test.ts`：覆盖状态端点/token/失败关闭、五态 metadata 映射、30 秒四维节流键、queued 回补与普通接单超时分离、刷新保持及页面两触发/迟到响应守卫。
 - `canvas-agent/src/codex-isolated.ts`：P2-b 独立 Codex app-server 会话模块；每回合独立进程、4 路失败关闭上限、按线程归属事件、本轮助手文本和三路进程清理均封装在此，不改既有画布助手单例。

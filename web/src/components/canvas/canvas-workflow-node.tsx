@@ -4,6 +4,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { readWorkflowDemoState, WORKFLOW_DEMO_DETAIL_COUNT, WORKFLOW_DEMO_MAIN_COUNT, WORKFLOW_DEMO_TOTAL } from "@/lib/canvas/canvas-workflow-demo";
 import { REPAIR_PROJECTION_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-delivery";
 import { isWorkflowImageDownloadDisabled } from "@/lib/canvas/canvas-workflow-image-export";
+import { workflowEmptyInputMessage } from "@/lib/canvas/canvas-docked-pair";
 import { completedProductionStatusText, productionActionLabel, productionFailureStatusText, readProductionState, type ConnectedProductionSummary } from "@/lib/canvas/canvas-workflow-production";
 import { productionObservationMessages } from "@/lib/canvas/canvas-workflow-production-observations";
 import { ACCEPTANCE_ENTRY_ENABLED } from "@/lib/canvas/canvas-workflow-receiving";
@@ -12,6 +13,7 @@ import type { CanvasNodeData, CanvasWorkflowDemoStatus, CanvasWorkflowProduction
 
 type CanvasWorkflowNodeProps = {
     node: CanvasNodeData;
+    docked?: boolean;
     connectedImageCount: number;
     production?: ConnectedProductionSummary;
     downloadableSelectedImageCount: number;
@@ -24,7 +26,7 @@ type CanvasWorkflowNodeProps = {
     onToggleDetails: (nodeId: string) => void;
 };
 
-export function CanvasWorkflowNode({ node, connectedImageCount, production, downloadableSelectedImageCount, downloadableAllImageCount, onStart, onDownloadSelected, onDownloadAll, onProjectRepaired, onEnsureReceiving, onToggleDetails }: CanvasWorkflowNodeProps) {
+export function CanvasWorkflowNode({ node, docked = false, connectedImageCount, production, downloadableSelectedImageCount, downloadableAllImageCount, onStart, onDownloadSelected, onDownloadAll, onProjectRepaired, onEnsureReceiving, onToggleDetails }: CanvasWorkflowNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const demoState = readWorkflowDemoState(node.metadata);
     const productionState = readProductionState(node.metadata);
@@ -33,7 +35,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, down
     const queued = state.status === "queued";
     const awaitingConfirmation = !production && demoState.status === "awaiting_confirmation";
     const statusLabel = production ? productionStatusLabel(productionState.status) : workflowStatusLabel(demoState.status);
-    const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.totalCount, productionState.message, productionState.errorMessage, productionState.failureSource) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage);
+    const statusText = production ? productionStatusText(productionState.status, productionState.producedCount, productionState.totalCount, productionState.message, productionState.errorMessage, productionState.failureSource) : workflowStatusText(demoState.status, demoState.producedCount, connectedImageCount, demoState.errorMessage, docked);
     const observationMessages = production ? productionObservationMessages(productionState) : [];
     const compactCompletedLayout = Boolean(production && productionState.status === "completed" && (REPAIR_PROJECTION_ENTRY_ENABLED || ACCEPTANCE_ENTRY_ENABLED));
     const completedActions: Array<{ key: string; label: string; disabled?: boolean; wide?: boolean; onClick: (nodeId: string) => void }> = [
@@ -45,7 +47,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, down
 
     return (
         <div className={`flex h-full w-full cursor-move flex-col ${compactCompletedLayout ? "gap-2" : "gap-3"} p-4`} style={{ color: theme.node.text }}>
-            <div className="flex items-center gap-3">
+            {!docked ? <div className="flex items-center gap-3">
                 <span className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: theme.toolbar.activeBg, color: theme.node.text }}>
                     <Workflow className="size-5" />
                 </span>
@@ -64,7 +66,7 @@ export function CanvasWorkflowNode({ node, connectedImageCount, production, down
                     {statusIcon(state.status)}
                     {statusLabel}
                 </span>
-            </div>
+            </div> : null}
 
             <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                 <SummaryCell label="已连接" value={`${production?.materialCount ?? connectedImageCount} 张`} />
@@ -205,13 +207,13 @@ function workflowStatusLabel(status: CanvasWorkflowDemoStatus) {
     return "待机";
 }
 
-function workflowStatusText(status: CanvasWorkflowDemoStatus, producedCount: number, connectedImageCount: number, errorMessage?: string) {
+function workflowStatusText(status: CanvasWorkflowDemoStatus, producedCount: number, connectedImageCount: number, errorMessage?: string, docked = false) {
     if (status === "awaiting_confirmation") return "等待确认本次 0 元演示费用。";
     if (status === "queued") return "已提交，等待本机演示服务接单。";
     if (status === "running") return `正在生成第 ${Math.min(producedCount + 1, WORKFLOW_DEMO_TOTAL)}/${WORKFLOW_DEMO_TOTAL} 张，已完成 ${producedCount} 张。`;
     if (status === "completed") return `${WORKFLOW_DEMO_TOTAL} 张演示图已上桌。再次开始会保留旧图。`;
     if (status === "failed") return errorMessage || "演示没有完成，已经上桌的图片仍然保留。";
-    return connectedImageCount ? `已连接 ${connectedImageCount} 张素材，可以开始演示。` : "请先把至少 1 张图片素材连到左侧输入点。";
+    return connectedImageCount ? `已连接 ${connectedImageCount} 张素材，可以开始演示。` : workflowEmptyInputMessage(docked, "请先把至少 1 张图片素材连到左侧输入点。");
 }
 
 function workflowActionLabel(status: CanvasWorkflowDemoStatus) {
