@@ -255,6 +255,13 @@
 | 251 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | MG-01 版本归纳与真人待测清单 | 记录单入口合体及协议不变，并登记创建、两口吸附、整体拖删、旧画布、演示与自然真实批次验收 | 自动测试不代替真实浏览器交互和自然付费批次，文档不提前宣称真人通过 | — |
 | 252 | `web/dist/` | MG-01 最新随仓运行副本 | 按最终源码与版本记录离线重建入口和哈希资源 | 源码与运行副本同次交付；不改 Canvas Agent、desktop runtime、主仓或后端 | — |
 | 253 | `canvas-agent/src/codex-isolated.ts` + `canvas-agent/src/codex-isolated.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | SLIM-03 生产隔离会话提示词直通 | 隔离新建与续接会话直接传递生产 prompt，不再附加画布助手工具教学；新增源码负向锚与续轮原文正负断言，并登记真实批次头部复核欠账 | 生产隔离会话本就不挂画布工具，去除无效前缀不改变空串拒绝、线程归属、模型档位、4 路并发或两个助手面板入口；不重建 `dist` | — |
+| 254 | `canvas-agent/src/agents.ts` | AG-01 Codex delta 全量快照节流与回合级身份 | 首个 delta 立即广播，持续流按每消息 100ms 至多一次发送最新全量快照；`item/completed`、错误和 turn 完结强制冲刷，键改为 `turnId:itemId`，turn 完结清理累积文本与定时器，真实 delta 计数口径不变 | 切断逐字符累积全文广播与跨回合裸 itemId 串接，同时保持 `item.updated` 全量快照、`stream.summary`、SSE 事件名和 payload 结构不变 | 2026-08-27 |
+| 255 | `canvas-agent/src/agents-delta.test.ts` | AG-01 可控时钟节流回归与变异防线 | 新增 5 项假时钟测试，覆盖 100ms 上限、最新快照、item/错误/turn 冲刷、定时器与累积表清理、跨 turn 复用 itemId 及真实 delta 计数 | 零墙钟睡眠、零真实 Codex、零网络；M1/M3/M4 行为回退均可稳定引红 | 2026-08-27 |
+| 256 | `web/src/lib/canvas/canvas-agent-client.ts` | AG-01 `agentStreamId()` 与 `upsertAgentMessage()` 纯函数 | 集中组合身份、文本规整、同键快照覆盖、新键追加、无身份旧行为与 `slice(-120)`；流式路径不再调用 merge，保留的无身份助手合并删除 O(n²) 重叠扫描 | 两组件共享单一消息决策，带身份消息绝不并入上一条或丢失 streamId，普通 user/tool/error/提示保持原行为 | 2026-08-27 |
+| 257 | `web/src/components/canvas/canvas-agent-connection-host.tsx` + `web/src/components/canvas/canvas-local-agent-panel.tsx` | AG-01 两处 `addMessage` 薄包装与流式身份接线 | 删除两份重复决策，统一调用纯 upsert；SSE 助手消息优先使用实际 turn 字段与 item id 组成身份，并兼容已组合或仅有旧 item id 的事件 | 常驻 SSE 与面板内本地提示使用同一有界写入规则；连接、工具、历史、渲染与 store 文件均不改 | 2026-08-27 |
+| 258 | `web/tests/agent-message-upsert.test.ts` | AG-01 双消息复现、upsert 矩阵与组件接线 | 新增 10 项覆盖同 turn 两条 agent_message 交错快照、同键稳定 id、新键、跨 turn 同 itemId、无身份消息、尾部上限、trim/空文本及两组件唯一接线 | T1 在修前稳定复现消息并吞与全文膨胀；M2/M4 退回旧合并时稳定引红 | 2026-08-27 |
+| 259 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | AG-01 版本归纳与真人待测清单 | 记录长配置阶段 Agent 面板流畅性与重复巨字消息治理，并登记真实批次开面板验收项 | 自动测试不替代约 26 分钟真实配置阶段的浏览器交互验收，费用与批次数据不受影响 | 2026-08-27 |
+| 260 | `web/dist/` | AG-01 最新随仓运行副本 | 按最终源码与版本记录重建入口和哈希资源 | 用户硬刷新即可加载严格消息身份更新；不改 Canvas Agent 运行副本、desktop runtime、主仓或后端 | 2026-08-27 |
 
 ## 退役锚点（编号不复用）
 
@@ -266,6 +273,8 @@
 
 ## 新增文件
 
+- `canvas-agent/src/agents-delta.test.ts`：AG-01 100ms 全量快照节流、强制冲刷、跨 turn 身份、清理与真实 delta 计数的可控时钟回归。
+- `web/tests/agent-message-upsert.test.ts`：AG-01 两条交错助手消息复现、严格 upsert 矩阵与两组件共用接线回归。
 - `web/src/lib/canvas/canvas-docked-pair.ts`：MG-01 成对创建、合体/隐藏单一状态源、复制/级联/文案与缩放抑制纯函数。
 - `web/tests/canvas-docked-pair.test.ts`：MG-01、A1、A2 的纯函数、组件默认路径、旧画布及页面接线离线回归。
 - `web/tests/dc01-agent-reconnect-watchdog.test.ts`：覆盖 45 秒死链字面锚、ping/业务事件接线、断链与连接正常两类进度超时文案、8 秒接单超时零回归及非响应式连接态读取。

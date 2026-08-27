@@ -6,7 +6,7 @@ import { Copy, FolderOpen, History, KeyRound, Link2, LoaderCircle, LogIn, PlugZa
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CODEX_AUTH_POLL_INTERVAL_MS, codexAuthStatusText, normalizeCodexAuthResponse, shouldContinuePolling, type CodexAuthPhase, type CodexAuthState } from "@/lib/agent/agent-codex-auth";
 import { windowMessages } from "@/lib/agent/agent-chat-view";
-import { canvasAgentToolName, fetchAgentJson, mergeAgentText, normalizeAgentHistoryMessages, normalizeAgentText } from "@/lib/canvas/canvas-agent-client";
+import { canvasAgentToolName, fetchAgentJson, normalizeAgentHistoryMessages, normalizeAgentText, upsertAgentMessage } from "@/lib/canvas/canvas-agent-client";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAgentStore, type AgentAttachment, type AgentChatItem, type AgentEventLog, type AgentPanelTab, type AgentThreadSummary } from "@/stores/use-agent-store";
@@ -31,7 +31,7 @@ export function CanvasLocalAgentPanel({ embedded }: { embedded?: boolean }) {
     const user = useUserStore((state) => state.user);
     const { message, modal } = App.useApp();
     const [showAllMessages, setShowAllMessages] = useState(false);
-    const { width, url, token, connected, enabled, prompt, attachments, sending, waiting, messages, eventLogs, threads, activeThreadId, workspacePath, loadingThreads, activeTab, activity, connectError, pendingTool, canvasContext, setAgentState, addMessage: pushMessage, addEventLog: pushEventLog, clearEventLogs, toggleAgentConnection, loadAgentThreads, approvePendingTool, rejectPendingTool, undoLastAgentTool } = useAgentStore();
+    const { width, url, token, connected, enabled, prompt, attachments, sending, waiting, messages, eventLogs, threads, activeThreadId, workspacePath, loadingThreads, activeTab, activity, connectError, pendingTool, canvasContext, setAgentState, addEventLog: pushEventLog, clearEventLogs, toggleAgentConnection, loadAgentThreads, approvePendingTool, rejectPendingTool, undoLastAgentTool } = useAgentStore();
     const listRef = useRef<HTMLDivElement>(null);
     const attachmentUrlsRef = useRef(new Set<string>());
     const endpoint = useMemo(() => url.trim().replace(/\/$/, ""), [url]);
@@ -192,25 +192,9 @@ export function CanvasLocalAgentPanel({ embedded }: { embedded?: boolean }) {
     };
 
     const addMessage = (item: Omit<AgentChatItem, "id">) => {
-        const text = normalizeAgentText(item.text);
-        if (!text && !item.attachments?.length) return;
-        const next = { ...item, id: `${Date.now()}-${Math.random()}`, text };
         const currentMessages = useAgentStore.getState().messages;
-        if (next.streamId) {
-            const index = currentMessages.findIndex((message) => message.streamId === next.streamId);
-            if (index >= 0) {
-                setAgentState({ messages: currentMessages.map((message, i) => i === index ? { ...message, ...next, id: message.id, text: next.text || message.text } : message) });
-                return;
-            }
-        }
-        const last = currentMessages.at(-1);
-        if (last?.role === "assistant" && next.role === "assistant" && last.title === next.title) {
-            const merged = mergeAgentText(last.text, next.text);
-            if (merged === last.text) return;
-            setAgentState({ messages: [...useAgentStore.getState().messages.slice(0, -1), { ...last, text: merged, meta: next.meta || last.meta }] });
-            return;
-        }
-        pushMessage(next);
+        const nextMessages = upsertAgentMessage(currentMessages, item, `${Date.now()}-${Math.random()}`);
+        if (nextMessages !== currentMessages) setAgentState({ messages: nextMessages });
     };
 
     const addEventLog = (title: string, text: unknown, raw?: unknown) => {

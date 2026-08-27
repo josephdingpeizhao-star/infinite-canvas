@@ -29,12 +29,33 @@ export function normalizeAgentText(value: unknown) {
 export function mergeAgentText(prev: string, next: string) {
     if (!next || prev === next || prev.endsWith(next)) return prev;
     if (next.startsWith(prev)) return next;
-    for (let size = Math.min(prev.length, next.length); size > 0; size--) {
-        if (prev.endsWith(next.slice(0, size))) return `${prev}${next.slice(size)}`;
-    }
-    const half = Math.floor(prev.length / 2);
-    if (prev.length > 12 && next.length > 12 && prev.slice(half) === next.slice(0, prev.length - half)) return prev;
     return `${prev}${next}`;
+}
+
+export function agentStreamId(turnId: string, itemId: string) {
+    if (!turnId) return itemId;
+    const prefix = `${turnId}:`;
+    return itemId.startsWith(prefix) ? itemId : `${prefix}${itemId}`;
+}
+
+export function upsertAgentMessage(messages: AgentChatItem[], item: Omit<AgentChatItem, "id">, id: string) {
+    const text = normalizeAgentText(item.text);
+    if (!text && !item.attachments?.length) return messages;
+    const next = { ...item, id, text };
+    if (next.streamId) {
+        const index = messages.findIndex((current) => current.streamId === next.streamId);
+        if (index >= 0) {
+            return messages.map((current, currentIndex) => currentIndex === index ? { ...current, ...next, id: current.id, text: next.text } : current);
+        }
+        return [...messages.slice(-120), next];
+    }
+    const last = messages.at(-1);
+    if (last?.role === "assistant" && next.role === "assistant" && last.title === next.title) {
+        const merged = mergeAgentText(last.text, next.text);
+        if (merged === last.text) return messages;
+        return [...messages.slice(0, -1), { ...last, text: merged, meta: next.meta || last.meta }];
+    }
+    return [...messages.slice(-120), next];
 }
 
 export function canvasAgentToolName(name: string) {

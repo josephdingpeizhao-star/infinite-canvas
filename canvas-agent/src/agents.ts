@@ -16,9 +16,25 @@ type CodexReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xh
 type CodexRunOptions = { threadId?: string; cwd?: string; model?: string; effort?: CodexReasoningEffort };
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
 type CodexTurnError = Error & { code: string };
+type CodexDeltaScheduler = {
+    setTimeout: (callback: () => void, delayMs: number) => unknown;
+    clearTimeout: (handle: unknown) => void;
+};
+type CodexDeltaSnapshot = {
+    turnId: string;
+    streamId: string;
+    text: string;
+    emittedText: string | null;
+    timer: unknown | null;
+};
 
 const CODEX_FAILURE_CODES = new Set(["empty_assistant_response", "codex_turn_failed", "codex_turn_interrupted"]);
 const CODEX_REASONING_EFFORTS = new Set<CodexReasoningEffort>(["none", "minimal", "low", "medium", "high", "xhigh"]);
+export const CODEX_DELTA_THROTTLE_MS = 100;
+const CODEX_DELTA_SCHEDULER: CodexDeltaScheduler = {
+    setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+    clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
 
 let codexQueue: Promise<unknown> = Promise.resolve();
 let codexApp: CodexAppClient | null = null;
@@ -143,8 +159,7 @@ function isRecoverableThreadError(error: unknown) {
 class CodexAppClient {
     private nextId = 1;
     private buffer = "";
-    private textByItem = new Map<string, string>();
-    private deltaCount = 0;
+    private deltaSnapshots: CodexDeltaSnapshotBuffer;
     private lastUsage: unknown = null;
     private pending = new Map<number, PendingRequest>();
     private activeTurns = new Map<string, PendingRequest>();
@@ -153,7 +168,9 @@ class CodexAppClient {
     private errorNotificationTurns = new Set<string>();
     private currentTurnId = "";
 
-    private constructor(private child: ChildProcess, private emit: AgentEmit) {}
+    private constructor(private child: ChildProcess, private emit: AgentEmit) {
+        this.deltaSnapshots = createCodexDeltaSnapshotBuffer(emit);
+    }
 
     static async start(emit: AgentEmit) {
         const codex = resolveCodexCommand();
@@ -271,12 +288,23 @@ class CodexAppClient {
         const notificationTurnId = String(field(params, "turnId") || field(field(params, "turn"), "id") || this.currentTurnId);
         if (method === "item/agentMessage/delta") {
             if (notificationTurnId && String(field(params, "delta") || "").trim()) this.assistantOutputTurns.add(notificationTurnId);
-            return this.emitDelta(params);
+            return this.deltaSnapshots.append(notificationTurnId, String(field(params, "itemId") || ""), String(field(params, "delta") || ""));
         }
-        if (method === "item/completed" && notificationTurnId && completedAssistantText(params)) this.assistantOutputTurns.add(notificationTurnId);
-        if (method === "error" && notificationTurnId) this.errorNotificationTurns.add(notificationTurnId);
+        if (method === "item/completed" && notificationTurnId) {
+            const item = field(params, "item");
+            if (completedAssistantText(params)) this.assistantOutputTurns.add(notificationTurnId);
+            if (String(field(item, "type") || "") === "agentMessage") {
+                const finalText = String(field(item, "text") || "");
+                this.deltaSnapshots.completeItem(notificationTurnId, String(field(item, "id") || ""), finalText || undefined);
+            }
+        }
+        if (method === "error" && notificationTurnId) {
+            this.errorNotificationTurns.add(notificationTurnId);
+            this.deltaSnapshots.flushTurn(notificationTurnId);
+        }
+        if (method === "turn/completed" && notificationTurnId) this.deltaSnapshots.flushTurn(notificationTurnId);
         if (method === "thread/tokenUsage/updated") this.lastUsage = normalizeUsage(params);
-        const event = normalizeCodexNotification(method, params);
+        const event = normalizeCodexNotification(method, params, notificationTurnId);
         if (!event) return;
         if (event.type === "turn.completed") event.usage = this.lastUsage;
         this.emit("agent_event", { agent: "codex", ...event });
@@ -296,8 +324,7 @@ class CodexAppClient {
             } else if (turnId) {
                 this.completedTurns.set(turnId, failure);
             }
-            this.emit("agent_event", { agent: "codex", type: "stream.summary", delta_count: this.deltaCount });
-            this.deltaCount = 0;
+            this.emit("agent_event", { agent: "codex", type: "stream.summary", delta_count: this.deltaSnapshots.finishTurn(turnId) });
             this.emit("agent_done", {
                 agent: "codex",
                 usage: event.usage,
@@ -305,14 +332,6 @@ class CodexAppClient {
                 ...(failure ? { failureCode: failure.code } : {}),
             });
         }
-    }
-
-    private emitDelta(params: Json) {
-        const id = String(field(params, "itemId") || "");
-        const text = `${this.textByItem.get(id) || ""}${String(field(params, "delta") || "")}`;
-        this.deltaCount += 1;
-        this.textByItem.set(id, text);
-        this.emit("agent_event", { agent: "codex", type: "item.updated", item: { id, type: "agent_message", text } });
     }
 
     private answerServerRequest(message: Json) {
@@ -333,6 +352,7 @@ class CodexAppClient {
     }
 
     failAll(message: string) {
+        this.deltaSnapshots.clear();
         [...this.pending.values(), ...this.activeTurns.values()].forEach((item) => item.reject(new Error(message)));
         this.pending.clear();
         this.activeTurns.clear();
@@ -340,6 +360,104 @@ class CodexAppClient {
         this.errorNotificationTurns.clear();
         this.currentTurnId = "";
     }
+}
+
+class CodexDeltaSnapshotBuffer {
+    private snapshots = new Map<string, CodexDeltaSnapshot>();
+    private deltaCount = 0;
+
+    constructor(private emit: AgentEmit, private scheduler: CodexDeltaScheduler) {}
+
+    append(turnId: string, itemId: string, delta: string) {
+        const streamId = agentStreamId(turnId, itemId);
+        let snapshot = this.snapshots.get(streamId);
+        this.deltaCount += 1;
+        if (!snapshot) {
+            snapshot = { turnId, streamId, text: delta, emittedText: null, timer: null };
+            this.snapshots.set(streamId, snapshot);
+            this.emitSnapshot(snapshot);
+            this.arm(snapshot);
+            return;
+        }
+        snapshot.text += delta;
+        if (snapshot.timer === null) {
+            this.emitSnapshot(snapshot);
+            this.arm(snapshot);
+        }
+    }
+
+    completeItem(turnId: string, itemId: string, finalText?: string) {
+        const streamId = agentStreamId(turnId, itemId);
+        let snapshot = this.snapshots.get(streamId);
+        if (!snapshot && finalText !== undefined) {
+            snapshot = { turnId, streamId, text: finalText, emittedText: null, timer: null };
+            this.snapshots.set(streamId, snapshot);
+        } else if (snapshot && finalText !== undefined) {
+            snapshot.text = finalText;
+        }
+        if (!snapshot) return;
+        this.flush(snapshot);
+        this.snapshots.delete(streamId);
+    }
+
+    flushTurn(turnId: string) {
+        for (const snapshot of this.snapshots.values()) {
+            if (snapshot.turnId === turnId) this.flush(snapshot);
+        }
+    }
+
+    finishTurn(turnId: string) {
+        for (const [streamId, snapshot] of this.snapshots) {
+            if (snapshot.turnId !== turnId) continue;
+            this.flush(snapshot);
+            this.snapshots.delete(streamId);
+        }
+        const count = this.deltaCount;
+        this.deltaCount = 0;
+        return count;
+    }
+
+    activeItemCount() {
+        return this.snapshots.size;
+    }
+
+    clear() {
+        for (const snapshot of this.snapshots.values()) this.flush(snapshot);
+        this.snapshots.clear();
+        this.deltaCount = 0;
+    }
+
+    private arm(snapshot: CodexDeltaSnapshot) {
+        snapshot.timer = this.scheduler.setTimeout(() => {
+            snapshot.timer = null;
+            if (snapshot.text === snapshot.emittedText) return;
+            this.emitSnapshot(snapshot);
+            this.arm(snapshot);
+        }, CODEX_DELTA_THROTTLE_MS);
+    }
+
+    private flush(snapshot: CodexDeltaSnapshot) {
+        if (snapshot.timer !== null) {
+            this.scheduler.clearTimeout(snapshot.timer);
+            snapshot.timer = null;
+        }
+        if (snapshot.text !== snapshot.emittedText) this.emitSnapshot(snapshot);
+    }
+
+    private emitSnapshot(snapshot: CodexDeltaSnapshot) {
+        snapshot.emittedText = snapshot.text;
+        this.emit("agent_event", { agent: "codex", type: "item.updated", item: { id: snapshot.streamId, type: "agent_message", text: snapshot.text } });
+    }
+}
+
+export function agentStreamId(turnId: string, itemId: string) {
+    if (!turnId) return itemId;
+    const prefix = `${turnId}:`;
+    return itemId.startsWith(prefix) ? itemId : `${prefix}${itemId}`;
+}
+
+export function createCodexDeltaSnapshotBuffer(emit: AgentEmit, scheduler: CodexDeltaScheduler = CODEX_DELTA_SCHEDULER) {
+    return new CodexDeltaSnapshotBuffer(emit, scheduler);
 }
 
 export function createUtf8StreamDecoder(consume: (text: string) => void) {
@@ -417,12 +535,12 @@ export function codexInput(prompt: string, images: string[]) {
     return [{ type: "text", text: prompt, text_elements: [] }, ...images.map((file) => ({ type: "localImage", path: file }))];
 }
 
-function normalizeCodexNotification(method: string, params: Json): AgentEvent | null {
+function normalizeCodexNotification(method: string, params: Json, turnId = ""): AgentEvent | null {
     if (method === "thread/started") return { type: "thread.started", thread_id: field(field(params, "thread"), "id") };
     if (method === "turn/started") return { type: "turn.started" };
     if (method === "turn/completed") return { type: "turn.completed", usage: null };
-    if (method === "item/started") return { type: "item.started", item: normalizeItem(field(params, "item")) };
-    if (method === "item/completed") return { type: "item.completed", item: normalizeItem(field(params, "item")) };
+    if (method === "item/started") return { type: "item.started", item: normalizeItem(field(params, "item"), turnId) };
+    if (method === "item/completed") return { type: "item.completed", item: normalizeItem(field(params, "item"), turnId) };
     if (method === "error") return { type: "error", message: "Codex turn failed" };
     return null;
 }
@@ -445,11 +563,14 @@ function threadInWorkspace(thread: unknown, cwd: string) {
     return Boolean(threadCwd && path.resolve(threadCwd) === path.resolve(cwd));
 }
 
-function normalizeItem(item: unknown) {
+function normalizeItem(item: unknown, turnId = "") {
     const value = item && typeof item === "object" ? { ...(item as Json) } : {};
     if (value.type === "agentMessage") value.type = "agent_message";
     if (value.type === "mcpToolCall") value.type = "mcp_tool_call";
-    if (value.type === "agent_message" && typeof value.id === "string") value.text = String(value.text || "");
+    if (value.type === "agent_message" && typeof value.id === "string") {
+        value.id = agentStreamId(turnId, value.id);
+        value.text = String(value.text || "");
+    }
     if ("arguments" in value) value.arguments = parseMaybeJson(value.arguments);
     return value;
 }

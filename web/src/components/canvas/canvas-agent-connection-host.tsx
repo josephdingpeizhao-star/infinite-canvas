@@ -4,7 +4,7 @@ import { App } from "antd";
 
 import { isSiteTool, runSiteTool, SITE_TOOL_LABELS } from "@/lib/agent/agent-site-tools";
 import { isAgentSseDead, nextRetryDelayMs, shouldKeepRetrying } from "@/lib/canvas/agent-connection";
-import { canvasAgentToolName, fetchAgentJson, mergeAgentText, normalizeAgentHistoryMessages, normalizeAgentText } from "@/lib/canvas/canvas-agent-client";
+import { agentStreamId, canvasAgentToolName, fetchAgentJson, normalizeAgentHistoryMessages, normalizeAgentText, upsertAgentMessage } from "@/lib/canvas/canvas-agent-client";
 import { summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { useAgentStore, type AgentChatItem, type AgentPendingToolCall, type AgentThreadSummary } from "@/stores/use-agent-store";
 
@@ -14,6 +14,8 @@ type AgentEventPayload = {
     agent?: string;
     type?: string;
     thread_id?: string;
+    turnId?: string;
+    turn_id?: string;
     item?: AgentEventItem;
     error?: { message?: string };
     message?: string;
@@ -30,7 +32,7 @@ export function CanvasAgentConnectionHost() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [connectionRun, setConnectionRun] = useState(0);
-    const { url, token, connected, enabled, confirmTools, canvasContext, setAgentState, setConnectionCommands, connectAgent, addMessage: pushMessage, addEventLog: pushEventLog } = useAgentStore();
+    const { url, token, connected, enabled, confirmTools, canvasContext, setAgentState, setConnectionCommands, connectAgent, addEventLog: pushEventLog } = useAgentStore();
     const canvasContextRef = useRef(canvasContext);
     const confirmToolsRef = useRef(confirmTools);
     const pendingToolRef = useRef<AgentPendingToolCall | null>(null);
@@ -46,26 +48,10 @@ export function CanvasAgentConnectionHost() {
     const urlAgentToken = searchParams.get("agentToken") || "";
 
     const addMessage = useCallback((item: Omit<AgentChatItem, "id">) => {
-        const text = normalizeAgentText(item.text);
-        if (!text && !item.attachments?.length) return;
-        const next = { ...item, id: `${Date.now()}-${Math.random()}`, text };
         const currentMessages = useAgentStore.getState().messages;
-        if (next.streamId) {
-            const index = currentMessages.findIndex((current) => current.streamId === next.streamId);
-            if (index >= 0) {
-                setAgentState({ messages: currentMessages.map((current, i) => i === index ? { ...current, ...next, id: current.id, text: next.text || current.text } : current) });
-                return;
-            }
-        }
-        const last = currentMessages.at(-1);
-        if (last?.role === "assistant" && next.role === "assistant" && last.title === next.title) {
-            const merged = mergeAgentText(last.text, next.text);
-            if (merged === last.text) return;
-            setAgentState({ messages: [...currentMessages.slice(0, -1), { ...last, text: merged, meta: next.meta || last.meta }] });
-            return;
-        }
-        pushMessage(next);
-    }, [pushMessage, setAgentState]);
+        const messages = upsertAgentMessage(currentMessages, item, `${Date.now()}-${Math.random()}`);
+        if (messages !== currentMessages) setAgentState({ messages });
+    }, [setAgentState]);
 
     const addEventLog = useCallback((title: string, text: unknown, raw?: unknown) => {
         pushEventLog({ id: `${Date.now()}-${Math.random()}`, time: new Date().toLocaleTimeString(), title, text: normalizeAgentText(text) || title, raw });
@@ -469,7 +455,7 @@ async function discoverAgentConfig(endpoint: string) {
 function formatAgentEvent(event: AgentEventPayload): Omit<AgentChatItem, "id"> | null {
     const item = event.item;
     if (event.type === "item.completed" && item?.type === "error") return { role: "error", title: "错误", text: normalizeAgentText(item.message), detail: item };
-    if ((event.type === "item.updated" || event.type === "item.completed") && item?.type === "agent_message") return { role: "assistant", title: "Codex", text: stringText(item.text), meta: usageText(event), streamId: item.id };
+    if ((event.type === "item.updated" || event.type === "item.completed") && item?.type === "agent_message") return { role: "assistant", title: "Codex", text: stringText(item.text), meta: usageText(event), streamId: agentStreamId(event.turnId || event.turn_id || "", item.id || "") };
     if (event.type === "item.completed" && isMcpToolItem(item) && isReadTool(String(item?.tool || ""))) return { role: "tool", title: `${canvasAgentToolName(String(item?.tool || ""))}完成`, text: item?.error?.message || toolSummary(item), detail: toolDetail(item) };
     const text = eventText(event);
     if (text) return { role: "assistant", title: "Codex", text, meta: usageText(event) };
