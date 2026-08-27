@@ -11,7 +11,6 @@ import {
     codexTurnFailure,
     codexTurnStartParams,
     createUtf8StreamDecoder,
-    withAgentPrompt,
 } from "./agents.js";
 import { resolveCodexCommand, type CodexCommand } from "./codex-command.js";
 import { VERSION } from "./config.js";
@@ -674,7 +673,7 @@ function parseRouteInput(
     const model = typeof value.model === "string" ? value.model.trim() : "";
     return {
         input: {
-            prompt: withAgentPrompt(String(value.prompt || "")),
+            prompt: String(value.prompt || ""),
             attachments: Array.isArray(value.attachments) ? value.attachments as AgentAttachment[] : [],
             cwd,
             ...(model ? { model } : {}),

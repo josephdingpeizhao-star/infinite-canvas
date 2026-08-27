@@ -254,6 +254,7 @@
 | 250 | `web/tests/canvas-docked-pair.test.ts` | MG-01/A1/A2 离线回归与变异防线 | 覆盖创建几何、四条件判定、隐藏不过度、旧画布、复制、拖删、文案、默认组件、缩放手柄和页面接线 | 零网络、零真实画布、零工作台、零费用；视觉拼缝与吸附手感仍留真人验收 | — |
 | 251 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | MG-01 版本归纳与真人待测清单 | 记录单入口合体及协议不变，并登记创建、两口吸附、整体拖删、旧画布、演示与自然真实批次验收 | 自动测试不代替真实浏览器交互和自然付费批次，文档不提前宣称真人通过 | — |
 | 252 | `web/dist/` | MG-01 最新随仓运行副本 | 按最终源码与版本记录离线重建入口和哈希资源 | 源码与运行副本同次交付；不改 Canvas Agent、desktop runtime、主仓或后端 | — |
+| 253 | `canvas-agent/src/codex-isolated.ts` + `canvas-agent/src/codex-isolated.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | SLIM-03 生产隔离会话提示词直通 | 隔离新建与续接会话直接传递生产 prompt，不再附加画布助手工具教学；新增源码负向锚与续轮原文正负断言，并登记真实批次头部复核欠账 | 生产隔离会话本就不挂画布工具，去除无效前缀不改变空串拒绝、线程归属、模型档位、4 路并发或两个助手面板入口；不重建 `dist` | — |
 
 ## 退役锚点（编号不复用）
 

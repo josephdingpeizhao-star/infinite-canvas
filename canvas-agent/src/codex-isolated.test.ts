@@ -773,7 +773,8 @@ describe("isolated Codex sessions", () => {
         assert.equal(field(turn, "threadId"), "continued-thread");
         assert.equal(field(turn, "model"), "gpt-5.5");
         assert.equal(field(turn, "effort"), "xhigh");
-        assert.match(JSON.stringify(field(turn, "input")), /用户请求：continue/);
+        assert.match(JSON.stringify(field(turn, "input")), /"text":"continue"/);
+        assert.doesNotMatch(JSON.stringify(field(turn, "input")), /用户请求：/);
     });
 
     test("continuation fails closed when thread resume returns a different thread id", async () => {
@@ -862,6 +863,13 @@ describe("isolated Codex sessions", () => {
         const isolatedTurn = source.indexOf('app.post("/agent/codex/isolated/turn"');
         const notFound = source.indexOf('app.use((_req, res) => res.status(404)');
         assert.ok(tokenMiddleware >= 0 && tokenMiddleware < isolatedTurn && isolatedTurn < notFound);
+    });
+
+    test("isolated production routes pass through prompts without the assistant panel prefix", async () => {
+        const source = await readFile(fileURLToPath(new URL("./codex-isolated.ts", import.meta.url)), "utf8");
+
+        assert.doesNotMatch(source, /\bwithAgentPrompt\s*\(/);
+        assert.match(source, /prompt:\s*String\(value\.prompt \|\| ""\)/);
     });
 });
 
