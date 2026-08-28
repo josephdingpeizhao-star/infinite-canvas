@@ -20,7 +20,7 @@ import {
 } from "../src/lib/canvas/canvas-batch-intake";
 import { CanvasNodeType, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchIntakeMetadata, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
-const CONTRACT_HASH = "a030df8d0aa9c96d9275d7c6f463fbc9d8f10af57e8c4539c2cb9d0d903456d3";
+const CONTRACT_HASH = "290859538c76ce429f251febc29aa28ead9cb69ca95bca85cea791fa7433644b";
 const CATEGORY: CanvasBatchCategoryMetadata = {
     key: "杯类",
     display_name: "杯类",
@@ -44,7 +44,7 @@ const CATEGORY: CanvasBatchCategoryMetadata = {
 };
 const CATALOG: CanvasBatchCategoryCatalog = { contractHash: CONTRACT_HASH, categories: [CATEGORY] };
 const BATCH_INTAKE_ALLOWED_KEYS = [
-    "status", "category", "contractHash", "batch_type", "productType", "productLengthCm", "productWidthCm", "productHeightCm", "allowClearWater",
+    "status", "category", "contractHash", "batch_type", "renderQuality", "render_quality", "productType", "productLengthCm", "productWidthCm", "productHeightCm", "allowClearWater",
     "prohibitPouringAndHeating", "skipMissingDAngle", "mainImageCount", "detailImageCount", "handheldMainCount", "handheldDetailCount", "facts", "requestId",
     "requestedAt", "updatedAt", "workflowNodeId", "sourceImageNodeIds", "setGroupImageNodeIds", "componentWhiteBgImageNodeIds", "batchId", "uploadBaseUrl",
     "expectedCount", "receivedCount", "errorMessage", "receipt",
@@ -112,7 +112,7 @@ function renderCard(state: CanvasBatchIntakeMetadata, connectedImages?: Array<{ 
 }
 
 describe("ST-01 set batch declaration", () => {
-    test("pins the v4 contract hash", () => {
+    test("pins the v5 contract hash", () => {
         expect(BATCH_INTAKE_CONTRACT_SHA256).toBe(CONTRACT_HASH);
     });
 

@@ -10,7 +10,7 @@ import {
 } from "../src/lib/canvas/canvas-batch-intake";
 import type { CanvasBatchCategoryMetadata } from "../src/types/canvas";
 
-const EXPECTED_CONTRACT_HASH = "a030df8d0aa9c96d9275d7c6f463fbc9d8f10af57e8c4539c2cb9d0d903456d3";
+const EXPECTED_CONTRACT_HASH = "290859538c76ce429f251febc29aa28ead9cb69ca95bca85cea791fa7433644b";
 const CATEGORY: CanvasBatchCategoryMetadata = {
     key: "杯类",
     display_name: "杯类",

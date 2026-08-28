@@ -113,6 +113,7 @@ export type CanvasWorkflowReceivingBoxMetadata = {
 };
 export type CanvasBatchIntakeStatus = "draft" | "queued" | "upload_ready" | "uploading" | "completed" | "failed" | "integrity_blocked";
 export type CanvasBatchType = "single" | "set";
+export type CanvasRenderQuality = "auto" | "low" | "medium" | "high";
 export type CanvasBatchSourceFile = {
     name: string;
     size: number;
@@ -177,6 +178,9 @@ export type CanvasBatchIntakeReceipt = {
 export type CanvasBatchIntakeMetadata = {
     status: CanvasBatchIntakeStatus;
     batch_type?: CanvasBatchType;
+    renderQuality?: CanvasRenderQuality;
+    /** 仅在排队载荷中供本机工作台读取。 */
+    render_quality?: CanvasRenderQuality;
     category?: string;
     contractHash?: string;
     productType?: string;

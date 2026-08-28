@@ -1,4 +1,5 @@
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkflowAngleInventorySummary, type CanvasWorkflowBindingDistribution, type CanvasWorkflowProductionMetadata, type CanvasWorkflowProductionRecovery } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasRenderQuality, type CanvasWorkflowAngleInventorySummary, type CanvasWorkflowBindingDistribution, type CanvasWorkflowProductionMetadata, type CanvasWorkflowProductionRecovery } from "@/types/canvas";
+import { isRenderQuality } from "@/lib/canvas/canvas-batch-intake";
 import {
     requireClosedWorkflowCommand,
     type ClosedWorkflowCommand,
@@ -38,10 +39,27 @@ export type WorkflowProductionQuote = {
     expectedConfigIds: string[];
     readyCount: number;
     remainingCount: number;
-    estimatedUnitUsd: number;
-    estimatedTotalUsd: number;
+    renderQuality: CanvasRenderQuality;
     estimatedMinutes: number;
 };
+
+export const WORKFLOW_PRODUCTION_CONFIRMATION_NOTICE = "时长按当前缺图数量估算。确认后机器才会进入真实制作；任一步失败都会停下，不会自动重试。实际费用以图片服务商后台为准。";
+export const WORKFLOW_PRODUCTION_CONFIRMATION_FOOTNOTE = "取消不会写入命令、不会修改批次，也不会产生费用。";
+
+export function productionConfirmationCopy(quote?: Pick<WorkflowProductionQuote, "remainingCount" | "renderQuality" | "estimatedMinutes">) {
+    const qualityLabels: Record<CanvasRenderQuality, string> = { auto: "自动", high: "高", medium: "中", low: "低" };
+    return {
+        title: "确认开始真实制作",
+        buttonLabel: "确认开始",
+        notice: WORKFLOW_PRODUCTION_CONFIRMATION_NOTICE,
+        footnote: WORKFLOW_PRODUCTION_CONFIRMATION_FOOTNOTE,
+        rows: [
+            { key: "remaining" as const, label: "本次还需制作", value: `${quote?.remainingCount ?? 0} 张` },
+            { key: "quality" as const, label: "生图质量", value: qualityLabels[quote?.renderQuality ?? "auto"] },
+            { key: "duration" as const, label: "预计时长", value: `约 ${quote?.estimatedMinutes ?? 0} 分钟` },
+        ],
+    };
+}
 
 export type WorkflowProductionStatusSummary = {
     ok: true;
@@ -387,11 +405,10 @@ export async function fetchProductionQuote(batchId: string, token: string, fetch
         !validCount(payload.readyCount, countInfo.totalCount) ||
         !validCount(payload.remainingCount, countInfo.totalCount) ||
         Number(payload.readyCount) + Number(payload.remainingCount) !== countInfo.totalCount ||
-        !validMoney(payload.estimatedUnitUsd) ||
-        !validMoney(payload.estimatedTotalUsd) ||
+        !isRenderQuality(payload.renderQuality) ||
         !validMinutes(payload.estimatedMinutes)
     ) {
-        throw new Error("本机真实制作服务没有返回可信的费用估算，本次没有开始。");
+        throw new Error("本机真实制作服务没有返回可信的制作估算，本次没有开始。");
     }
     return {
         batchId,
@@ -399,8 +416,7 @@ export async function fetchProductionQuote(batchId: string, token: string, fetch
         expectedConfigIds: countInfo.expectedConfigIds,
         readyCount: Number(payload.readyCount),
         remainingCount: Number(payload.remainingCount),
-        estimatedUnitUsd: Number(payload.estimatedUnitUsd),
-        estimatedTotalUsd: Number(payload.estimatedTotalUsd),
+        renderQuality: payload.renderQuality,
         estimatedMinutes: Number(payload.estimatedMinutes),
     };
 }
@@ -592,10 +608,6 @@ function timestamp(value: unknown) {
 
 function validCount(value: unknown, totalCount: number) {
     return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= totalCount;
-}
-
-function validMoney(value: unknown) {
-    return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function validMinutes(value: unknown) {

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, BatchIntakeIntegrityError, buildBatchIntakeCommand, categoryDefaultPatch, categorySwitchPatch, expireBatchIntakeState, fetchBatchCategoryCatalog, readBatchIntakeState, resolveBatchIntakeSelection, uploadBatchSourceImages, validateBatchIntakeFacts } from "@/lib/canvas/canvas-batch-intake";
+import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, BatchIntakeIntegrityError, buildBatchIntakeCommand, categoryDefaultPatch, categorySwitchPatch, expireBatchIntakeState, fetchBatchCategoryCatalog, isRenderQuality, readBatchIntakeState, resolveBatchIntakeSelection, uploadBatchSourceImages, validateBatchIntakeFacts } from "@/lib/canvas/canvas-batch-intake";
 import { getImageBlob } from "@/services/image-storage";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { CanvasNodeType, type CanvasBatchCategoryCatalog, type CanvasBatchIntakeMetadata, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
-    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+    "category" | "renderQuality" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "prohibitPouringAndHeating" | "skipMissingDAngle"
 >;
 
 type BatchIntakeControllerOptions = {
@@ -254,6 +254,7 @@ function hasCurrentCategoryForm(state: CanvasBatchIntakeMetadata, category: stri
         state.category === category &&
         state.productType === productNoun &&
         state.contractHash === contractHash &&
+        isRenderQuality(state.renderQuality) &&
         Number.isInteger(state.mainImageCount) &&
         Number.isInteger(state.detailImageCount) &&
         Number.isInteger(state.handheldMainCount) &&

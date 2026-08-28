@@ -7,12 +7,19 @@ import { BATCH_CATEGORY_UNAVAILABLE_MESSAGE, COMPONENT_WHITE_BG_IMAGE_LIMIT, SET
 import { batchRegistrationButtonLabel, styleRemovalButtonLabel, styleSupplementButtonLabel } from "@/lib/canvas/canvas-intake-role-visibility";
 import { readStyleReferenceRemovalState, readStyleReferenceState } from "@/lib/canvas/canvas-style-reference-intake";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchIntakeMetadata, CanvasBatchType, CanvasNodeData } from "@/types/canvas";
+import type { CanvasBatchCategoryCatalog, CanvasBatchCategoryMetadata, CanvasBatchDimensionKey, CanvasBatchIntakeMetadata, CanvasBatchType, CanvasNodeData, CanvasRenderQuality } from "@/types/canvas";
 
 type EditableFacts = Pick<
     CanvasBatchIntakeMetadata,
-    "category" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "prohibitPouringAndHeating" | "skipMissingDAngle"
+    "category" | "renderQuality" | "productLengthCm" | "productWidthCm" | "productHeightCm" | "mainImageCount" | "detailImageCount" | "handheldMainCount" | "handheldDetailCount" | "prohibitPouringAndHeating" | "skipMissingDAngle"
 >;
+
+const RENDER_QUALITY_OPTIONS: Array<{ value: CanvasRenderQuality; label: string }> = [
+    { value: "auto", label: "自动" },
+    { value: "high", label: "高" },
+    { value: "medium", label: "中" },
+    { value: "low", label: "低" },
+];
 
 export function CanvasBatchInfoNode({
     node,
@@ -132,6 +139,7 @@ export function CanvasBatchInfoNode({
                     )) : null}
                     <ReceiptRow label="本批张数" value={`主图 ${state.mainImageCount ?? "—"} + 详情 ${state.detailImageCount ?? "—"}`} />
                     <ReceiptRow label="手持数量" value={`主图 ${state.handheldMainCount ?? "—"} + 详情 ${state.handheldDetailCount ?? "—"}`} />
+                    <ReceiptRow label="生图质量" value={renderQualityLabel(state.renderQuality)} />
                     {category ? category.form.advanced_options.map((option) => (
                         <ReceiptRow key={option.field} label={option.label} value={advancedValue(state, option.field) ? "开" : "关"} />
                     )) : null}
@@ -252,6 +260,16 @@ export function CanvasBatchInfoNode({
                                     onChange={(handheldDetailCount) => onChange(node.id, { handheldDetailCount })}
                                 />
                             </div>
+                            <fieldset className="grid gap-1 text-[11px]" style={{ color: theme.node.muted }} onMouseDown={stopEvent} onPointerDown={stopEvent}>
+                                <legend>生图质量</legend>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {RENDER_QUALITY_OPTIONS.map(({ value, label }) => (
+                                        <button key={value} type="button" aria-pressed={state.renderQuality === value} disabled={!editable} className="flex min-h-9 cursor-pointer items-center justify-center rounded-lg border px-2 text-xs disabled:cursor-not-allowed disabled:opacity-60" style={{ borderColor: state.renderQuality === value ? theme.node.activeStroke : theme.node.stroke, background: state.renderQuality === value ? theme.toolbar.activeBg : theme.node.panel, color: theme.node.text }} onClick={() => onChange(node.id, { renderQuality: value })}>
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </fieldset>
                             <CanvasBatchAdvancedOptions
                                 category={category}
                                 state={state}
@@ -486,6 +504,10 @@ function validImageCount(value: number | undefined, bounds: { minimum: number; m
 function advancedValue(state: CanvasBatchIntakeMetadata, field: CanvasBatchCategoryMetadata["form"]["advanced_options"][number]["field"]) {
     if (field === "forbid_pouring_and_heating") return Boolean(state.prohibitPouringAndHeating);
     return Boolean(state.skipMissingDAngle);
+}
+
+function renderQualityLabel(value: CanvasRenderQuality | undefined) {
+    return RENDER_QUALITY_OPTIONS.find((option) => option.value === value)?.label || "自动";
 }
 
 function SummaryCell({ label, value }: { label: string; value: string }) {

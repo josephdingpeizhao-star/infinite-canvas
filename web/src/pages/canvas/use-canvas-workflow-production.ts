@@ -185,7 +185,7 @@ export function useCanvasWorkflowProduction({ nodes, connections, nodesRef, conn
 function safeProductionStartError(error: unknown) {
     if (error instanceof WorkflowProductionRebindError) return error.message;
     const message = error instanceof Error ? error.message : "";
-    return message === "本机真实制作服务尚未就绪，请重新启动画布服务后再试。" || message === "本机真实制作服务没有返回可信的费用估算，本次没有开始。" || message === WORKFLOW_COUNT_DATA_MISSING_MESSAGE
+    return message === "本机真实制作服务尚未就绪，请重新启动画布服务后再试。" || message === "本机真实制作服务没有返回可信的制作估算，本次没有开始。" || message === WORKFLOW_COUNT_DATA_MISSING_MESSAGE
         ? message
-        : "无法取得可信的费用估算，本次没有开始。";
+        : "无法取得可信的制作估算，本次没有开始。";
 }

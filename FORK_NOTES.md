@@ -262,6 +262,9 @@
 | 258 | `web/tests/agent-message-upsert.test.ts` | AG-01 双消息复现、upsert 矩阵与组件接线 | 新增 10 项覆盖同 turn 两条 agent_message 交错快照、同键稳定 id、新键、跨 turn 同 itemId、无身份消息、尾部上限、trim/空文本及两组件唯一接线 | T1 在修前稳定复现消息并吞与全文膨胀；M2/M4 退回旧合并时稳定引红 | 2026-08-27 |
 | 259 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | AG-01 版本归纳与真人待测清单 | 记录长配置阶段 Agent 面板流畅性与重复巨字消息治理，并登记真实批次开面板验收项 | 自动测试不替代约 26 分钟真实配置阶段的浏览器交互验收，费用与批次数据不受影响 | 2026-08-27 |
 | 260 | `web/dist/` | AG-01 最新随仓运行副本 | 按最终源码与版本记录重建入口和哈希资源 | 用户硬刷新即可加载严格消息身份更新；不改 Canvas Agent 运行副本、desktop runtime、主仓或后端 | 2026-08-27 |
+| 261 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/pages/canvas/use-canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` + 建批契约测试 | QL-01 批次生图质量声明 | 元数据新增 `renderQuality`，排队载荷新增顶层 `render_quality`；新卡默认自动，旧值缺失或非法归一自动，换品类保留选择，完成回执只读展示；四档按钮由批次卡本地维护 | 不引用上游生图面板，不改品类表单、事实十字段、教学正文、canvas-agent 或 desktop | 2026-08-28 |
+| 262 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-production-cost-card.tsx` + `web/tests/ql01-render-quality.test.ts` + `web/tests/canvas-workflow-production.test.ts` + 版本记录 | QL-01 制作确认卡与报价合同 | 报价类型删除单价/金额并严格读取 `renderQuality`；纯函数固定剩余张数、中文质量、时长、服务商费用口径、标题与按钮文案，离线测试覆盖载荷、兼容和金额负向合同 | 人工确认卡点、取消零副作用、失败即停、无自动重试及既有生产命令不变；真实档位和账单留待真人核对 | 2026-08-28 |
+| 263 | `web/dist/` | QL-01 最新随仓运行副本 | 按最终源码、契约哈希与确认卡文案重建入口和哈希资源 | 用户硬刷新即可加载四档质量和无金额确认卡；不改 Canvas Agent 或 desktop runtime | 2026-08-28 |
 
 ## 退役锚点（编号不复用）
 
@@ -275,6 +278,7 @@
 
 - `canvas-agent/src/agents-delta.test.ts`：AG-01 100ms 全量快照节流、强制冲刷、跨 turn 身份、清理与真实 delta 计数的可控时钟回归。
 - `web/tests/agent-message-upsert.test.ts`：AG-01 两条交错助手消息复现、严格 upsert 矩阵与两组件共用接线回归。
+- `web/tests/ql01-render-quality.test.ts`：QL-01 旧元数据归一、四档闭集、建批载荷、批次卡本地选项和无金额确认文案纯函数回归。
 - `web/src/lib/canvas/canvas-docked-pair.ts`：MG-01 成对创建、合体/隐藏单一状态源、复制/级联/文案与缩放抑制纯函数。
 - `web/tests/canvas-docked-pair.test.ts`：MG-01、A1、A2 的纯函数、组件默认路径、旧画布及页面接线离线回归。
 - `web/tests/dc01-agent-reconnect-watchdog.test.ts`：覆盖 45 秒死链字面锚、ping/业务事件接线、断链与连接正常两类进度超时文案、8 秒接单超时零回归及非响应式连接态读取。

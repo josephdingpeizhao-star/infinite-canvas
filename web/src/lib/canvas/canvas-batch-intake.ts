@@ -1,10 +1,11 @@
-import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasBatchType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
+import { CanvasNodeType, type CanvasBatchAdvancedOptionKey, type CanvasBatchCategoryCatalog, type CanvasBatchCategoryMetadata, type CanvasBatchDimensionKey, type CanvasBatchIntakeFacts, type CanvasBatchIntakeMetadata, type CanvasBatchIntakeStatus, type CanvasBatchSourceFile, type CanvasBatchType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasRenderQuality } from "@/types/canvas";
 
 export const BATCH_INTAKE_ACK_TIMEOUT_MS = 8000;
 export const BATCH_INTAKE_UPLOAD_ORIGIN = "http://127.0.0.1:17372";
 export const BATCH_CATEGORY_ORIGIN = "http://127.0.0.1:17373";
 export const BATCH_CATEGORY_URL = `${BATCH_CATEGORY_ORIGIN}/batch-categories`;
-export const BATCH_INTAKE_CONTRACT_SHA256 = "a030df8d0aa9c96d9275d7c6f463fbc9d8f10af57e8c4539c2cb9d0d903456d3";
+export const BATCH_INTAKE_CONTRACT_SHA256 = "290859538c76ce429f251febc29aa28ead9cb69ca95bca85cea791fa7433644b";
+export const RENDER_QUALITY_LEVELS = ["auto", "low", "medium", "high"] as const;
 export const BATCH_CATEGORY_UNAVAILABLE_MESSAGE = "产品品类暂时无法读取，请重启工作台并刷新画布后再登记。";
 export const SET_GROUP_IMAGE_LIMIT = { minimum: 1, maximum: 3 } as const;
 export const COMPONENT_WHITE_BG_IMAGE_LIMIT = { minimum: 2, maximum: 8 } as const;
@@ -53,6 +54,7 @@ export function readBatchIntakeState(metadata?: CanvasNodeMetadata): CanvasBatch
     return {
         status,
         batch_type: batchType,
+        renderQuality: normalizeRenderQuality(value?.renderQuality ?? value?.render_quality),
         category: nonemptyString(value?.category),
         contractHash: nonemptyString(value?.contractHash),
         productType: nonemptyString(value?.productType),
@@ -91,6 +93,9 @@ export function validateBatchIntakeFacts(
 ): { ok: true; facts: CanvasBatchIntakeFacts } | { ok: false; message: string } {
     if (!category || state.category !== category.key || state.contractHash !== contractHash || contractHash !== BATCH_INTAKE_CONTRACT_SHA256) {
         return { ok: false, message: BATCH_CATEGORY_UNAVAILABLE_MESSAGE };
+    }
+    if (!isRenderQuality(state.renderQuality)) {
+        return { ok: false, message: "生图质量无效，请重新选择后再登记。" };
     }
     const batchTypeResult = validateBatchTypeDeclaration(state, connectedImageNodeIds);
     if (!batchTypeResult.ok) return batchTypeResult;
@@ -231,6 +236,7 @@ export function categoryDefaultPatch(category: CanvasBatchCategoryMetadata, cont
     const option = (field: CanvasBatchAdvancedOptionKey) => category.form.advanced_options.find((item) => item.field === field)!;
     return {
         batch_type: "single" as const,
+        renderQuality: "auto" as const,
         setGroupImageNodeIds: [] as string[],
         componentWhiteBgImageNodeIds: [] as string[],
         category: category.key,
@@ -253,6 +259,7 @@ export function categorySwitchPatch(state: CanvasBatchIntakeMetadata, category: 
     return {
         ...defaults,
         batch_type: state.batch_type,
+        renderQuality: state.renderQuality,
         setGroupImageNodeIds: [...(state.setGroupImageNodeIds || [])],
         componentWhiteBgImageNodeIds: [] as string[],
         productLengthCm: state.productLengthCm,
@@ -374,6 +381,7 @@ export function buildBatchIntakeCommand(
             workflowNodeId: selection.workflowNodeId,
             sourceImageNodeIds: [...selection.sourceImageNodeIds],
             batch_type: state.batch_type,
+            render_quality: state.renderQuality,
             setGroupImageNodeIds: [...(selection.setGroupImageNodeIds || [])],
             componentWhiteBgImageNodeIds: [...(selection.componentWhiteBgImageNodeIds || [])],
             batchId: undefined,
@@ -582,6 +590,14 @@ function uniqueStrings(value: unknown) {
 
 function validBatchType(value: unknown): value is CanvasBatchType {
     return value === "single" || value === "set";
+}
+
+export function isRenderQuality(value: unknown): value is CanvasRenderQuality {
+    return typeof value === "string" && RENDER_QUALITY_LEVELS.includes(value as CanvasRenderQuality);
+}
+
+export function normalizeRenderQuality(value: unknown): CanvasRenderQuality {
+    return isRenderQuality(value) ? value : RENDER_QUALITY_LEVELS[0];
 }
 
 function nonemptyString(value: unknown) {
