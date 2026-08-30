@@ -265,6 +265,8 @@
 | 261 | `web/src/types/canvas.ts` + `web/src/lib/canvas/canvas-batch-intake.ts` + `web/src/pages/canvas/use-canvas-batch-intake.ts` + `web/src/components/canvas/canvas-batch-info-node.tsx` + 建批契约测试 | QL-01 批次生图质量声明 | 元数据新增 `renderQuality`，排队载荷新增顶层 `render_quality`；新卡默认自动，旧值缺失或非法归一自动，换品类保留选择，完成回执只读展示；四档按钮由批次卡本地维护 | 不引用上游生图面板，不改品类表单、事实十字段、教学正文、canvas-agent 或 desktop | 2026-08-28 |
 | 262 | `web/src/lib/canvas/canvas-workflow-production.ts` + `web/src/pages/canvas/use-canvas-workflow-production.ts` + `web/src/components/canvas/canvas-workflow-production-cost-card.tsx` + `web/tests/ql01-render-quality.test.ts` + `web/tests/canvas-workflow-production.test.ts` + 版本记录 | QL-01 制作确认卡与报价合同 | 报价类型删除单价/金额并严格读取 `renderQuality`；纯函数固定剩余张数、中文质量、时长、服务商费用口径、标题与按钮文案，离线测试覆盖载荷、兼容和金额负向合同 | 人工确认卡点、取消零副作用、失败即停、无自动重试及既有生产命令不变；真实档位和账单留待真人核对 | 2026-08-28 |
 | 263 | `web/dist/` | QL-01 最新随仓运行副本 | 按最终源码、契约哈希与确认卡文案重建入口和哈希资源 | 用户硬刷新即可加载四档质量和无金额确认卡；不改 Canvas Agent 或 desktop runtime | 2026-08-28 |
+| 264 | `web/src/lib/gpt-image-size.ts` + `web/src/services/api/image.ts` + `web/tests/gsz01-gpt-image-size.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | GSZ-01 gpt-image 官方尺寸档位吸附 | 新增纯函数按已解析模型名识别 gpt-image；空值/auto 继续省略 size，其余比例或像素按对数阈值吸附横、方、竖三档；生成与编辑两入口仅对该模型族接线，quality 独立原样透传，并新增吸附矩阵、阈值边界、非法格式、3:4 跨仓一致性、非目标模型保持及源码负向锚定回归 | 画布原生生图与独立图片页不再发出 `1760x2352` 等非三档大尺寸，降低服务端已生成计费但前端网关超时的风险；Gemini、非 gpt-image 的 OpenAI 模型、主仓批次链路、重试与错误覆盖逻辑均不改 | 2026-08-30 |
+| 265 | `web/dist/` | GSZ-01 最新随仓运行副本 | 按最终源码、测试与版本记录重建入口和哈希资源 | 用户硬刷新即可加载 gpt-image 三档尺寸吸附；不改 Canvas Agent、desktop runtime 或主仓批次运行副本 | 2026-08-30 |
 
 ## 退役锚点（编号不复用）
 
