@@ -267,6 +267,8 @@
 | 263 | `web/dist/` | QL-01 最新随仓运行副本 | 按最终源码、契约哈希与确认卡文案重建入口和哈希资源 | 用户硬刷新即可加载四档质量和无金额确认卡；不改 Canvas Agent 或 desktop runtime | 2026-08-28 |
 | 264 | `web/src/lib/gpt-image-size.ts` + `web/src/services/api/image.ts` + `web/tests/gsz01-gpt-image-size.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | GSZ-01 gpt-image 官方尺寸档位吸附 | 新增纯函数按已解析模型名识别 gpt-image；空值/auto 继续省略 size，其余比例或像素按对数阈值吸附横、方、竖三档；生成与编辑两入口仅对该模型族接线，quality 独立原样透传，并新增吸附矩阵、阈值边界、非法格式、3:4 跨仓一致性、非目标模型保持及源码负向锚定回归 | 画布原生生图与独立图片页不再发出 `1760x2352` 等非三档大尺寸，降低服务端已生成计费但前端网关超时的风险；Gemini、非 gpt-image 的 OpenAI 模型、主仓批次链路、重试与错误覆盖逻辑均不改 | 2026-08-30 |
 | 265 | `web/dist/` | GSZ-01 最新随仓运行副本 | 按最终源码、测试与版本记录重建入口和哈希资源 | 用户硬刷新即可加载 gpt-image 三档尺寸吸附；不改 Canvas Agent、desktop runtime 或主仓批次运行副本 | 2026-08-30 |
+| 266 | `web/src/lib/reference-image-compression.ts` + `web/src/services/api/image.ts` + `web/tests/gsz02-reference-image-compression.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | GSZ-02 gpt-image 参考图发送前压缩 | 新增纯决策与浏览器重编码两层：仅对超过 256KB、无 mask、已解析为 gpt-image 的参考图执行白底 JPEG 0.85 / 长边 1280 重编码，候选为空或不更小时原图放行；`requestEdit` 单点接线，并新增阈值、mask、模型、常量单点、fail-open 与源码边界回归 | 缩短 medium 拉线改图的请求在网时间；带 mask、Gemini、`requestGeneration`、quality 现有行为、GSZ-01 尺寸吸附、失败即停和无自动重试均不改；high 仍受外部超时约束 | 2026-08-30 |
+| 267 | `web/dist/` | GSZ-02 最新随仓运行副本 | 按最终源码、测试与版本记录重建为 12 个文件 / 2,822,200 字节，入口与哈希资源来自同次构建 | 用户硬刷新即可加载 gpt-image 参考图发送前压缩；不改 Canvas Agent、desktop runtime、主仓批次运行副本或 Gemini 链路 | 2026-08-30 |
 
 ## 退役锚点（编号不复用）
 
