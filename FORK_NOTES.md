@@ -277,6 +277,7 @@
 | 273 | `canvas-agent/package.json` + `canvas-agent/bun.lock` + `desktop/package.json` + `desktop/package-lock.json` + `desktop/portable/README-zh-CN.txt` + `desktop/portable/FIRST-DEPLOY-CHECKLIST-zh-CN.txt` | TMS-02 双份内置 Codex 与便携当前口径 | Canvas Agent 与 Desktop 的 `@openai/codex` 均精确固定为 `0.153.0` 并机械更新双 lock；便携说明登记 Sol 默认、精确迁移边界与真人账号验证 | Windows 原生程序布局和现有 resolver 不改；不打包、不部署、不切快捷方式 | 2026-09-03 |
 | 274 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | TMS-02 版本归纳与真人待验清单 | 记录 Sol 默认、精确迁移、双客户端版本及真实账号/质量对照验收项目 | 离线 bundled catalog 和测试不替代付费或真实模型验收，不提前宣称质量提升 | 2026-09-03 |
 | 275 | `web/dist/` | TMS-02 最终随仓运行副本 | 按最终源码与 CHANGELOG 同次构建为 12 个文件 / 2,828,820 字节；入口引用 `index-yGYWzLf5.js` 与 `index-D__p4lJ3.css`，主 JS SHA-256 `92A5C6CA38840EA4EA9984C6EBF8AADA0F3E4C740CF7CCF56AD69EA6C2665F37` | 用户后续部署并硬刷新后可加载 Sol 默认与精确迁移；本任务不改 Canvas Agent/desktop runtime、不生成 ZIP、不部署 | 2026-09-03 |
+| 276 | `docs/content/docs/progress/pending-test.mdx` | TMS-02 从待测试移除并归入“已完成” | 登记 v59 已部署，配置、同步与真实生成经用户真人验收通过；成图“非常不错”且比以前更好仅为用户主观反馈，不作独立盲测或客观量化结论 | 仅归档验收状态；不改运行代码或合同，不改 `CHANGELOG.md`、`web/dist/`，不重建、不打包、不部署 | 2026-09-03 |
 
 ## 退役锚点（编号不复用）
 
