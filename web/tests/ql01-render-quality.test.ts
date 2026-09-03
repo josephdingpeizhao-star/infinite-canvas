@@ -53,7 +53,7 @@ describe("QL-01 render quality", () => {
     });
 
     test("removes amount copy and states the provider billing boundary", () => {
-        const copy = productionConfirmationCopy({ remainingCount: 3, renderQuality: "medium", estimatedMinutes: 24 });
+        const copy = productionConfirmationCopy({ remainingCount: 3, textModelLabel: "Codex gpt-5.5（medium）", renderQuality: "medium", estimatedMinutes: 24 });
         expect(copy).toEqual({
             title: "确认开始真实制作",
             buttonLabel: "确认开始",
@@ -61,6 +61,7 @@ describe("QL-01 render quality", () => {
             footnote: "取消不会写入命令、不会修改批次，也不会产生费用。",
             rows: [
                 { key: "remaining", label: "本次还需制作", value: "3 张" },
+                { key: "textModel", label: "识图模型", value: "Codex gpt-5.5（medium）" },
                 { key: "quality", label: "生图质量", value: "中" },
                 { key: "duration", label: "预计时长", value: "约 24 分钟" },
             ],

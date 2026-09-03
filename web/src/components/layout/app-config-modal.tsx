@@ -3,6 +3,7 @@ import { CircleAlert, Cloud, KeyRound, Link2, Plus, RefreshCw, ShieldCheck, Tras
 import { useEffect, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
+import { WorkflowTextModelConfig } from "@/components/layout/workflow-text-model-config";
 import { fetchChannelModels } from "@/services/api/image";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
 import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
@@ -333,6 +334,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                                         </Form.Item>
                                     ))}
                                 </div>
+                                <WorkflowTextModelConfig />
                             </Form>
                         ),
                     },

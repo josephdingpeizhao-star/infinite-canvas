@@ -1,5 +1,5 @@
 import { Button, Modal } from "antd";
-import { Clock3, Images, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { BrainCircuit, Clock3, Images, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { productionConfirmationCopy, type WorkflowProductionQuote } from "@/lib/canvas/canvas-workflow-production";
@@ -10,6 +10,7 @@ export function CanvasWorkflowProductionCostCard({ open, batchId, materialCount,
     const copy = productionConfirmationCopy(quote);
     const rowIcons = {
         remaining: <Images className="size-4" />,
+        textModel: <BrainCircuit className="size-4" />,
         quality: <SlidersHorizontal className="size-4" />,
         duration: <Clock3 className="size-4" />,
     };

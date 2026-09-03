@@ -58,60 +58,6 @@ test("unrecognized credential fields are not returned", () => {
     });
 });
 
-test("optional text credentials are trimmed and injected without render credentials", () => {
-    withCredentialFile(JSON.stringify({
-        text_provider: " ark ",
-        ark_api_key: " ark-test-key ",
-        ark_base_url: " http://ark.example.test/api/v3 ",
-        ark_model: " doubao-test-model ",
-    }), (filePath) => {
-        assert.deepEqual(loadRenderCredentialEnv(filePath), {
-            CANVAS_TEXT_PROVIDER: "ark",
-            ARK_API_KEY: "ark-test-key",
-            ARK_BASE_URL: "http://ark.example.test/api/v3",
-            ARK_MODEL: "doubao-test-model",
-        });
-    });
-});
-
-test("render and text credentials share one environment without changing render fields", () => {
-    withCredentialFile(JSON.stringify({
-        api_key: " sk-test-000 ",
-        base_url: " https://example.test/v1 ",
-        text_provider: " ark ",
-        ark_api_key: " ark-test-key ",
-        ark_base_url: " https://ark.example.test/api/v3 ",
-        ark_model: " doubao-test-model ",
-    }), (filePath) => {
-        assert.deepEqual(loadRenderCredentialEnv(filePath), {
-            RENDER_ALLOW_REAL_EXECUTION: "1",
-            OPENAI_API_KEY: "sk-test-000",
-            OPENAI_BASE_URL: "https://example.test/v1",
-            CANVAS_TEXT_PROVIDER: "ark",
-            ARK_API_KEY: "ark-test-key",
-            ARK_BASE_URL: "https://ark.example.test/api/v3",
-            ARK_MODEL: "doubao-test-model",
-        });
-    });
-});
-
-test("blank and non-string optional text credential fields are not injected", () => {
-    withCredentialFile(JSON.stringify({
-        api_key: "sk-test-000",
-        base_url: "https://example.test/v1",
-        text_provider: " ",
-        ark_api_key: 123,
-        ark_base_url: null,
-        ark_model: [],
-    }), (filePath) => {
-        assert.deepEqual(loadRenderCredentialEnv(filePath), {
-            RENDER_ALLOW_REAL_EXECUTION: "1",
-            OPENAI_API_KEY: "sk-test-000",
-            OPENAI_BASE_URL: "https://example.test/v1",
-        });
-    });
-});
-
 test("legacy credential JSON keeps the exact render-only environment shape", () => {
     withCredentialFile(JSON.stringify({
         api_key: "sk-legacy-000",

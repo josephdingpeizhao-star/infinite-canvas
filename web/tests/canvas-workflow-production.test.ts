@@ -137,7 +137,7 @@ describe("canvas workflow production", () => {
         const calls: Array<{ url: string; init?: RequestInit }> = [];
         const quote = await fetchProductionQuote("杯子_20260719", "canvas-token", async (input, init) => {
             calls.push({ url: String(input), init });
-            return new Response(JSON.stringify({ ok: true, batchId: "杯子_20260719", totalCount: 14, expectedConfigIds: configIds(6, 8), readyCount: 0, remainingCount: 14, renderQuality: "high", estimatedMinutes: 55 }), { status: 200 });
+            return new Response(JSON.stringify({ ok: true, batchId: "杯子_20260719", totalCount: 14, expectedConfigIds: configIds(6, 8), readyCount: 0, remainingCount: 14, textModelLabel: "Codex gpt-5.5（medium）", renderQuality: "high", estimatedMinutes: 55 }), { status: 200 });
         });
         expect(quote).toMatchObject({ remainingCount: 14, renderQuality: "high" });
         expect(calls[0]?.url).toBe("http://127.0.0.1:17373/workflow-production/%E6%9D%AF%E5%AD%90_20260719/quote");
@@ -415,6 +415,7 @@ describe("RB-01 white-background recovery", () => {
                     expectedConfigIds: configIds(3, 2),
                     readyCount: 2,
                     remainingCount: 3,
+                    textModelLabel: "Codex gpt-5.5（medium）",
                     renderQuality: "auto",
                     estimatedMinutes: 24,
                 }),

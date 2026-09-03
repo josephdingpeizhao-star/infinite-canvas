@@ -269,6 +269,9 @@
 | 265 | `web/dist/` | GSZ-01 最新随仓运行副本 | 按最终源码、测试与版本记录重建入口和哈希资源 | 用户硬刷新即可加载 gpt-image 三档尺寸吸附；不改 Canvas Agent、desktop runtime 或主仓批次运行副本 | 2026-08-30 |
 | 266 | `web/src/lib/reference-image-compression.ts` + `web/src/services/api/image.ts` + `web/tests/gsz02-reference-image-compression.test.ts` + `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | GSZ-02 gpt-image 参考图发送前压缩 | 新增纯决策与浏览器重编码两层：仅对超过 256KB、无 mask、已解析为 gpt-image 的参考图执行白底 JPEG 0.85 / 长边 1280 重编码，候选为空或不更小时原图放行；`requestEdit` 单点接线，并新增阈值、mask、模型、常量单点、fail-open 与源码边界回归 | 缩短 medium 拉线改图的请求在网时间；带 mask、Gemini、`requestGeneration`、quality 现有行为、GSZ-01 尺寸吸附、失败即停和无自动重试均不改；high 仍受外部超时约束 | 2026-08-30 |
 | 267 | `web/dist/` | GSZ-02 最新随仓运行副本 | 按最终源码、测试与版本记录重建为 12 个文件 / 2,822,200 字节，入口与哈希资源来自同次构建 | 用户硬刷新即可加载 gpt-image 参考图发送前压缩；不改 Canvas Agent、desktop runtime、主仓批次运行副本或 Gemini 链路 | 2026-08-30 |
+| 268 | `web/src/components/layout/app-config-modal.tsx` | “模型”页签第二个模型网格之后 | 仅新增 1 个导入与 1 个 `<WorkflowTextModelConfig />` 渲染锚点 | 在既有配置页提供批次识图模型选择与同步状态，不改原四类默认模型和可选项 | 2026-09-03 |
+| 269 | `web/src/layouts/user-layout.tsx` | `<CanvasAgentConnectionHost />` 之后、`<AgentPanel />` 之前 | 仅新增 1 个导入与 1 个 `<WorkflowTextModelSyncHost />` 应用级无界面宿主 | 让已选模型在页面切换和面板收起时仍随渠道或连接令牌变化同步；现有 Agent SSE 宿主原行与协议不改 | 2026-09-03 |
+| 270 | `web/dist/` | TMS-01 最新随仓运行副本 | 按最终源码与版本记录重建为 12 个文件 / 2,827,447 字节，入口与哈希资源来自同次构建 | 用户硬刷新即可加载识图模型配置、应用级同步与确认卡模型标签；不改 Canvas Agent、desktop runtime、主仓批次运行副本或生图链路 | 2026-09-03 |
 
 ## 退役锚点（编号不复用）
 
@@ -362,6 +365,11 @@
 - `desktop/main-window-foreground-policy.test.cjs`：以源码负向契约锁定重复启动静默、主窗口不被程序性置前，并保护单实例锁继续存在。
 - `desktop/process-output-log.cjs`：把工作台 stdout/stderr 原始字节分别写入带上限的轮转文件；只接收调用方给定的日志目录，不依赖 Electron 或自行解析数据根。
 - `desktop/process-output-log.test.cjs`：覆盖双流落盘、轮转上限、失败降级、注入调用、主进程双流接线与桌面打包清单。
+- `web/src/stores/use-workflow-text-model-store.ts`：持久化批次识图模型选择，并在内存中记录本机工作台同步状态；持久化切片不含渠道 Key。
+- `web/src/lib/canvas/canvas-workflow-text-model.ts`：提供 Codex／OpenAI 兼容渠道选项、请求载荷解析、17373 同步与选择标签纯函数。
+- `web/src/components/layout/workflow-text-model-config.tsx`：在配置页展示批次识图模型、Codex 型号／推理档位和同步状态。
+- `web/src/components/canvas/workflow-text-model-sync-host.tsx`：应用级无界面 300ms 防抖同步宿主；不建立 SSE、不轮询、不自动重试。
+- `web/tests/tms01-workflow-text-model.test.ts`：覆盖选项过滤、载荷、Base URL、同步脱敏、报价标签、确认行、持久化切片与两处源码锚点。
 
 ## 上游同步纪律
 
