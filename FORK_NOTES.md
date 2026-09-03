@@ -272,6 +272,11 @@
 | 268 | `web/src/components/layout/app-config-modal.tsx` | “模型”页签第二个模型网格之后 | 仅新增 1 个导入与 1 个 `<WorkflowTextModelConfig />` 渲染锚点 | 在既有配置页提供批次识图模型选择与同步状态，不改原四类默认模型和可选项 | 2026-09-03 |
 | 269 | `web/src/layouts/user-layout.tsx` | `<CanvasAgentConnectionHost />` 之后、`<AgentPanel />` 之前 | 仅新增 1 个导入与 1 个 `<WorkflowTextModelSyncHost />` 应用级无界面宿主 | 让已选模型在页面切换和面板收起时仍随渠道或连接令牌变化同步；现有 Agent SSE 宿主原行与协议不改 | 2026-09-03 |
 | 270 | `web/dist/` | TMS-01 最新随仓运行副本 | 按最终源码与版本记录重建为 12 个文件 / 2,827,447 字节，入口与哈希资源来自同次构建 | 用户硬刷新即可加载识图模型配置、应用级同步与确认卡模型标签；不改 Canvas Agent、desktop runtime、主仓批次运行副本或生图链路 | 2026-09-03 |
+| 271 | `web/src/stores/use-config-store.ts` | TMS-02 通用配置默认与一次性迁移 | 内置 default 渠道和三处默认文本引用改为 `gpt-5.6-sol`；persist v1 只识别 default 渠道原始 `gpt-5.5` 与 `default::gpt-5.5` 引用 | 自定义渠道、Key、URL、名称、顺序、其它模型和选择逐项保持；迁移可重复运行且不扩大到用户渠道 | 2026-09-03 |
+| 272 | `web/src/stores/use-workflow-text-model-store.ts` + `web/tests/tms01-workflow-text-model.test.ts` | TMS-02 工作流默认、一次性迁移与离线合同 | 新安装默认改为 `gpt-5.6-sol / medium`；persist v1 只迁移 `kind=codex && model=gpt-5.5` 并保留 effort；现有测试锁定两份 migrate 接线、幂等性、保护边界和双客户端精确版本 | OpenAI-compatible 渠道选择原样保留；不引入模型禁用名单，不阻断用户手工切回旧型号 | 2026-09-03 |
+| 273 | `canvas-agent/package.json` + `canvas-agent/bun.lock` + `desktop/package.json` + `desktop/package-lock.json` + `desktop/portable/README-zh-CN.txt` + `desktop/portable/FIRST-DEPLOY-CHECKLIST-zh-CN.txt` | TMS-02 双份内置 Codex 与便携当前口径 | Canvas Agent 与 Desktop 的 `@openai/codex` 均精确固定为 `0.153.0` 并机械更新双 lock；便携说明登记 Sol 默认、精确迁移边界与真人账号验证 | Windows 原生程序布局和现有 resolver 不改；不打包、不部署、不切快捷方式 | 2026-09-03 |
+| 274 | `CHANGELOG.md` + `docs/content/docs/progress/pending-test.mdx` | TMS-02 版本归纳与真人待验清单 | 记录 Sol 默认、精确迁移、双客户端版本及真实账号/质量对照验收项目 | 离线 bundled catalog 和测试不替代付费或真实模型验收，不提前宣称质量提升 | 2026-09-03 |
+| 275 | `web/dist/` | TMS-02 最终随仓运行副本 | 按最终源码与 CHANGELOG 同次构建为 12 个文件 / 2,828,820 字节；入口引用 `index-yGYWzLf5.js` 与 `index-D__p4lJ3.css`，主 JS SHA-256 `92A5C6CA38840EA4EA9984C6EBF8AADA0F3E4C740CF7CCF56AD69EA6C2665F37` | 用户后续部署并硬刷新后可加载 Sol 默认与精确迁移；本任务不改 Canvas Agent/desktop runtime、不生成 ZIP、不部署 | 2026-09-03 |
 
 ## 退役锚点（编号不复用）
 

@@ -11,12 +11,19 @@ import {
     type WorkflowTextModelPayload,
 } from "@/lib/canvas/canvas-workflow-text-model";
 import { fetchProductionQuote, productionConfirmationCopy } from "@/lib/canvas/canvas-workflow-production";
-import { defaultConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { defaultConfig, migrateConfigStore, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import {
+    DEFAULT_WORKFLOW_TEXT_MODEL_SELECTION,
+    migrateWorkflowTextModelStore,
+} from "@/stores/use-workflow-text-model-store";
 
 const appConfigSource = readFileSync(new URL("../src/components/layout/app-config-modal.tsx", import.meta.url), "utf8");
 const userLayoutSource = readFileSync(new URL("../src/layouts/user-layout.tsx", import.meta.url), "utf8");
 const syncHostSource = readFileSync(new URL("../src/components/canvas/workflow-text-model-sync-host.tsx", import.meta.url), "utf8");
 const storeSource = readFileSync(new URL("../src/stores/use-workflow-text-model-store.ts", import.meta.url), "utf8");
+const configStoreSource = readFileSync(new URL("../src/stores/use-config-store.ts", import.meta.url), "utf8");
+const canvasAgentPackage = JSON.parse(readFileSync(new URL("../../canvas-agent/package.json", import.meta.url), "utf8"));
+const desktopPackage = JSON.parse(readFileSync(new URL("../../desktop/package.json", import.meta.url), "utf8"));
 
 const openaiChannel: ModelChannel = {
     id: "dashscope",
@@ -40,6 +47,88 @@ function configWith(...channels: ModelChannel[]): AiConfig {
 }
 
 describe("TMS-01 workflow text model", () => {
+    test("uses Sol medium for both new-install defaults", () => {
+        expect(DEFAULT_WORKFLOW_TEXT_MODEL_SELECTION).toEqual({ kind: "codex", model: "gpt-5.6-sol", effort: "medium" });
+        expect(defaultConfig.channels.find((channel) => channel.id === "default")?.models).toContain("gpt-5.6-sol");
+        expect(defaultConfig.channels.find((channel) => channel.id === "default")?.models).not.toContain("gpt-5.5");
+        expect(defaultConfig.textModel).toBe("default::gpt-5.6-sol");
+        expect(defaultConfig.models).toContain("default::gpt-5.6-sol");
+        expect(defaultConfig.textModels).toEqual(["default::gpt-5.6-sol"]);
+    });
+
+    test("migrates only the old persisted workflow Codex default and remains idempotent", () => {
+        const oldCodex = {
+            selection: { kind: "codex", model: "gpt-5.5", effort: "high" },
+            syncState: "synced",
+            syncedLabel: "old label",
+            syncHint: "keep hint",
+        };
+        const migrated = migrateWorkflowTextModelStore(oldCodex, 0) as typeof oldCodex;
+        expect(migrated).toEqual({ ...oldCodex, selection: { kind: "codex", model: "gpt-5.6-sol", effort: "high" } });
+        expect(migrateWorkflowTextModelStore(migrated, 0)).toEqual(migrated);
+
+        const channel = { selection: { kind: "channel", channelModel: "dashscope::qwen3-vl-plus" }, syncState: "synced" };
+        expect(migrateWorkflowTextModelStore(channel, 0)).toEqual(channel);
+        const customCodex = { selection: { kind: "codex", model: "gpt-5.4", effort: "medium" } };
+        expect(migrateWorkflowTextModelStore(customCodex, 0)).toEqual(customCodex);
+    });
+
+    test("migrates only built-in default-channel GPT-5.5 references and preserves custom channels", () => {
+        const customChannel: ModelChannel = {
+            id: "custom",
+            name: "自定义 GPT-5.5 渠道",
+            baseUrl: "https://custom.example.test/v1",
+            apiKey: "preserve-key-marker",
+            apiFormat: "openai",
+            models: ["alpha", "gpt-5.5", "omega"],
+        };
+        const oldState = {
+            config: {
+                ...defaultConfig,
+                channels: [
+                    {
+                        id: "default",
+                        name: "默认渠道",
+                        baseUrl: "https://api.openai.com",
+                        apiKey: "default-key-marker",
+                        apiFormat: "openai" as const,
+                        models: ["gpt-image-2", "gpt-5.5", "gpt-4o-mini-tts"],
+                    },
+                    customChannel,
+                ],
+                textModel: "default::gpt-5.5",
+                models: ["default::gpt-image-2", "default::gpt-5.5", "custom::gpt-5.5"],
+                textModels: ["default::gpt-5.5", "custom::gpt-5.5"],
+            },
+            webdav: { marker: "unchanged" },
+        };
+
+        const migrated = migrateConfigStore(oldState, 0) as typeof oldState;
+        expect(migrated.config.channels[0]).toEqual({
+            ...oldState.config.channels[0],
+            models: ["gpt-image-2", "gpt-5.6-sol", "gpt-4o-mini-tts"],
+        });
+        expect(migrated.config.channels[1]).toEqual(customChannel);
+        expect(migrated.config.textModel).toBe("default::gpt-5.6-sol");
+        expect(migrated.config.models).toEqual(["default::gpt-image-2", "default::gpt-5.6-sol", "custom::gpt-5.5"]);
+        expect(migrated.config.textModels).toEqual(["default::gpt-5.6-sol", "custom::gpt-5.5"]);
+        expect(migrated.webdav).toEqual(oldState.webdav);
+        expect(migrateConfigStore(migrated, 0)).toEqual(migrated);
+
+        const customSelection = { ...oldState, config: { ...oldState.config, textModel: "custom::gpt-5.5" } };
+        const customSelectionMigrated = migrateConfigStore(customSelection, 0) as typeof customSelection;
+        expect(customSelectionMigrated.config.textModel).toBe("custom::gpt-5.5");
+    });
+
+    test("wires both persist migrations and pins both embedded Codex clients", () => {
+        expect(storeSource).toContain("version: 1");
+        expect(storeSource).toContain("migrate: migrateWorkflowTextModelStore");
+        expect(configStoreSource).toContain("version: 1");
+        expect(configStoreSource).toContain("migrate: migrateConfigStore");
+        expect(canvasAgentPackage.dependencies["@openai/codex"]).toBe("0.153.0");
+        expect(desktopPackage.dependencies["@openai/codex"]).toBe("0.153.0");
+    });
+
     test("keeps Codex available and only includes text models from OpenAI-compatible channels", () => {
         const groups = buildWorkflowTextModelOptions(configWith(openaiChannel, geminiChannel));
         expect(groups).toEqual([

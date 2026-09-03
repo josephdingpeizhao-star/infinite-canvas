@@ -9,7 +9,7 @@ export type WorkflowTextModelSelection =
 
 export type WorkflowTextModelSyncState = "idle" | "synced" | "unavailable" | "failed";
 
-export const DEFAULT_WORKFLOW_TEXT_MODEL_SELECTION: WorkflowTextModelSelection = { kind: "codex", model: "gpt-5.5", effort: "medium" };
+export const DEFAULT_WORKFLOW_TEXT_MODEL_SELECTION: WorkflowTextModelSelection = { kind: "codex", model: "gpt-5.6-sol", effort: "medium" };
 
 type WorkflowTextModelStore = {
     selection: WorkflowTextModelSelection;
@@ -19,6 +19,21 @@ type WorkflowTextModelStore = {
     setSelection: (selection: WorkflowTextModelSelection) => void;
     setSyncStatus: (syncState: WorkflowTextModelSyncState, syncedLabel?: string, syncHint?: string) => void;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+}
+
+export function migrateWorkflowTextModelStore(persistedState: unknown, version: number): Partial<WorkflowTextModelStore> {
+    const state = persistedState as Partial<WorkflowTextModelStore>;
+    if (version >= 1 || !isRecord(persistedState) || !isRecord(persistedState.selection)) return state;
+    const selection = persistedState.selection;
+    if (selection.kind !== "codex" || selection.model !== "gpt-5.5") return state;
+    return {
+        ...persistedState,
+        selection: { ...selection, model: "gpt-5.6-sol" } as WorkflowTextModelSelection,
+    };
+}
 
 export const useWorkflowTextModelStore = create<WorkflowTextModelStore>()(
     persist(
@@ -32,6 +47,8 @@ export const useWorkflowTextModelStore = create<WorkflowTextModelStore>()(
         }),
         {
             name: "infinite-canvas:workflow_text_model",
+            version: 1,
+            migrate: migrateWorkflowTextModelStore,
             partialize: (state) => ({ selection: state.selection }),
         },
     ),

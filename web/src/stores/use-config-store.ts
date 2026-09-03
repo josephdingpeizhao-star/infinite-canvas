@@ -72,13 +72,13 @@ export const defaultConfig: AiConfig = {
             baseUrl: OPENAI_BASE_URL,
             apiKey: "",
             apiFormat: "openai",
-            models: ["gpt-image-2", "grok-imagine-video", "gpt-5.5", "gpt-4o-mini-tts"],
+            models: ["gpt-image-2", "grok-imagine-video", "gpt-5.6-sol", "gpt-4o-mini-tts"],
         },
     ],
     model: "default::gpt-image-2",
     imageModel: "default::gpt-image-2",
     videoModel: "default::grok-imagine-video",
-    textModel: "default::gpt-5.5",
+    textModel: "default::gpt-5.6-sol",
     audioModel: "default::gpt-4o-mini-tts",
     audioVoice: "alloy",
     audioFormat: "mp3",
@@ -89,10 +89,10 @@ export const defaultConfig: AiConfig = {
     videoGenerateAudio: "true",
     videoWatermark: "false",
     systemPrompt: "",
-    models: ["default::gpt-image-2", "default::grok-imagine-video", "default::gpt-5.5", "default::gpt-4o-mini-tts"],
+    models: ["default::gpt-image-2", "default::grok-imagine-video", "default::gpt-5.6-sol", "default::gpt-4o-mini-tts"],
     imageModels: ["default::gpt-image-2"],
     videoModels: ["default::grok-imagine-video"],
-    textModels: ["default::gpt-5.5"],
+    textModels: ["default::gpt-5.6-sol"],
     audioModels: ["default::gpt-4o-mini-tts"],
     quality: "auto",
     size: "1:1",
@@ -121,6 +121,49 @@ type ConfigStore = {
     setConfigDialogOpen: (isOpen: boolean) => void;
     clearPromptContinue: () => void;
 };
+
+const LEGACY_DEFAULT_TEXT_MODEL = "gpt-5.5";
+const CURRENT_DEFAULT_TEXT_MODEL = "gpt-5.6-sol";
+const LEGACY_DEFAULT_TEXT_MODEL_REF = `default::${LEGACY_DEFAULT_TEXT_MODEL}`;
+const CURRENT_DEFAULT_TEXT_MODEL_REF = `default::${CURRENT_DEFAULT_TEXT_MODEL}`;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+}
+
+function migrateDefaultModelReference(value: unknown) {
+    return value === LEGACY_DEFAULT_TEXT_MODEL_REF ? CURRENT_DEFAULT_TEXT_MODEL_REF : value;
+}
+
+function migrateDefaultModelReferenceList(value: unknown) {
+    if (!Array.isArray(value)) return value;
+    return value.map(migrateDefaultModelReference);
+}
+
+export function migrateConfigStore(persistedState: unknown, version: number): Partial<ConfigStore> {
+    const state = persistedState as Partial<ConfigStore>;
+    if (version >= 1 || !isRecord(persistedState) || !isRecord(persistedState.config)) return state;
+    const config = persistedState.config;
+    const channels = Array.isArray(config.channels)
+        ? config.channels.map((channel) => {
+              if (!isRecord(channel) || channel.id !== "default" || !Array.isArray(channel.models)) return channel;
+              return {
+                  ...channel,
+                  models: channel.models.map((model) => (model === LEGACY_DEFAULT_TEXT_MODEL ? CURRENT_DEFAULT_TEXT_MODEL : model)),
+              };
+          })
+        : config.channels;
+    return {
+        ...persistedState,
+        config: {
+            ...config,
+            channels,
+            textModel: migrateDefaultModelReference(config.textModel),
+            models: migrateDefaultModelReferenceList(config.models),
+            textModels: migrateDefaultModelReferenceList(config.textModels),
+        } as AiConfig,
+    };
+}
 
 function isVideoModelName(model: string) {
     const value = modelOptionName(model).toLowerCase();
@@ -196,6 +239,8 @@ export const useConfigStore = create<ConfigStore>()(
         }),
         {
             name: CONFIG_STORE_KEY,
+            version: 1,
+            migrate: migrateConfigStore,
             partialize: (state) => ({ config: state.config, webdav: state.webdav }),
             merge: (persisted, current) => {
                 const persistedState = (persisted || {}) as Partial<ConfigStore>;
